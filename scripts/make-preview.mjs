@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
-const sourcePath = resolve(root, "docs/images/theme-preview.png");
+const sourcePath = resolve(root, "preview.png");
 const outPath = resolve(root, "preview.png");
 
 if (!existsSync(sourcePath)) {
