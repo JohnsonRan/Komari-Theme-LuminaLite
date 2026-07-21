@@ -1,0 +1,19 @@
+import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { subscribeMediaQuery } from "@/utils/mediaQuery";
+
+/** 订阅单个 CSS 媒体查询，旧 Safari 的事件兼容由 subscribeMediaQuery 统一处理。 */
+export function useMediaQuery(query: string, serverFallback = false) {
+  const mediaQuery = useMemo(
+    () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query) : null),
+    [query],
+  );
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      mediaQuery ? subscribeMediaQuery(mediaQuery, listener) : () => undefined,
+    [mediaQuery],
+  );
+  const getSnapshot = useCallback(() => mediaQuery?.matches ?? serverFallback, [mediaQuery, serverFallback]);
+  const getServerSnapshot = useCallback(() => serverFallback, [serverFallback]);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}

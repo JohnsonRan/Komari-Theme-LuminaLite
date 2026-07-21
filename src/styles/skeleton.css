@@ -1,0 +1,282 @@
+/* 骨架屏：卡片数据到达前的占位结构。用 shimmer 扫光动画暗示加载方向,
+   色块形状与真实卡片各区块一一对应,避免数据到达时布局跳动。 */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-block {
+  border-radius: 6px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--fill-tertiary) 25%,
+      color-mix(in srgb, var(--fill-secondary) 56%, transparent) 50%,
+      var(--fill-tertiary) 75%
+    );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+    background: var(--fill-tertiary);
+  }
+}
+
+/* ─── 紧凑卡骨架 ─── */
+.skeleton-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.skeleton-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  gap: 10px;
+}
+
+.skeleton-compact-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.skeleton-compact-chips {
+  display: flex;
+  gap: 6px;
+  min-height: 24px;
+  align-items: center;
+}
+
+.skeleton-compact-vitals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
+  padding-top: 10px;
+}
+
+.skeleton-compact-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skeleton-compact-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fill-tertiary) 72%, transparent);
+  min-height: 52px;
+}
+
+.skeleton-compact-strip-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 10px;
+}
+
+.skeleton-compact-strip-tile + .skeleton-compact-strip-tile {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.skeleton-compact-traffic {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
+  padding-top: 10px;
+}
+
+.skeleton-compact-bottom {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
+  padding-top: 10px;
+}
+
+.skeleton-compact-health {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ─── 大卡骨架 ─── */
+.skeleton-large {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 18px 15px;
+}
+
+.skeleton-large-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.skeleton-large-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.skeleton-large-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+}
+
+.skeleton-large-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.skeleton-large-traffic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.skeleton-large-traffic-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.skeleton-large-health {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+.skeleton-large-health-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-large-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ─── 迷你卡骨架 ─── */
+.skeleton-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px;
+}
+
+.skeleton-mini-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+
+.skeleton-mini-chips {
+  display: flex;
+  gap: 5px;
+  min-height: 20px;
+  align-items: center;
+}
+
+.skeleton-mini-vitals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 12px;
+}
+
+.skeleton-mini-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeleton-mini-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.skeleton-mini-health {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
+}
+
+.skeleton-mini-health-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ─── 列表行骨架 ─── */
+.skeleton-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-height: 52px;
+}
+
+.skeleton-list-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.skeleton-list-metrics {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+@media (max-width: 390px) {
+  .skeleton-compact {
+    padding: 12px;
+  }
+
+  .skeleton-compact-vitals {
+    gap: 9px;
+  }
+
+  .skeleton-compact-strip-tile {
+    padding: 6px;
+  }
+
+  .skeleton-compact-bottom {
+    gap: 7px;
+  }
+}
