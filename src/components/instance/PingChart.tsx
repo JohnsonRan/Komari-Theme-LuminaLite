@@ -140,6 +140,7 @@ export function PingChart({
   const isDark = resolvedAppearance === "dark";
   // 刷新按钮递增此值，重置缩放/固定状态。
   const [resetSignal, setResetSignal] = useState(0);
+  const zoomXRangeRef = useRef<[number, number] | null>(null);
   // API 顺序与后台任务权重一致，响应本身不一定包含可重排的权重。
   const tasks = useMemo(() => [...(data?.tasks ?? [])], [data]);
   const taskLabels = useMemo(() => {
@@ -301,12 +302,14 @@ export function PingChart({
     fullRange: requestedXRange,
     resetSignal,
     syncKey: "ping-sync",
+    zoomXRangeRef,
     onUnpin: hideAllTooltips,
   });
   const { onCreate: lossOnCreate } = useChartInteractions({
     fullRange: requestedXRange,
     resetSignal,
     syncKey: "ping-sync",
+    zoomXRangeRef,
     onUnpin: hideAllTooltips,
   });
   const coverageMeta = useMemo(() => {
@@ -390,14 +393,18 @@ export function PingChart({
     return {
       padding: [10, 14, 12, 2],
       cursor: {
-        drag: { x: true, y: false },
+        drag: { x: true, y: false, dist: 8 },
         // 与下方丢包率图共享光标：悬停任一图时两图同时显示该时间点的详情。
         sync: { key: "ping-sync", setSeries: false },
       },
       legend: { show: false },
       scales: {
         x: requestedXRange
-          ? { time: true, auto: false, range: () => requestedXRange }
+          ? {
+              time: true,
+              auto: false,
+              range: () => zoomXRangeRef.current ?? requestedXRange,
+            }
           : { time: true },
         y: { auto: false, range: yRange },
       },
@@ -499,13 +506,17 @@ export function PingChart({
     return {
       padding: [6, 14, 8, 2],
       cursor: {
-        drag: { x: true, y: false },
+        drag: { x: true, y: false, dist: 8 },
         sync: { key: "ping-sync", setSeries: false },
       },
       legend: { show: false },
       scales: {
         x: requestedXRange
-          ? { time: true, auto: false, range: () => requestedXRange }
+          ? {
+              time: true,
+              auto: false,
+              range: () => zoomXRangeRef.current ?? requestedXRange,
+            }
           : { time: true },
         y: { auto: false, range: lossYRange },
       },

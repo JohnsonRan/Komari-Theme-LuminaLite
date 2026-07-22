@@ -208,6 +208,7 @@ function buildBaseOptions({
   axisSize,
   xRange,
   networkUnit = "mbs",
+  zoomXRangeRef,
 }: {
   title: string;
   keys: string[];
@@ -220,6 +221,7 @@ function buildBaseOptions({
   axisSize?: number;
   xRange?: [number, number] | null;
   networkUnit?: DetailNetworkUnit;
+  zoomXRangeRef?: { readonly current: [number, number] | null };
 }): Omit<uPlot.Options, "width" | "height"> {
   // bytes 模式的标签（如 "76.2 MB"）比百分比模式更宽，需要更大的轴尺寸避免文字被裁切。
   const resolvedAxisSize = axisSize ?? (axisKind === "bytes" ? 72 : 52);
@@ -229,13 +231,22 @@ function buildBaseOptions({
   return {
     padding: [8, 12, 10, 2],
     cursor: {
-      drag: { x: true, y: false },
+      drag: { x: true, y: false, dist: 8 },
       // 同 key 的图表共享光标：悬停任一子图时，其余子图同步显示同一时间点的 tooltip。
       sync: { key: "load-sync", setSeries: false },
     },
     legend: { show: false },
     scales: {
-      x: xRange ? { time: true, auto: false, range: () => xRange } : { time: true },
+      x: xRange
+        ? {
+            time: true,
+            auto: false,
+            range: () => {
+              const zoom = zoomXRangeRef?.current;
+              return zoom ?? xRange;
+            },
+          }
+        : { time: true },
       y: { auto: true },
     },
     axes: [
@@ -326,6 +337,7 @@ const ChartCard = memo(function ChartCard({
 }) {
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("grid");
   const dataRef = useRef<uPlot.AlignedData>([[]]);
+  const zoomXRangeRef = useRef<[number, number] | null>(null);
   const [tooltip, setTooltip] = useState<ChartTooltipState>({
     show: false,
     left: 0,
@@ -337,6 +349,7 @@ const ChartCard = memo(function ChartCard({
     fullRange: xRange ?? null,
     resetSignal,
     syncKey: "load-sync",
+    zoomXRangeRef,
     onUnpin: () => setTooltip((prev) => (prev.show ? { ...prev, show: false } : prev)),
   });
   const data = useMemo(() => metricData(points, keys), [points, keys]);
@@ -357,6 +370,7 @@ const ChartCard = memo(function ChartCard({
         axisSize,
         xRange,
         networkUnit,
+        zoomXRangeRef,
       }),
     [axisKind, axisSize, colors, keys, networkUnit, rangeHours, resolvedAppearance, spanGaps, title, unit, xRange],
   );
@@ -427,13 +441,14 @@ const ChartCard = memo(function ChartCard({
       </header>
       <div ref={chartSizeRef} className="instance-uplot-wrap">
         <UplotReact
-          key={`${uuid}-${rangeHours}`}
+          key={`${uuid}-${rangeHours}-${axisKind ?? "default"}`}
           options={chartOptions}
           data={data}
           // 实时模式下滑动窗口需要 setData 重置缩放；但用户手动放大后
           // （zoomed）或固定后（pinned）不能再被每秒的数据更新冲掉——
           // 否则缩放保不住，固定的光标也会随着窗口滑动漂离点选的数据点。
-          resetScales={rangeHours === 0 && !zoomed && !pinned}
+          // 历史模式下始终重置 Y 轴自适应，确保数据源切换时纵轴正确缩放。
+          resetScales={rangeHours === 0 ? !zoomed && !pinned : true}
           onCreate={onCreate}
         />
         <ChartTooltip tooltip={tooltip} />

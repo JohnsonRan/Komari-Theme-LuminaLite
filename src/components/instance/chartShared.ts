@@ -436,6 +436,7 @@ interface SyncGroupEntry {
   chart: uPlot | null;
   syncKey: string;
   fullRangeRef: MutableRefObject<[number, number] | null>;
+  zoomXRangeRef: MutableRefObject<[number, number] | null>;
   setPinned: (value: boolean) => void;
   setZoomed: (value: boolean) => void;
   onUnpinRef: MutableRefObject<(() => void) | undefined>;
@@ -466,11 +467,21 @@ function unpinSyncGroup(syncKey: string) {
   }
 }
 
+// 重置整组缩放：清除各图的 zoomXRangeRef 并解除缩放标记。
+function resetSyncGroupZoom(syncKey: string) {
+  for (const entry of [...syncGroupCharts]) {
+    if (entry.syncKey !== syncKey) continue;
+    entry.zoomXRangeRef.current = null;
+    entry.setZoomed(false);
+  }
+}
+
 // 把 X 轴窗口广播给同组其余图表，并同步各自的 zoomed 标记。
 // 各图的 fullRange 可能不同（实时为 null），故各自判断 isFull。
 function broadcastXScale(syncKey: string, source: uPlot, min: number, max: number) {
   for (const entry of [...syncGroupCharts]) {
     if (entry.syncKey !== syncKey || entry.chart == null || entry.chart === source) continue;
+    entry.zoomXRangeRef.current = [min, max];
     entry.chart.setScale("x", { min, max });
     const full = entry.fullRangeRef.current;
     const isFull = full != null && min <= full[0] + 0.5 && max >= full[1] - 0.5;
@@ -487,11 +498,13 @@ export function useChartInteractions({
   resetSignal,
   syncKey,
   onUnpin,
+  zoomXRangeRef,
 }: {
   fullRange: [number, number] | null;
   resetSignal: number;
   syncKey: string;
   onUnpin?: () => void;
+  zoomXRangeRef: MutableRefObject<[number, number] | null>;
 }) {
   const chartRef = useRef<uPlot | null>(null);
   const [pinned, setPinned] = useState(false);
@@ -509,6 +522,7 @@ export function useChartInteractions({
       chart: null,
       syncKey,
       fullRangeRef,
+      zoomXRangeRef,
       setPinned,
       setZoomed,
       onUnpinRef,
@@ -574,6 +588,7 @@ export function useChartInteractions({
         if (newMax - newMin < 60) return;
 
         chart.setScale("x", { min: newMin, max: newMax });
+        zoomXRangeRef.current = [newMin, newMax];
         const isFull = full != null && newMin <= full[0] + 0.5 && newMax >= full[1] - 0.5;
         setZoomed(!isFull);
         // 缩放整组联动：其余同组图表同步到相同 X 窗口。
@@ -648,7 +663,7 @@ export function useChartInteractions({
         // 图表销毁（切换时间范围/主题重建等）后光标与数据都已重置，
         // 同步解除整组固定，避免残留冻结在旧数据上的 tooltip。
         unpinSyncGroup(syncKey);
-        setZoomed(false);
+        resetSyncGroupZoom(syncKey);
         originalDestroy();
       };
     },
@@ -657,7 +672,7 @@ export function useChartInteractions({
 
   const resetView = useCallback(() => {
     unpinSyncGroup(syncKey);
-    setZoomed(false);
+    resetSyncGroupZoom(syncKey);
     const chart = chartRef.current;
     if (!chart) return;
     const full = fullRangeRef.current;
