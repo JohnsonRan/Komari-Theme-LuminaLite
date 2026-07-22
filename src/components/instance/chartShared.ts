@@ -478,14 +478,19 @@ function resetSyncGroupZoom(syncKey: string) {
 
 // 把 X 轴窗口广播给同组其余图表，并同步各自的 zoomed 标记。
 // 各图的 fullRange 可能不同（实时为 null），故各自判断 isFull。
-function broadcastXScale(syncKey: string, source: uPlot, min: number, max: number) {
+// isReset=true 时为重置操作，所有图表无条件清除缩放标记。
+function broadcastXScale(syncKey: string, source: uPlot, min: number, max: number, isReset = false) {
   for (const entry of [...syncGroupCharts]) {
     if (entry.syncKey !== syncKey || entry.chart == null || entry.chart === source) continue;
-    entry.zoomXRangeRef.current = [min, max];
+    entry.zoomXRangeRef.current = isReset ? null : [min, max];
     entry.chart.setScale("x", { min, max });
-    const full = entry.fullRangeRef.current;
-    const isFull = full != null && min <= full[0] + 0.5 && max >= full[1] - 0.5;
-    entry.setZoomed(!isFull);
+    if (isReset) {
+      entry.setZoomed(false);
+    } else {
+      const full = entry.fullRangeRef.current;
+      const isFull = full != null && min <= full[0] + 0.5 && max >= full[1] - 0.5;
+      entry.setZoomed(!isFull);
+    }
   }
 }
 
@@ -678,14 +683,14 @@ export function useChartInteractions({
     const full = fullRangeRef.current;
     if (full) {
       chart.setScale("x", { min: full[0], max: full[1] });
-      broadcastXScale(syncKey, chart, full[0], full[1]);
+      broadcastXScale(syncKey, chart, full[0], full[1], true);
     } else {
       const times = chart.data[0];
       if (times && times.length > 1) {
         const min = times[0] as number;
         const max = times[times.length - 1] as number;
         chart.setScale("x", { min, max });
-        broadcastXScale(syncKey, chart, min, max);
+        broadcastXScale(syncKey, chart, min, max, true);
       }
     }
   }, [syncKey]);
