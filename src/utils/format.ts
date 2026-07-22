@@ -39,8 +39,10 @@ export function formatBytes(n: number | undefined | null): string {
     idx += 1;
   }
   if (idx === 0) return `${Math.round(v)} ${UNITS[idx]}`;
-  const dec = v >= 100 ? 0 : v >= 10 ? 1 : 2;
-  return `${v.toFixed(dec)} ${UNITS[idx]}`;
+  // 精度各档加一位,保证 GB/TB 量级下小幅变化(几百 MB / 几 GB)也能在数值上体现;
+  // trimFixed 去掉尾随零,整数总量(如 640 GB)不会多出 ".0"。
+  const dec = v >= 100 ? 1 : v >= 10 ? 2 : 3;
+  return `${trimFixed(v, dec)} ${UNITS[idx]}`;
 }
 
 function formatRateValue(value: number): string {

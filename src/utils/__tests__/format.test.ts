@@ -15,6 +15,7 @@ import {
 const KB = 1024;
 const MB = 1024 * 1024;
 const GB = 1024 * 1024 * 1024;
+const TB = 1024 * GB;
 
 describe("formatBytes", () => {
   it("returns '0 B' for empty / non-positive / non-finite input", () => {
@@ -33,11 +34,24 @@ describe("formatBytes", () => {
   });
 
   it("scales up and adapts precision by magnitude", () => {
-    expect(formatBytes(KB)).toBe("1.00 KB");
-    expect(formatBytes(1.5 * KB)).toBe("1.50 KB");
-    expect(formatBytes(MB)).toBe("1.00 MB");
+    expect(formatBytes(KB)).toBe("1 KB");
+    expect(formatBytes(1.5 * KB)).toBe("1.5 KB");
+    expect(formatBytes(MB)).toBe("1 MB");
     expect(formatBytes(100 * MB)).toBe("100 MB");
-    expect(formatBytes(2.5 * GB)).toBe("2.50 GB");
+    expect(formatBytes(2.5 * GB)).toBe("2.5 GB");
+  });
+
+  // 防回归：GB/TB 量级下精度不足会导致实时数值“看似不变”（图表曲线在动、
+  // 读数不动），各档位至少保留一位小数（v<10 保留三位）。
+  it("keeps enough decimals for small deltas at GB / TB scale", () => {
+    expect(formatBytes(823.4 * GB)).toBe("823.4 GB");
+    expect(formatBytes(823.9 * GB)).toBe("823.9 GB");
+    expect(formatBytes(45.23 * GB)).toBe("45.23 GB");
+    expect(formatBytes(1.843 * TB)).toBe("1.843 TB");
+    expect(formatBytes(12.34 * TB)).toBe("12.34 TB");
+    // 整数总量不拖尾零
+    expect(formatBytes(640 * GB)).toBe("640 GB");
+    expect(formatBytes(2 * TB)).toBe("2 TB");
   });
 });
 
@@ -65,9 +79,9 @@ describe("formatByteRate / formatByteRateLabel", () => {
 
   it("uses the byte (1024) ladder suffixed with /s", () => {
     expect(formatByteRate(512)).toEqual({ value: "512", unit: "B/s" });
-    expect(formatByteRateLabel(KB)).toBe("1.00 KB/s");
-    expect(formatByteRateLabel(MB)).toBe("1.00 MB/s");
-    expect(formatByteRateLabel(2.5 * GB)).toBe("2.50 GB/s");
+    expect(formatByteRateLabel(KB)).toBe("1 KB/s");
+    expect(formatByteRateLabel(MB)).toBe("1 MB/s");
+    expect(formatByteRateLabel(2.5 * GB)).toBe("2.5 GB/s");
   });
 });
 
