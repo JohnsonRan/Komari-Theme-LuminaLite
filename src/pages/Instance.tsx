@@ -57,6 +57,11 @@ export function Instance() {
   const [pingHours, setPingHours] = useState(DEFAULT_PING_HOURS);
   const chartControlsRef = useRef<HTMLDivElement | null>(null);
 
+  // 进入详情页时立即回到页面顶部，避免保留上一页的滚动位置。
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [uuid]);
+
   const metricRetentionHours =
     config?.metric_retention_days && config.metric_retention_days > 0
       ? config.metric_retention_days * 24

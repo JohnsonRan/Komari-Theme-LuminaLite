@@ -1,6 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "react-router-dom";
 import { ErrorBoundary } from "@/components/shell/ErrorBoundary";
+import { PWAUpdateBanner } from "@/components/shell/PWAUpdateBanner";
 import { queryClient } from "@/services/queryClient";
 import { router } from "@/router";
 
@@ -9,6 +10,7 @@ export function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
+        <PWAUpdateBanner />
       </QueryClientProvider>
     </ErrorBoundary>
   );

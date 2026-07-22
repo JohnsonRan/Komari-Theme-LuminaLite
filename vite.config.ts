@@ -2,9 +2,59 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
+      registerType: "prompt",
+      injectRegister: "inline",
+      includeAssets: ["favicon.ico"],
+      manifest: {
+        name: "Komari Theme LuminaPlus",
+        short_name: "LuminaPlus",
+        description: "Komari 监控平台 LuminaPlus 主题",
+        theme_color: "#6366f1",
+        background_color: "#000000",
+        display: "standalone",
+        start_url: "/",
+        scope: "/",
+        icons: [
+          {
+            src: "favicon.ico",
+            sizes: "32x32",
+            type: "image/x-icon",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        navigateFallback: undefined,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gstatic-fonts-cache",
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
