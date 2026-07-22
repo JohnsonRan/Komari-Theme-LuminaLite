@@ -3,9 +3,11 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { RouteErrorFallback } from "@/components/shell/ErrorBoundary";
 import { Spinner } from "@/components/ui/Spinner";
-import { Traffic } from "@/pages/Traffic";
 import { Home } from "@/pages/Home";
 
+const Traffic = lazy(() =>
+  import("@/pages/Traffic").then((m) => ({ default: m.Traffic })),
+);
 const Instance = lazy(() =>
   import("@/pages/Instance").then((m) => ({ default: m.Instance })),
 );
@@ -41,7 +43,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "traffic",
-        element: <Traffic />,
+        element: suspended(<Traffic />),
       },
       {
         path: "404",

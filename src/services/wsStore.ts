@@ -55,6 +55,10 @@ const NODE_INFO_REFRESH_INTERVAL_MS = 30_000;
 // 较短超时可让 half-open 连接尽快重试。
 const LIVE_STATUS_REQUEST_TIMEOUT_MS = 8_000;
 const SCROLL_IDLE_DELAY_MS = 160;
+// 用户无交互超过此阈值时，实时指标轮询降频以节省 CPU / 电量。
+const IDLE_THRESHOLD_MS = 120_000;
+const IDLE_REFRESH_INTERVAL_MS = 10_000;
+const IDLE_NODE_INFO_INTERVAL_MS = 60_000;
 const TRAFFIC_TREND_SAMPLE_COUNT = 18;
 const EMPTY_TRAFFIC_TREND_SAMPLE: TrafficTrendSample = {
   value: 0,
@@ -883,23 +887,118 @@ let stopTimer: number | null = null;
 let liveStatusTimer: number | null = null;
 let nodeInfoTimer: number | null = null;
 
+// ─── Page Visibility + 空闲降频 ─────────────────────────────────────────────
+let pageHidden = typeof document !== "undefined" && document.hidden;
+let lastInteractionTime = Date.now();
+let idleTrackingStarted = false;
+
+function isUserIdle(): boolean {
+  return Date.now() - lastInteractionTime > IDLE_THRESHOLD_MS;
+}
+
+function markUserInteraction() {
+  lastInteractionTime = Date.now();
+}
+
+function ensureIdleTrackingStarted() {
+  if (idleTrackingStarted) return;
+  idleTrackingStarted = true;
+  const opts: AddEventListenerOptions = { passive: true, capture: true };
+  document.addEventListener("pointermove", markUserInteraction, opts);
+  document.addEventListener("pointerdown", markUserInteraction, opts);
+  document.addEventListener("keydown", markUserInteraction, opts);
+  document.addEventListener("wheel", markUserInteraction, opts);
+  document.addEventListener("touchstart", markUserInteraction, opts);
+}
+
+function stopIdleTracking() {
+  if (!idleTrackingStarted) return;
+  idleTrackingStarted = false;
+  document.removeEventListener("pointermove", markUserInteraction, true);
+  document.removeEventListener("pointerdown", markUserInteraction, true);
+  document.removeEventListener("keydown", markUserInteraction, true);
+  document.removeEventListener("wheel", markUserInteraction, true);
+  document.removeEventListener("touchstart", markUserInteraction, true);
+}
+
+function getEffectiveLiveInterval(): number {
+  return isUserIdle() ? IDLE_REFRESH_INTERVAL_MS : LIVE_STATUS_REFRESH_INTERVAL_MS;
+}
+
+function getEffectiveNodeInfoInterval(): number {
+  return isUserIdle() ? IDLE_NODE_INFO_INTERVAL_MS : NODE_INFO_REFRESH_INTERVAL_MS;
+}
+
+function scheduleLiveStatusTick() {
+  if (liveStatusTimer != null) return;
+  if (pageHidden) return;
+  liveStatusTimer = window.setTimeout(() => {
+    liveStatusTimer = null;
+    if (pageHidden || !started) return;
+    if (!hydrated) {
+      void bootstrap();
+    } else {
+      void refreshLatestStatus();
+    }
+    scheduleLiveStatusTick();
+  }, getEffectiveLiveInterval());
+}
+
+function scheduleNodeInfoTick() {
+  if (nodeInfoTimer != null) return;
+  if (pageHidden) return;
+  nodeInfoTimer = window.setTimeout(() => {
+    nodeInfoTimer = null;
+    if (pageHidden || !started) return;
+    void syncNodeInfo().catch(() => {});
+    scheduleNodeInfoTick();
+  }, getEffectiveNodeInfoInterval());
+}
+
+function handleVisibilityChange() {
+  const hidden = document.hidden;
+  if (hidden === pageHidden) return;
+  pageHidden = hidden;
+
+  if (hidden) {
+    // 页面隐藏：停止调度，节省后台开销。
+    if (liveStatusTimer != null) {
+      window.clearTimeout(liveStatusTimer);
+      liveStatusTimer = null;
+    }
+    if (nodeInfoTimer != null) {
+      window.clearTimeout(nodeInfoTimer);
+      nodeInfoTimer = null;
+    }
+  } else {
+    // 页面恢复可见：立即刷新一次，然后恢复正常调度。
+    markUserInteraction();
+    if (started) {
+      if (!hydrated) {
+        void bootstrap();
+      } else {
+        void refreshLatestStatus();
+      }
+      scheduleLiveStatusTick();
+      scheduleNodeInfoTick();
+    }
+  }
+}
+
 function ensureStarted() {
   if (started) return;
   started = true;
 
   ensureScrollTrackingStarted();
+  ensureIdleTrackingStarted();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  pageHidden = document.hidden;
+  lastInteractionTime = Date.now();
+
   void bootstrap();
-  // 实时指标与节点信息使用独立轮询节奏。
-  liveStatusTimer = window.setInterval(() => {
-    if (!hydrated) {
-      void bootstrap();
-      return;
-    }
-    void refreshLatestStatus();
-  }, LIVE_STATUS_REFRESH_INTERVAL_MS);
-  nodeInfoTimer = window.setInterval(() => {
-    void syncNodeInfo().catch(() => {});
-  }, NODE_INFO_REFRESH_INTERVAL_MS);
+  // 实时指标与节点信息使用自适应调度（感知 visibility + 空闲状态）。
+  scheduleLiveStatusTick();
+  scheduleNodeInfoTick();
 }
 
 export function retainStore() {
@@ -933,11 +1032,11 @@ function stopStore() {
   nodeInfoController?.abort();
   nodeInfoController = null;
   if (liveStatusTimer != null) {
-    window.clearInterval(liveStatusTimer);
+    window.clearTimeout(liveStatusTimer);
     liveStatusTimer = null;
   }
   if (nodeInfoTimer != null) {
-    window.clearInterval(nodeInfoTimer);
+    window.clearTimeout(nodeInfoTimer);
     nodeInfoTimer = null;
   }
   if (scrollIdleTimer != null) {
@@ -948,6 +1047,8 @@ function stopStore() {
     window.removeEventListener("scroll", markScrollActivity);
     scrollTrackingStarted = false;
   }
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+  stopIdleTracking();
   scrollActive = false;
   refreshDeferredWhileScrolling = false;
   hydrated = false;
@@ -1096,49 +1197,70 @@ export function getAllNodeMetaSnapshot(): NodeInfo[] {
 export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
   if (homeNodeSummariesSnapshotVersion === storeVersion) return homeNodeSummariesSnapshot;
 
-  const next = state.order
-    .map((uuid) => {
-      const meta = state.metaByUuid[uuid];
-      if (!meta) return null;
-      const metrics = state.metricsByUuid[uuid];
-      return {
-        uuid,
-        group: String(meta.group || "").trim(),
-        region: String(meta.region || "").trim(),
-        hidden: meta.hidden,
-        weight: meta.weight,
-        online: metrics?.online ?? null,
-        trafficUp: metrics?.trafficUp ?? 0,
-        trafficDown: metrics?.trafficDown ?? 0,
-        netUp: metrics?.netUp ?? 0,
-        netDown: metrics?.netDown ?? 0,
-        connectionsTcp: metrics?.connectionsTcp ?? 0,
-        connectionsUdp: metrics?.connectionsUdp ?? 0,
-      };
-    })
-    .filter((item): item is HomeNodeSummary => Boolean(item));
+  // 增量更新：只对字段真正变化的节点创建新对象，其余复用上一轮引用。
+  // 这让每 tick 的对象分配从 O(N) 降到 O(changed)，减轻 GC 压力。
+  const prevByUuid = new Map<string, HomeNodeSummary>();
+  for (const item of homeNodeSummariesSnapshot) {
+    prevByUuid.set(item.uuid, item);
+  }
 
-  if (
-    next.length === homeNodeSummariesSnapshot.length &&
-    next.every((item, index) => {
-      const prev = homeNodeSummariesSnapshot[index];
-      return (
-        prev &&
-        prev.uuid === item.uuid &&
-        prev.group === item.group &&
-        prev.region === item.region &&
-        prev.hidden === item.hidden &&
-        prev.weight === item.weight &&
-        prev.online === item.online &&
-        prev.trafficUp === item.trafficUp &&
-        prev.trafficDown === item.trafficDown &&
-        prev.netUp === item.netUp &&
-        prev.netDown === item.netDown &&
-        prev.connectionsTcp === item.connectionsTcp &&
-        prev.connectionsUdp === item.connectionsUdp
-      );
-    })
-  ) {
+  let anyChanged =
+    state.order.length !== homeNodeSummariesSnapshot.length;
+  const next: HomeNodeSummary[] = [];
+
+  for (const uuid of state.order) {
+    const meta = state.metaByUuid[uuid];
+    if (!meta) continue;
+    const metrics = state.metricsByUuid[uuid];
+    const prev = prevByUuid.get(uuid);
+
+    const group = String(meta.group || "").trim();
+    const region = String(meta.region || "").trim();
+    const hidden = meta.hidden;
+    const weight = meta.weight;
+    const online = metrics?.online ?? null;
+    const trafficUp = metrics?.trafficUp ?? 0;
+    const trafficDown = metrics?.trafficDown ?? 0;
+    const netUp = metrics?.netUp ?? 0;
+    const netDown = metrics?.netDown ?? 0;
+    const connectionsTcp = metrics?.connectionsTcp ?? 0;
+    const connectionsUdp = metrics?.connectionsUdp ?? 0;
+
+    if (
+      prev &&
+      prev.group === group &&
+      prev.region === region &&
+      prev.hidden === hidden &&
+      prev.weight === weight &&
+      prev.online === online &&
+      prev.trafficUp === trafficUp &&
+      prev.trafficDown === trafficDown &&
+      prev.netUp === netUp &&
+      prev.netDown === netDown &&
+      prev.connectionsTcp === connectionsTcp &&
+      prev.connectionsUdp === connectionsUdp
+    ) {
+      next.push(prev);
+    } else {
+      anyChanged = true;
+      next.push({
+        uuid,
+        group,
+        region,
+        hidden,
+        weight,
+        online,
+        trafficUp,
+        trafficDown,
+        netUp,
+        netDown,
+        connectionsTcp,
+        connectionsUdp,
+      });
+    }
+  }
+
+  if (!anyChanged) {
     homeNodeSummariesSnapshotVersion = storeVersion;
     return homeNodeSummariesSnapshot;
   }

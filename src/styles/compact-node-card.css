@@ -471,6 +471,11 @@
   height: 7px;
 }
 
+.compact-node-traffic-pulse-canvas {
+  display: block;
+  min-width: 0;
+}
+
 .compact-node-traffic-pulse span {
   justify-self: center;
   width: 4px;

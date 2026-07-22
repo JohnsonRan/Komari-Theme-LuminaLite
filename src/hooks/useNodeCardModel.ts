@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import type { NodeInfo, NodeMetrics } from "@/types/komari";
 import { useFakePingFallback } from "@/hooks/useFakePing";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useNodeCardSnapshots } from "@/hooks/useNode";
@@ -93,8 +94,14 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     [resolvedPing],
   );
 
+  // 浅比较缓存：避免每 tick 创建新的 { ...meta, ...metrics } 对象引用，
+  // 让子组件在值未变时跳过 re-render。
+  type NodeCombined = NodeInfo & NodeMetrics;
+  const nodeCacheRef = useRef<NodeCombined | undefined>(undefined);
+
   return useMemo(() => {
     if (!meta || !metrics || !metaModel) {
+      nodeCacheRef.current = undefined;
       return {
         node: undefined,
         trafficTrend,
@@ -105,7 +112,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
 
     const { loadBaseline } = metaModel;
 
-    // 流量配额：按节点的 traffic_limit_type（与后端一致）把累计上/下行算成"已用"，
+    // 流量配额：按节点的 traffic_limit_type（与后端一致）把累计上/下行算成“已用”，
     // 在这里一次性算出剩余和使用占比，让两种卡片布局共用这套计算。
     const trafficUsage = resolveTrafficUsage(
       meta.traffic_limit_type,
@@ -114,8 +121,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       meta.traffic_limit,
     );
     const trafficUsedLabel = formatBytes(trafficUsage.used);
-    // 不限量时渲染成 ∞，让剩余值和"已用/上限"那行与限量情况保持一致
-    //（"剩余 ∞" + "2.73 GB / ∞"）。
+    // 不限量时渲染成 ∞，让剩余值和“已用/上限”那行与限量情况保持一致
+    //（“剩余 ∞” + “2.73 GB / ∞”）。
     const trafficLimitLabel = trafficUsage.unlimited ? "∞" : formatBytes(trafficUsage.limit);
     const trafficColor = trafficUsage.unlimited
       ? "var(--status-success)"
@@ -128,8 +135,24 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       typeLabel: trafficTypeLabel(meta.traffic_limit_type),
     };
 
+    // 浅比较：值未变则复用旧引用，避免子组件无谓 re-render。
+    const candidate: NodeCombined = { ...meta, ...metrics };
+    const prev = nodeCacheRef.current;
+    let node: NodeCombined;
+    if (prev) {
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(candidate);
+      const same =
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((key) => (prev as unknown as Record<string, unknown>)[key] === (candidate as unknown as Record<string, unknown>)[key]);
+      node = same ? prev : candidate;
+    } else {
+      node = candidate;
+    }
+    nodeCacheRef.current = node;
+
     return {
-      node: { ...meta, ...metrics },
+      node,
       trafficTrend,
       ping: resolvedPing,
       pingBuckets,

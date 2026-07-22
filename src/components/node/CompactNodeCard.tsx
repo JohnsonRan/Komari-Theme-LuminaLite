@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -38,6 +38,7 @@ import {
   TRAFFIC_SLIVER_RATIO,
 } from "./nodeCardShared";
 import { IpStackBadges } from "./IpStackBadges";
+import { CanvasStrip, safeCanvasColor } from "./CanvasStrip";
 import type {
   NodeInfo,
   NodeMetrics,
@@ -131,37 +132,47 @@ function CompactTrafficPulse({
 }) {
   const upSelected = up.slice(-TRAFFIC_DOT_COUNT);
   const downSelected = down.slice(-TRAFFIC_DOT_COUNT);
-  const upPadding = Math.max(0, TRAFFIC_DOT_COUNT - upSelected.length);
-  const downPadding = Math.max(0, TRAFFIC_DOT_COUNT - downSelected.length);
 
-  return (
-    <span className="compact-node-traffic-pulse" aria-hidden>
-      {Array.from({ length: TRAFFIC_DOT_COUNT }, (_, index) => {
-        const upSample = index < upPadding ? null : upSelected[index - upPadding];
-        const downSample = index < downPadding ? null : downSelected[index - downPadding];
+  const draw = useCallback(
+    (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      const count = TRAFFIC_DOT_COUNT;
+      const slotWidth = width / count;
+      const upPad = Math.max(0, count - upSelected.length);
+      const downPad = Math.max(0, count - downSelected.length);
+      const inactiveColor = safeCanvasColor("var(--progress-bg)");
+
+      for (let i = 0; i < count; i++) {
+        const upSample = i < upPad ? null : upSelected[i - upPad];
+        const downSample = i < downPad ? null : downSelected[i - downPad];
         const upValue = upSample?.value ?? 0;
         const downValue = downSample?.value ?? 0;
         const active = upValue > 0 || downValue > 0;
         const level = Math.max(upSample?.level ?? 0, downSample?.level ?? 0);
-        // 每点按其主方向(上/下取大)速率的单位档上色,与大卡的速度档色一致;大小/透明度仍按 level。
-        // 仅活跃点计算颜色,空闲点直接用中性色,省掉无谓的 formatByteRate。
-        const style = {
-          "--compact-traffic-dot-color": active
-            ? speedRateColorFromBytes(Math.max(upValue, downValue))
-            : "var(--progress-bg)",
-          "--compact-traffic-dot-scale": active ? `${0.68 + level * 0.62}` : "0.48",
-          opacity: active ? 0.5 + level * 0.42 : 0.38,
-        } as CSSProperties;
+        const scale = active ? 0.68 + level * 0.62 : 0.48;
+        const radius = 2 * scale;
+        const x = i * slotWidth + slotWidth / 2;
+        const y = height / 2;
 
-        return (
-          <span
-            key={index}
-            data-active={active ? "true" : "false"}
-            style={style}
-          />
-        );
-      })}
-    </span>
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = active
+          ? safeCanvasColor(speedRateColorFromBytes(Math.max(upValue, downValue)))
+          : inactiveColor;
+        ctx.globalAlpha = active ? 0.5 + level * 0.42 : 0.38;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    },
+    [upSelected, downSelected],
+  );
+
+  return (
+    <CanvasStrip
+      className="compact-node-traffic-pulse-canvas"
+      height={7}
+      redrawKey={`${upSelected.length}-${downSelected.length}`}
+      draw={draw}
+    />
   );
 }
 

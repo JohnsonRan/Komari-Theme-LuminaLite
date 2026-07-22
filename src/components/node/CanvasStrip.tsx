@@ -300,6 +300,28 @@ export function fillRoundedRect(
   ctx.fill();
 }
 
+// ─── 共享 rAF 重绘调度器 ─────────────────────────────────────────────────────
+// 同一 React commit 内所有 CanvasStrip 的重绘合并到一帧执行，减少 layout thrashing。
+const pendingRedraws = new Set<() => void>();
+let redrawFrame: number | null = null;
+
+function flushRedraws() {
+  redrawFrame = null;
+  const draws = [...pendingRedraws];
+  pendingRedraws.clear();
+  for (const fn of draws) fn();
+}
+
+function scheduleRedraw(fn: () => void): () => void {
+  pendingRedraws.add(fn);
+  if (redrawFrame == null) {
+    redrawFrame = requestAnimationFrame(flushRedraws);
+  }
+  return () => {
+    pendingRedraws.delete(fn);
+  };
+}
+
 export function CanvasStrip({
   className,
   height,
@@ -349,10 +371,13 @@ export function CanvasStrip({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, width, height);
-    draw(ctx, width, height);
+    // 合并到同一帧执行，避免同一 tick 内数百张 canvas 逐个触发 layout。
+    return scheduleRedraw(() => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.clearRect(0, 0, width, height);
+      draw(ctx, width, height);
+    });
   }, [draw, height, redrawKey, visible, width]);
 
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {

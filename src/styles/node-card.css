@@ -7,6 +7,7 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   content-visibility: auto;
+  contain: layout style paint;
   box-shadow: none;
   overflow: hidden;
 }

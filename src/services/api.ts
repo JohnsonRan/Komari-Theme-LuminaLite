@@ -165,19 +165,15 @@ export class ApiRequestError extends Error {
 function normalizeRpcLatestStatus(
   payload: unknown,
 ): Record<string, unknown> {
+  // 热路径（每 2s 轮询）用轻量 typeof 检查代替 Zod 校验，减少 CPU 开销。
   if (payload && typeof payload === "object" && !Array.isArray(payload)) {
-    const maybeRecords = (payload as Record<string, unknown>).records;
-    const wrapped = z.record(z.string(), z.unknown()).safeParse(maybeRecords);
-    if (wrapped.success) {
-      return wrapped.data;
+    const obj = payload as Record<string, unknown>;
+    const maybeRecords = obj.records;
+    if (maybeRecords && typeof maybeRecords === "object" && !Array.isArray(maybeRecords)) {
+      return maybeRecords as Record<string, unknown>;
     }
+    return obj;
   }
-
-  const direct = z.record(z.string(), z.unknown()).safeParse(payload);
-  if (direct.success) {
-    return direct.data;
-  }
-
   return {};
 }
 
