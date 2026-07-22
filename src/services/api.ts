@@ -1011,6 +1011,9 @@ export const RecentStatusRecordSchema = z
   .object({
     cpu: z.number().default(0),
     gpu: z.number().default(0),
+    gpu_memory_used: z.number().default(0),
+    gpu_memory_total: z.number().default(0),
+    gpu_temperature: z.number().default(0),
     ram: z.number().default(0),
     ram_total: z.number().default(0),
     swap: z.number().default(0),

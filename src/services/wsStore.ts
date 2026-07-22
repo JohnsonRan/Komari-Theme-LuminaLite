@@ -123,6 +123,9 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     pingLatest: null,
     pingLoss: null,
     gpuPct: 0,
+    gpuMemUsed: 0,
+    gpuMemTotal: 0,
+    gpuTemp: 0,
   };
 }
 
@@ -225,6 +228,9 @@ function mergeRealtime(
     pingLatest,
     pingLoss,
     gpuPct: rt.gpu?.usage ?? 0,
+    gpuMemUsed: rt.gpu?.memoryUsed ?? 0,
+    gpuMemTotal: rt.gpu?.memoryTotal ?? 0,
+    gpuTemp: rt.gpu?.temperature ?? 0,
   };
 }
 
@@ -254,7 +260,10 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.updatedAt === b.updatedAt &&
     a.pingLatest === b.pingLatest &&
     a.pingLoss === b.pingLoss &&
-    a.gpuPct === b.gpuPct
+    a.gpuPct === b.gpuPct &&
+    a.gpuMemUsed === b.gpuMemUsed &&
+    a.gpuMemTotal === b.gpuMemTotal &&
+    a.gpuTemp === b.gpuTemp
   );
 }
 
@@ -541,6 +550,7 @@ function normalizeRealtime(
   if (Object.keys(payload).length === 0) return null;
 
   const cpu = asRecord(payload.cpu);
+  const gpu = asRecord(payload.gpu);
   const ram = asRecord(payload.ram);
   const swap = asRecord(payload.swap);
   const load = asRecord(payload.load);
@@ -557,6 +567,14 @@ function normalizeRealtime(
   if (hasNestedShape) {
     return {
       cpu: { usage: asNumber(cpu.usage) },
+      gpu: Object.keys(gpu).length > 0
+        ? {
+            usage: asNumber(gpu.usage),
+            memoryUsed: asNumber(gpu.memoryUsed ?? gpu.memory_used),
+            memoryTotal: asNumber(gpu.memoryTotal ?? gpu.memory_total),
+            temperature: asNumber(gpu.temperature),
+          }
+        : undefined,
       ram: {
         total: asNumber(ram.total, metrics.ramTotal || meta.mem_total),
         used: asNumber(ram.used),
@@ -593,6 +611,14 @@ function normalizeRealtime(
 
   return {
     cpu: { usage: asNumber(payload.cpu) },
+    gpu: asNumber(payload.gpu) > 0 || asNumber(payload.gpu_temperature) > 0
+      ? {
+          usage: asNumber(payload.gpu),
+          memoryUsed: asNumber(payload.gpu_memory_used),
+          memoryTotal: asNumber(payload.gpu_memory_total),
+          temperature: asNumber(payload.gpu_temperature),
+        }
+      : undefined,
     ram: {
       total: asNumber(payload.ram_total, metrics.ramTotal || meta.mem_total),
       used: asNumber(payload.ram),

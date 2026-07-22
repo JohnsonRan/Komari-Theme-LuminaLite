@@ -96,7 +96,7 @@ export interface NodeInfo {
 
 export interface NodeRealtime {
   cpu: { usage: number };
-  gpu?: { usage: number };
+  gpu?: { usage: number; memoryUsed?: number; memoryTotal?: number; temperature?: number };
   ram: { total: number; used: number };
   swap: { total: number; used: number };
   load: { load1: number; load5: number; load15: number };
@@ -140,6 +140,12 @@ export interface NodeMetrics {
   pingLoss: number | null;
   /** GPU 使用率 (%)，无 GPU 或未上报时为 0。 */
   gpuPct: number;
+  /** GPU 显存已用 (bytes)，无 GPU 或未上报时为 0。 */
+  gpuMemUsed: number;
+  /** GPU 显存总量 (bytes)，无 GPU 或未上报时为 0。 */
+  gpuMemTotal: number;
+  /** GPU 温度 (°C)，无 GPU 或未上报时为 0。 */
+  gpuTemp: number;
 }
 
 export interface ThemeSettings {
@@ -246,6 +252,9 @@ export const LoadRecordSchema = z
   .object({
     cpu: z.number().default(0),
     gpu: z.number().default(0),
+    gpu_memory_used: z.number().default(0),
+    gpu_memory_total: z.number().default(0),
+    gpu_temperature: z.number().default(0),
     ram: z.number().default(0),
     ram_total: z.number().default(0),
     swap: z.number().default(0),
@@ -269,6 +278,9 @@ export const LoadRecordSchema = z
 export interface LoadRecord {
   cpu: number;
   gpu: number;
+  gpu_memory_used: number;
+  gpu_memory_total: number;
+  gpu_temperature: number;
   ram: number;
   ram_total: number;
   swap: number;

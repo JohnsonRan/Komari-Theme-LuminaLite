@@ -114,7 +114,7 @@ const nodes: NodeInfo[] = [
     virtualization: "KVM",
     os: "rocky",
     kernel_version: "5.14.0",
-    gpu_name: "",
+    gpu_name: "NVIDIA A100",
     mem_total: 16 * GIB,
     swap_total: 4 * GIB,
     disk_total: 320 * GIB,
@@ -219,6 +219,7 @@ function latestStatus() {
         {
           online: true,
           cpu,
+          gpu: node.gpu_name ? { usage: 34 + index * 8, memoryUsed: 18 * GIB, memoryTotal: 40 * GIB, temperature: 52 + index * 3 } : undefined,
           ram: (node.mem_total * memoryPct) / 100,
           ram_total: node.mem_total,
           swap: (node.swap_total * swapPct) / 100,
@@ -253,9 +254,13 @@ function loadRecords(uuid: string) {
     const phase = sample / 7 + index;
     const cpu = Math.max(2, Math.min(98, profile[0] + Math.sin(phase) * 10));
     const ram = node.mem_total * Math.min(0.94, 0.35 + index * 0.08 + Math.cos(phase) * 0.04);
+    const hasGpu = Boolean(node.gpu_name);
     return {
       cpu,
-      gpu: 0,
+      gpu: hasGpu ? Math.max(2, Math.min(98, 38 + index * 6 + Math.sin(phase) * 12)) : 0,
+      gpu_memory_used: hasGpu ? 18 * GIB * (0.7 + Math.sin(phase) * 0.15) : 0,
+      gpu_memory_total: hasGpu ? 40 * GIB : 0,
+      gpu_temperature: hasGpu ? 52 + index * 3 + Math.sin(phase) * 5 : 0,
       ram,
       ram_total: node.mem_total,
       swap: node.swap_total * 0.08,
@@ -281,6 +286,10 @@ function loadRecords(uuid: string) {
 // memory.total / swap.total / disk.total 已废弃（obsoleteBuiltinMetricNames），不再返回。
 const LOAD_METRIC_TO_FIELD = {
   "cpu.usage": "cpu",
+  "gpu.usage": "gpu",
+  "gpu.memory.used": "gpu_memory_used",
+  "gpu.memory.total": "gpu_memory_total",
+  "gpu.temperature": "gpu_temperature",
   "memory.used": "ram",
   "swap.used": "swap",
   "load.average": "load",

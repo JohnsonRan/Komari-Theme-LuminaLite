@@ -2,6 +2,10 @@ import type { LoadRecord } from "@/types/komari";
 
 const LOAD_METRIC_FIELD = {
   "cpu.usage": "cpu",
+  "gpu.usage": "gpu",
+  "gpu.memory.used": "gpu_memory_used",
+  "gpu.memory.total": "gpu_memory_total",
+  "gpu.temperature": "gpu_temperature",
   "memory.used": "ram",
   "memory.total": "ram_total",
   "swap.used": "swap",
@@ -24,6 +28,7 @@ export const LOAD_LAST_AGGREGATION = {
   "memory.total": "last",
   "swap.total": "last",
   "disk.total": "last",
+  "gpu.memory.total": "last",
   "net.total.up": "last",
   "net.total.down": "last",
 } as const;
@@ -39,6 +44,9 @@ function emptyLoadRecord(client: string, time: string): LoadRecord {
   return {
     cpu: 0,
     gpu: 0,
+    gpu_memory_used: 0,
+    gpu_memory_total: 0,
+    gpu_temperature: 0,
     ram: 0,
     ram_total: 0,
     swap: 0,

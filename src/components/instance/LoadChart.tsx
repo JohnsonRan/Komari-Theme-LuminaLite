@@ -11,7 +11,7 @@ import {
 } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
-import { ArrowDown, ArrowUp, CircuitBoard, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, CircuitBoard, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Thermometer, Workflow } from "lucide-react";
 import { clsx } from "clsx";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
@@ -59,8 +59,11 @@ const CONNECTION_KEYS = ["connections", "udp"];
 const CONNECTION_COLORS = [CHART_PALETTE.memory, CHART_PALETTE.cpu];
 const PROCESS_KEYS = ["process"];
 const PROCESS_COLORS = [CHART_PALETTE.warning];
-const GPU_KEYS = ["gpu"];
-const GPU_COLORS = ["#e05d7b"];
+const GPU_KEYS = ["gpu", "gpuMem"];
+const GPU_COLORS = ["#e05d7b", "#c77dff"];
+const GPU_BYTES_KEYS = ["gpuMemBytes"];
+const GPU_TEMP_KEYS = ["gpuTemp"];
+const GPU_TEMP_COLORS = ["#f4a261"];
 const SERIES_LABELS: Record<string, string> = {
   cpu: "CPU",
   ram: "内存",
@@ -75,6 +78,9 @@ const SERIES_LABELS: Record<string, string> = {
   udp: "UDP",
   process: "进程",
   gpu: "GPU",
+  gpuMem: "显存",
+  gpuMemBytes: "显存",
+  gpuTemp: "温度",
 };
 const LOAD_INTERPOLATE_KEYS = [
   "cpu",
@@ -90,6 +96,9 @@ const LOAD_INTERPOLATE_KEYS = [
   "udp",
   "process",
   "gpu",
+  "gpuMem",
+  "gpuMemBytes",
+  "gpuTemp",
 ];
 
 interface ChartPoint {
@@ -145,6 +154,9 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
     udp: node.connectionsUdp,
     process: node.process,
     gpu: node.gpuPct,
+    gpuMem: node.gpuMemTotal > 0 ? (node.gpuMemUsed / node.gpuMemTotal) * 100 : 0,
+    gpuMemBytes: node.gpuMemUsed,
+    gpuTemp: node.gpuTemp,
   };
 }
 
@@ -154,7 +166,7 @@ function formatNetworkRate(value: number, unit: DetailNetworkUnit): string {
   return unit === "mbps" ? formatTrafficRateLabel(value) : formatByteRateLabel(value);
 }
 
-const BYTES_TOOLTIP_KEYS = new Set(["ramBytes", "swapBytes", "diskBytes"]);
+const BYTES_TOOLTIP_KEYS = new Set(["ramBytes", "swapBytes", "diskBytes", "gpuMemBytes"]);
 
 function formatTooltipValue(
   key: string,
@@ -165,6 +177,7 @@ function formatTooltipValue(
   if (value == null || !Number.isFinite(value)) return "—";
   if (key === "netIn" || key === "netOut") return formatNetworkRate(value, networkUnit);
   if (BYTES_TOOLTIP_KEYS.has(key)) return formatBytes(value);
+  if (key === "gpuTemp") return `${value.toFixed(1)}°C`;
   if (unit === "%") return `${value.toFixed(2)}%`;
   if (key === "process" || key === "connections" || key === "udp") return `${Math.round(value)}`;
   return value.toFixed(2);
@@ -558,6 +571,9 @@ export function LoadChart({
         udp: record.connections_udp,
         process: record.process,
         gpu: record.gpu,
+        gpuMem: record.gpu_memory_total > 0 ? (record.gpu_memory_used / record.gpu_memory_total) * 100 : 0,
+        gpuMemBytes: record.gpu_memory_used,
+        gpuTemp: record.gpu_temperature,
       };
     });
     const sampled = downsamplePoints(rawPoints, getHistoryRenderLimit(hours));
@@ -590,6 +606,9 @@ export function LoadChart({
           udp: rec.connections_udp,
           process: rec.process,
           gpu: rec.gpu,
+          gpuMem: rec.gpu_memory_total > 0 ? (rec.gpu_memory_used / rec.gpu_memory_total) * 100 : 0,
+          gpuMemBytes: rec.gpu_memory_used,
+          gpuTemp: rec.gpu_temperature,
         } as ChartPoint;
       })
       .filter((p): p is ChartPoint => p !== null)
@@ -873,15 +892,44 @@ export function LoadChart({
                 ? `${node.gpuPct.toFixed(2)}%`
                 : `${(points[points.length - 1]?.gpu ?? 0).toFixed(2)}%`
             }
-            note={meta?.gpu_name || "使用率"}
+            note={
+              isRealtime && node && node.gpuMemTotal > 0
+                ? `显存 ${formatBytes(node.gpuMemUsed)} / ${formatBytes(node.gpuMemTotal)}`
+                : meta?.gpu_name || "使用率"
+            }
             points={points}
-            keys={GPU_KEYS}
-            colors={GPU_COLORS}
+            keys={useBytesUnit ? GPU_BYTES_KEYS : GPU_KEYS}
+            colors={useBytesUnit ? [GPU_COLORS[1]] : GPU_COLORS}
             resolvedAppearance={resolvedAppearance}
             rangeHours={hours}
-            unit="%"
+            unit={useBytesUnit ? "" : "%"}
             spanGaps={connectNulls}
-            axisKind="percent"
+            axisKind={useBytesUnit ? "bytes" : "percent"}
+            xRange={requestedXRange}
+            resetSignal={resetSignal}
+          />
+        )}
+        {hasGpu && (
+          <ChartCard
+            icon={<Thermometer size={13} />}
+            title="GPU 温度"
+            uuid={uuid}
+            value={
+              isRealtime && node
+                ? node.gpuTemp > 0 ? `${node.gpuTemp.toFixed(1)}°C` : "—"
+                : (points[points.length - 1]?.gpuTemp ?? 0) > 0
+                  ? `${(points[points.length - 1]?.gpuTemp ?? 0).toFixed(1)}°C`
+                  : "—"
+            }
+            note={meta?.gpu_name || "温度"}
+            points={points}
+            keys={GPU_TEMP_KEYS}
+            colors={GPU_TEMP_COLORS}
+            resolvedAppearance={resolvedAppearance}
+            rangeHours={hours}
+            unit="°C"
+            spanGaps={connectNulls}
+            axisKind="default"
             xRange={requestedXRange}
             resetSignal={resetSignal}
           />
