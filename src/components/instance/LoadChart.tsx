@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -461,20 +462,42 @@ export function LoadChart({
   const [connectNulls, setConnectNulls] = useState(false);
   // 刷新按钮递增此值，通知各 ChartCard 重置缩放/固定状态。
   const [resetSignal, setResetSignal] = useState(0);
+  // 鼠标悬停图表区域时暂停实时数据推送：避免滑动窗口在用户缩放/固定/阅读时
+  // 不断位移，导致交互「随机失效」。离开后一次性补回缓冲期间的数据点。
+  const [chartHovered, setChartHovered] = useState(false);
+  const realtimeBufferRef = useRef<ChartPoint[]>([]);
 
   useEffect(() => {
     if (!active || !isRealtime || !node) return;
     const point = pointFromNode(node);
+    if (chartHovered) {
+      realtimeBufferRef.current.push(point);
+      return;
+    }
+    const buffered = realtimeBufferRef.current;
+    realtimeBufferRef.current = [];
     setRealtimePoints((prev) => {
-      const last = prev[prev.length - 1];
-      if (last && Math.abs(last.time - point.time) < 1) return prev;
-      return [...prev, point].slice(-REALTIME_SAMPLE_LIMIT);
+      let next = prev;
+      for (const candidate of [...buffered, point]) {
+        const last = next[next.length - 1];
+        if (last && Math.abs(last.time - candidate.time) < 1) continue;
+        next = [...next, candidate];
+      }
+      return next === prev ? prev : next.slice(-REALTIME_SAMPLE_LIMIT);
     });
-  }, [active, isRealtime, node]);
+  }, [active, isRealtime, node, chartHovered]);
 
   useEffect(() => {
+    realtimeBufferRef.current = [];
     setRealtimePoints([]);
   }, [hours, uuid]);
+
+  const onChartGridEnter = useCallback(() => {
+    if (isRealtime) setChartHovered(true);
+  }, [isRealtime]);
+  const onChartGridLeave = useCallback(() => {
+    setChartHovered(false);
+  }, []);
 
   const historyRecords = useMemo<Array<{ record: LoadRecord; time: number }>>(
     () =>
@@ -622,7 +645,11 @@ export function LoadChart({
       }
       className="instance-chart-panel"
     >
-      <div className="instance-chart-grid">
+      <div
+        className="instance-chart-grid"
+        onMouseEnter={onChartGridEnter}
+        onMouseLeave={onChartGridLeave}
+      >
         <ChartCard
           icon={<Cpu size={13} />}
           title="CPU"
