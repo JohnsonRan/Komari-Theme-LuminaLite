@@ -984,7 +984,7 @@ export interface KomariVersion {
 export async function getVersion(
   options?: { signal?: AbortSignal },
 ): Promise<KomariVersion> {
-  return rpcCall(
+  const result = await rpcCall(
     "common:getVersion",
     {},
     z.object({
@@ -993,6 +993,7 @@ export async function getVersion(
     }),
     options,
   );
+  return { version: result.version ?? "", hash: result.hash ?? "" };
 }
 
 // ─── 访客事件上报 ─────────────────────────────────────────────────────────────
@@ -1043,10 +1044,10 @@ export async function getNodeRecentStatus(
     options,
   );
   // 后端可能返回数组或 { records: [...] } 包装。
-  const raw = Array.isArray(payload)
+  const raw: unknown[] = Array.isArray(payload)
     ? payload
     : payload && typeof payload === "object" && Array.isArray((payload as Record<string, unknown>).records)
-      ? (payload as Record<string, unknown>).records
+      ? (payload as Record<string, unknown>).records as unknown[]
       : [];
   const out: RecentStatusRecord[] = [];
   for (const item of raw) {
