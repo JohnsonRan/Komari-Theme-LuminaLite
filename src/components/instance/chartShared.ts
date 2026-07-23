@@ -571,12 +571,14 @@ export function useChartInteractions({
 
         // 收敛到完整范围，避免缩出数据边界。
         const full = fullRangeRef.current;
+        let isFull = false;
         if (full) {
           const [fullMin, fullMax] = full;
           const fullSpan = fullMax - fullMin;
           if (newMax - newMin >= fullSpan) {
             newMin = fullMin;
             newMax = fullMax;
+            isFull = true;
           } else {
             if (newMin < fullMin) {
               newMax += fullMin - newMin;
@@ -587,17 +589,35 @@ export function useChartInteractions({
               newMax = fullMax;
             }
           }
+        } else {
+          // 实时模式：以当前数据范围为界，防止无限缩小。
+          const times = chart.data[0];
+          if (times && times.length >= 2) {
+            const dataMin = times[0] as number;
+            const dataMax = times[times.length - 1] as number;
+            const dataSpan = dataMax - dataMin;
+            if (dataSpan > 0 && newMax - newMin >= dataSpan) {
+              newMin = dataMin;
+              newMax = dataMax;
+              isFull = true;
+            } else if (newMin < dataMin) {
+              newMax += dataMin - newMin;
+              newMin = dataMin;
+            } else if (newMax > dataMax) {
+              newMin -= newMax - dataMax;
+              newMax = dataMax;
+            }
+          }
         }
 
         // 最小缩放窗口 60s，避免缩到单点无意义。
         if (newMax - newMin < 60) return;
 
         chart.setScale("x", { min: newMin, max: newMax });
-        zoomXRangeRef.current = [newMin, newMax];
-        const isFull = full != null && newMin <= full[0] + 0.5 && newMax >= full[1] - 0.5;
+        zoomXRangeRef.current = isFull ? null : [newMin, newMax];
         setZoomed(!isFull);
         // 缩放整组联动：其余同组图表同步到相同 X 窗口。
-        broadcastXScale(syncKey, chart, newMin, newMax);
+        broadcastXScale(syncKey, chart, newMin, newMax, isFull);
       };
 
       // uPlot 在 wrap 上以捕获阶段监听 click：只要按下到松开期间光标有过任何位移
