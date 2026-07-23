@@ -393,6 +393,9 @@ function CompactNodeChips({
   ipv4?: string | null;
   ipv6?: string | null;
 }) {
+  // 无副标题、无 IP 徽章、无标签时整行不渲染：行高固定 24px，空渲染会在名称下方
+  // 留出一行空白（如后端未向访客下发 ipv4/ipv6 时）。
+  if (!subtitle && tags.length === 0 && !ipv4 && !ipv6) return null;
   // 完整 tag 列表挂在 lane 的 tooltip 上;chip 不带自己的 title,hover 会穿透到 lane 上 ——
   // 被裁剪 lane 折行挤出去的 tag 就靠这个保持可见,不用显示"+N"角标。
   const tagTitle = joinTagTitle(tags);
