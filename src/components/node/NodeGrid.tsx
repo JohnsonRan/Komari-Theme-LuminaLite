@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Flag } from "@/components/ui/Flag";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllNodeMeta, useHomeNodeSummaries, useNodeStoreStatus } from "@/hooks/useNode";
+import type { HomeNodeSummary } from "@/services/wsStore";
 import { useHomepagePingOverview } from "@/hooks/usePingOverview";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
