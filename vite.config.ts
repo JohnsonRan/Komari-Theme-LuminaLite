@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+const themeMeta = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./komari-theme.json", import.meta.url)), "utf-8"),
+) as { version: string };
+
 export default defineConfig({
+  define: {
+    __THEME_VERSION__: JSON.stringify(themeMeta.version),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

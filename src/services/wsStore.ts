@@ -59,6 +59,9 @@ const IDLE_NODE_INFO_INTERVAL_MS = 60_000;
 // WebSocket 实时通道（同默认主题 /api/clients）是实时数据的唯一来源，不作 RPC 降级。
 const WS_RECONNECT_DELAY_MS = 3_000;
 const WS_FRESH_THRESHOLD_MS = 8_000;
+// 后端 online 列表可能存在延迟（节点已断开但尚未从列表移除）。
+// 若节点声称在线但 updated_at 距今超过此阈值，前端主动将其视为离线。
+const STALE_ONLINE_THRESHOLD_MS = 30_000;
 const TRAFFIC_TREND_SAMPLE_COUNT = 18;
 const EMPTY_TRAFFIC_TREND_SAMPLE: TrafficTrendSample = {
   value: 0,
@@ -733,11 +736,21 @@ function applyWsLivePayload(payload: unknown) {
     if (!meta || !prev) continue;
     if (!(uuid in dataMap)) continue;
 
-    const online = onlineSet.has(uuid);
+    const backendOnline = onlineSet.has(uuid);
     const realtime = normalizeRealtime(dataMap[uuid], meta, prev);
-    const merged = realtime
-      ? mergeRealtime(prev, realtime, online, uuid)
-      : { ...prev, online };
+    let merged = realtime
+      ? mergeRealtime(prev, realtime, backendOnline, uuid)
+      : { ...prev, online: backendOnline };
+
+    // 后端 online 列表可能有延迟：节点实际已离线但仍在列表中。
+    // 若 updated_at 有效且距今超过阈值，前端主动修正为离线。
+    if (
+      backendOnline &&
+      merged.updatedAt > 0 &&
+      Date.now() - merged.updatedAt > STALE_ONLINE_THRESHOLD_MS
+    ) {
+      merged = { ...merged, online: false };
+    }
 
     if (!shallowEqualMetrics(prev, merged)) {
       if (nextMetricsByUuid === state.metricsByUuid) {
