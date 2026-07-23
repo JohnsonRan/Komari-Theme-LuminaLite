@@ -510,7 +510,6 @@ export function LoadChart({
 
   useEffect(() => {
     if (!active || !isRealtime || !node) return;
-    const point = pointFromNode(node);
     if (chartHovered) {
       realtimeBufferRef.current.push(point);
       return;
