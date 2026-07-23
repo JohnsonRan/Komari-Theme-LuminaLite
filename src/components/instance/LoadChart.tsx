@@ -630,6 +630,17 @@ export function LoadChart({
     return historyPoints.length > 0 ? historyPoints : recentPoints;
   }, [historyPoints, recentPoints, isRealtime, realtimePoints]);
 
+  // 即使节点标有 GPU 型号，若无实际数据上报（gpu_memory_total 始终为 0）
+  // 则 GPU 图表无意义，直接隐藏。
+  const hasGpuData = useMemo(() => {
+    if (!hasGpu) return false;
+    // gpu_memory_total > 0 是 GPU 监控活跃的最可靠信号
+    if (historyRecords.some(({ record }) => record.gpu_memory_total > 0)) return true;
+    if (recentPoints.some((p) => (p.gpuMemBytes ?? 0) > 0 || (p.gpuTemp ?? 0) > 0)) return true;
+    if (isRealtime && node && node.gpuMemTotal > 0) return true;
+    return false;
+  }, [hasGpu, historyRecords, recentPoints, isRealtime, node]);
+
   const sourceRecordCount = historyRecords.length;
   const wasDownsampled = !isRealtime && sourceRecordCount > getHistoryRenderLimit(hours);
   const sampleSummary = isRealtime
@@ -883,7 +894,7 @@ export function LoadChart({
           xRange={requestedXRange}
           resetSignal={resetSignal}
         />
-        {hasGpu && (
+        {hasGpuData && (
           <ChartCard
             icon={<CircuitBoard size={13} />}
             title="GPU"
@@ -910,7 +921,7 @@ export function LoadChart({
             resetSignal={resetSignal}
           />
         )}
-        {hasGpu && (
+        {hasGpuData && (
           <ChartCard
             icon={<Thermometer size={13} />}
             title="GPU 温度"
