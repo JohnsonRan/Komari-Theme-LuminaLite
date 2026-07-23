@@ -734,9 +734,40 @@ function applyWsLivePayload(payload: unknown) {
     const meta = state.metaByUuid[uuid];
     const prev = state.metricsByUuid[uuid];
     if (!meta || !prev) continue;
-    if (!(uuid in dataMap)) continue;
 
     const backendOnline = onlineSet.has(uuid);
+
+    // 节点不在 data map 中：无新数据帧。
+    // 若后端仍声称在线但数据已过期，主动修正为离线。
+    if (!(uuid in dataMap)) {
+      if (
+        prev.online === true &&
+        !backendOnline
+      ) {
+        // 后端已将其移出 online 列表，同步修正。
+        const merged = { ...prev, online: false as const };
+        if (nextMetricsByUuid === state.metricsByUuid) {
+          nextMetricsByUuid = { ...state.metricsByUuid };
+        }
+        nextMetricsByUuid[uuid] = merged;
+        touchedMetrics.add(uuid);
+      } else if (
+        backendOnline &&
+        prev.online !== false &&
+        prev.updatedAt > 0 &&
+        Date.now() - prev.updatedAt > STALE_ONLINE_THRESHOLD_MS
+      ) {
+        // 后端 online 列表有延迟：无新数据且 updated_at 已过期，视为离线。
+        const merged = { ...prev, online: false as const };
+        if (nextMetricsByUuid === state.metricsByUuid) {
+          nextMetricsByUuid = { ...state.metricsByUuid };
+        }
+        nextMetricsByUuid[uuid] = merged;
+        touchedMetrics.add(uuid);
+      }
+      continue;
+    }
+
     const realtime = normalizeRealtime(dataMap[uuid], meta, prev);
     let merged = realtime
       ? mergeRealtime(prev, realtime, backendOnline, uuid)

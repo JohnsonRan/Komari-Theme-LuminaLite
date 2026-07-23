@@ -29,14 +29,29 @@
   white-space: nowrap;
 }
 
-.home-brand-version {
+.home-brand-versions {
+  display: flex;
   flex-shrink: 0;
+  align-items: baseline;
+  gap: 5px;
   margin-top: 2px;
-  font-size: 11px;
+}
+
+.home-brand-version {
   font-weight: 500;
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
-  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.home-brand-version--server {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.home-brand-version--theme {
+  font-size: 10px;
+  opacity: 0.6;
 }
 
 @media (max-width: 720px) {
