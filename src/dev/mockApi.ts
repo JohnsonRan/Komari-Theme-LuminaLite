@@ -212,7 +212,9 @@ const statusProfiles = [
 function embeddedPingStats(baseline: number, nodeIndex: number, now: number) {
   const tick = now / 1000;
   return Object.fromEntries(
-    pingTasks.map((task, taskIndex) => {
+    // 4 号任务(教育网)刻意不下发数据:模拟「主题设置里绑了，但后端 Ping 任务其实
+    // 没覆盖这个节点」——此时该任务在卡片上应当整条不渲染，而不是留一个空 pill。
+    pingTasks.slice(0, 3).map((task, taskIndex) => {
       const jitter = Math.sin(tick / 3 + nodeIndex + taskIndex * 1.7) * 4;
       const latest = Math.max(1, Math.round(baseline + taskIndex * 14 + jitter));
       return [
@@ -407,6 +409,8 @@ function trafficMetricPayload(params: {
 }
 
 function pingRecords(uuid?: string, taskId = 1) {
+  // 与 embeddedPingStats 保持一致:4 号任务没有任何历史记录。
+  if (taskId > 3) return [];
   const clients = uuid ? [uuid] : nodes.map((node) => node.uuid);
   const now = Date.now();
   // 每个任务给一个固定偏移，让首页的多任务标签能明显区分出三条线路。
@@ -563,6 +567,8 @@ export function installDevMockApi() {
             "1": nodes.map((node) => node.uuid),
             "2": nodes.slice(0, Math.ceil(nodes.length / 2)).map((node) => node.uuid),
             "3": nodes.slice(0, Math.ceil(nodes.length / 3)).map((node) => node.uuid),
+            // Frankfurt 绑了 4 号任务，但后端那个任务没有它的数据 —— 用来验证空任务不渲染。
+            "4": [nodes[2].uuid],
           },
         },
       });

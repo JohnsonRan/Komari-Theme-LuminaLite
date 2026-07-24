@@ -1,7 +1,23 @@
-import type { PingRecord, PingTask, PingTaskStats } from "@/types/komari";
+import type { PingOverviewItem, PingRecord, PingTask, PingTaskStats } from "@/types/komari";
 
 export const PING_LATENCY_METRIC = "ping.latency_ms";
 export const PING_LOSS_METRIC = "ping.loss";
+
+/**
+ * 这条 ping 序列是否有任何可展示的数据。
+ *
+ * 用来识别「主题设置里绑了任务，但后端那个 Ping 任务其实没覆盖这个节点」——
+ * overview 对这种组合只能产出空壳（无样本、无延迟、无丢包），首页卡片上就是一个
+ * 「--ms」的噪声标签，应当整条不渲染。
+ *
+ * 刻意不按「值为 0」判断：0ms（同机 / 局域网目标）与 0% 丢包都是完全正常的读数，
+ * 按 0 过滤会连健康的任务一起藏掉；而真正的空任务读数是 null，压根不等于 0。
+ */
+export function hasPingSeriesData(
+  item: Pick<PingOverviewItem, "samples" | "lastValue" | "loss">,
+): boolean {
+  return item.samples.length > 0 || item.lastValue != null || item.loss != null;
+}
 
 interface PingMetricPoint {
   time: string;

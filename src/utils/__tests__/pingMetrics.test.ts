@@ -6,12 +6,34 @@ import {
   reconcilePingMetricStats,
   resolvePingSampleCounts,
   resolvePingChartInterval,
+  hasPingSeriesData,
   PING_LATENCY_METRIC,
   PING_LOSS_METRIC,
   type PingMetricSeries,
 } from "@/utils/pingMetrics";
 
 const CLIENT = "node-a";
+
+describe("hasPingSeriesData", () => {
+  it("rejects the empty shell produced for a task that never covers the node", () => {
+    expect(hasPingSeriesData({ samples: [], lastValue: null, loss: null })).toBe(false);
+  });
+
+  it("keeps zero readings — 0ms and 0% loss are healthy, not missing", () => {
+    expect(hasPingSeriesData({ samples: [], lastValue: 0, loss: 0 })).toBe(true);
+    expect(hasPingSeriesData({ samples: [], lastValue: null, loss: 0 })).toBe(true);
+  });
+
+  it("keeps a series that only has history", () => {
+    expect(
+      hasPingSeriesData({
+        samples: [{ time: 1, value: 12 }],
+        lastValue: null,
+        loss: null,
+      }),
+    ).toBe(true);
+  });
+});
 const TIME = "2026-07-13T02:00:00Z";
 
 function series(

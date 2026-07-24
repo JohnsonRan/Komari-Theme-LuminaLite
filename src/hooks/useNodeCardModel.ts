@@ -27,6 +27,7 @@ import {
 } from "@/utils/metricTone";
 import { resolveTrafficUsage, trafficTypeLabel, type TrafficDisplay } from "@/utils/traffic";
 import { resolveOsInfo } from "@/components/ui/OsLogo";
+import { hasPingSeriesData } from "@/utils/pingMetrics";
 import { MAX_HOMEPAGE_PING_TASKS } from "@/utils/pingTasks";
 import type { PingOverviewBucket, PingOverviewItem, PingRealtimeStats } from "@/types/komari";
 
@@ -127,27 +128,31 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   // 历史柱状图仍由 overview(~60s)提供。后端 WS 帧按 taskId 下发全量 map,所以副任务
   // 与主任务是同一档实时性,不存在"只有第一个是实时的"。
   const pingSeries = useMemo<NodePingSeries[]>(() => {
-    const entries = [
+    const resolved = [
       { item: ping, buckets: pingBuckets },
       { item: pingList[1], buckets: extraBuckets1 },
       { item: pingList[2], buckets: extraBuckets2 },
-    ].slice(0, MAX_HOMEPAGE_PING_TASKS);
-    const multi = pingList.length > 1;
+    ]
+      .slice(0, MAX_HOMEPAGE_PING_TASKS)
+      .flatMap(({ item, buckets }) =>
+        item ? [{ ping: applyRealtimePing(item, metrics), buckets }] : [],
+      );
 
-    return entries.flatMap(({ item, buckets }) => {
-      if (!item) return [];
-      const resolved = applyRealtimePing(item, metrics);
-      return [
-        {
-          taskId: resolved.taskId,
-          label: multi ? (resolved.taskName ?? `任务 #${resolved.taskId ?? "-"}`) : "",
-          ping: resolved,
-          buckets,
-          latencyColor: latencyHeatColor(resolved.lastValue),
-          lossColor: lossHeatColor(resolved.loss),
-        },
-      ];
-    });
+    // 绑了任务但后端那个任务没覆盖这个节点时只会拿到空壳，卡片上就是个「--ms」噪声标签。
+    // 整条丢掉；判据见 hasPingSeriesData（是「没有数据」而不是「值为 0」）。
+    const withData = resolved.filter(({ ping: item }) => hasPingSeriesData(item));
+    // 全空时保留主任务：卡片仍要有 延迟/丢包 块可画（显示「无样本」），与单任务档一致。
+    const visible = withData.length > 0 ? withData : resolved.slice(0, 1);
+    const multi = visible.length > 1;
+
+    return visible.map(({ ping: item, buckets }) => ({
+      taskId: item.taskId,
+      label: multi ? (item.taskName ?? `任务 #${item.taskId ?? "-"}`) : "",
+      ping: item,
+      buckets,
+      latencyColor: latencyHeatColor(item.lastValue),
+      lossColor: lossHeatColor(item.loss),
+    }));
   }, [ping, pingList, metrics, pingBuckets, extraBuckets1, extraBuckets2]);
 
   const resolvedPing = pingSeries[0].ping;
