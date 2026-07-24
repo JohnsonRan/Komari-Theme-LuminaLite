@@ -78,7 +78,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--fill-tertiary) 72%, transparent);
   min-height: 52px;
 }

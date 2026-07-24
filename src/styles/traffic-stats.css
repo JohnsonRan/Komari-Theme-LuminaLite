@@ -13,7 +13,7 @@
   justify-content: space-between;
   gap: 14px;
   border: 1px solid var(--hairline);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--surface-a);
   box-shadow: var(--shadow-card);
   padding: 22px 24px;
@@ -231,7 +231,7 @@
 .traffic-rate-chart {
   min-width: 0;
   border: 1px solid var(--hairline);
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--surface-a);
   padding: 9px 10px 5px;
 }
@@ -328,7 +328,7 @@
   flex-direction: column;
   gap: 9px;
   border: 1px solid var(--hairline);
-  border-radius: 13px;
+  border-radius: 12px;
   background: var(--surface-a);
   box-shadow: var(--shadow-card);
   padding: 12px 13px;
@@ -390,7 +390,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border-radius: 9px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--fill-tertiary) 66%, transparent);
   padding: 8px 9px;
 }
@@ -423,7 +423,7 @@
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--hairline);
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--surface-a);
   color: var(--text-secondary);
   text-align: center;
@@ -441,7 +441,7 @@
 .traffic-error button {
   margin-top: 6px;
   border: 1px solid var(--border-subtle);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface-elev);
   padding: 7px 12px;
   color: var(--text-primary);

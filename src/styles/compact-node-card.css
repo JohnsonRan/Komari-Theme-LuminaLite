@@ -96,7 +96,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--tag-gray-bg);
   color: var(--tag-gray-fg);
   padding: 0 0.56rem;
@@ -216,8 +216,10 @@
   line-height: 1.15;
 }
 
+/* 颜色只用来编码数据（进度条、热力值），标签图标一律中性——否则一屏里 CPU 蓝、
+   内存紫、磁盘橙、负载粉同时和进度条抢注意力。 */
 .compact-node-gauge-label svg {
-  color: var(--compact-gauge-color);
+  color: var(--text-tertiary);
   flex: 0 0 auto;
 }
 
@@ -285,9 +287,13 @@
   grid-template-columns: repeat(var(--compact-info-columns, 3), minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--fill-tertiary) 72%, transparent);
+  /* 原本是带边框和底色的独立小盒，嵌在同样有边框的卡片里、卡片又在有边框的网格里，
+     三层框叠着。改成上下发丝线界定的信息带，列间竖线保留，少一层嵌套。 */
+  border: 0;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
   padding-top: 0;
 }
 
@@ -341,7 +347,7 @@
 
 .compact-node-traffic-label svg {
   flex: 0 0 auto;
-  color: var(--compact-gauge-color);
+  color: var(--text-tertiary);
 }
 
 .compact-node-traffic-body > .compact-node-traffic-label {
@@ -357,7 +363,8 @@
   min-width: max-content;
   align-items: center;
   justify-content: flex-end;
-  color: var(--status-success);
+  /* 在线时长不表示"好/坏"，用绿色会和真正的状态色混淆，走普通次要文本色。 */
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
   text-align: right;
@@ -420,10 +427,11 @@
   line-height: 1.1;
 }
 
+/* 标签（图标 + 文案）中性；值仍保留自己的语义色（如到期临近转红）。 */
 .compact-node-info-row-label {
   flex: 0 0 auto;
   gap: calc(4px - var(--ci-shrink) * 0.5px);
-  color: var(--compact-info-row-color, var(--compact-info-color));
+  color: var(--text-tertiary);
 }
 
 /* 图标随小块一起收缩,以免前导字形挤占了数值的空间。 */
@@ -548,7 +556,7 @@
   width: max-content;
   max-width: 156px;
   pointer-events: none;
-  border-radius: 5px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--text-primary) 90%, black 10%);
   box-shadow: 0 10px 18px -14px rgba(0, 0, 0, 0.55);
   color: var(--surface);

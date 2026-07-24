@@ -555,7 +555,8 @@ function CompactNodeInfoStrip({
           <CompactInfoRow
             icon={<CircleDollarSign size={12} strokeWidth={2.2} />}
             value={renewalPrice || "未填"}
-            color={renewalPrice ? "var(--status-success)" : "var(--text-tertiary)"}
+            // 价格不编码任何状态，用普通正文色；到期天数才带语义色。
+            color={renewalPrice ? "var(--text-primary)" : "var(--text-tertiary)"}
           />
         </CompactInfoTile>
       )}
@@ -565,7 +566,6 @@ function CompactNodeInfoStrip({
             icon={<Network size={12} strokeWidth={2.1} />}
             label="TCP"
             value={node.connectionsTcp.toLocaleString()}
-            color="var(--progress-network)"
           />
           <CompactInfoRow
             icon={<Network size={12} strokeWidth={2.1} />}

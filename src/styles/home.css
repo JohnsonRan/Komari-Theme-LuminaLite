@@ -144,7 +144,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
   box-shadow: none;
@@ -301,7 +301,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-tertiary);
   transition: background 160ms ease, color 160ms ease;
@@ -363,7 +363,7 @@
 
 .renewal-reminder-status {
   flex: 0 0 auto;
-  border-radius: 7px;
+  border-radius: 8px;
   padding: 5px 7px;
   font-size: 10px;
   font-weight: 720;
@@ -404,7 +404,7 @@
 .renewal-reminder-actions a,
 .renewal-reminder-actions button {
   min-height: 32px;
-  border-radius: 9px;
+  border-radius: 8px;
   padding: 0 10px;
   font-size: 11px;
   font-weight: 680;
@@ -455,7 +455,7 @@
     left: 12px;
     width: auto;
     max-height: min(72vh, 620px);
-    border-radius: 18px;
+    border-radius: 16px;
   }
 
   .renewal-reminder-actions {
@@ -650,7 +650,7 @@
   flex: 1;
   min-width: 0;
   padding: 4px 8px;
-  border-radius: 7px;
+  border-radius: 8px;
   isolation: isolate;
 }
 
@@ -766,7 +766,7 @@
   justify-content: center;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 12px;
   color: var(--text-secondary);
   padding: 0 12px;
   font-size: 12px;
@@ -922,7 +922,7 @@
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 12px;
