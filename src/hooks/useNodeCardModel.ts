@@ -9,6 +9,8 @@ import {
   usePingBuckets,
 } from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
+import { useAttention } from "@/hooks/useNodeAttention";
+import { useNodeHistory } from "@/hooks/useNodeHistory";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
 import {
@@ -68,6 +70,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   const pingList = useNodePingOverviewList(uuid);
   const { showCardGroup, fakePingForUnbound, homepagePingBindings } = useThemeSettings();
   const now = useHourlyClock();
+  const history = useNodeHistory(uuid);
   const ping = useFakePingFallback(
     uuid,
     pingList[0] ?? EMPTY_PING,
@@ -158,6 +161,9 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     [resolvedPing],
   );
 
+  // 「需要关注」由 NodeGrid 统一判定后经 context 下发，卡片只读结果 —— 见 useNodeAttention。
+  const attention = useAttention(uuid);
+
   // 浅比较缓存：避免每 tick 创建新的 { ...meta, ...metrics } 对象引用，
   // 让子组件在值未变时跳过 re-render。
   type NodeCombined = NodeInfo & NodeMetrics;
@@ -173,6 +179,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
         ping,
         pingBuckets,
         pingSeries,
+        attention,
+        history,
       };
     }
 
@@ -222,6 +230,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       ping: resolvedPing,
       pingBuckets,
       pingSeries,
+      attention,
+      history,
       traffic,
       ...metaModel,
       ...pingModel,
@@ -244,6 +254,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     resolvedPing,
     pingBuckets,
     pingSeries,
+    attention,
+    history,
     trafficTrend,
   ]);
 }

@@ -16,8 +16,11 @@ import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { IpStackBadges } from "./IpStackBadges";
 import { PingTaskTabs } from "./PingTaskTabs";
+import { NodeHistoryStrip } from "./NodeHistoryStrip";
+import { attentionAttrs } from "@/utils/nodeAttention";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
 import {
   clamp01,
@@ -29,6 +32,7 @@ import {
 import { formatPingHourStatsTitle } from "./pingBucketText";
 import { formatBytes, type ByteRateDisplay } from "@/utils/format";
 import type { NodeInfo, NodeMetrics, PingOverviewItem, PingOverviewBucket } from "@/types/komari";
+import type { NodeHistory } from "@/utils/nodeHistory";
 
 // 迷你卡固定为巡检布局，不跟随紧凑卡的可选指标开关；数据仍走共享模型。
 const HEALTH_BAR_COUNT = 24;
@@ -319,6 +323,8 @@ const MiniHealth = memo(function MiniHealth({
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
+  history,
+  redrawKey,
 }: {
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
@@ -328,11 +334,14 @@ const MiniHealth = memo(function MiniHealth({
   latencyColor: string;
   lossColor: string;
   hasHomepagePingBinding: boolean;
+  history: NodeHistory;
+  redrawKey: string;
 }) {
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   const hourStatsTitle = formatPingHourStatsTitle(ping);
   return (
-    <>
+    // 整组吸底，见 CompactNodeCard 里同名 tail 容器的说明。
+    <div className="mini-node-tail">
       {pingSeries.length > 1 && (
         <div className="mini-node-ping-tabs">
           <PingTaskTabs
@@ -387,12 +396,15 @@ const MiniHealth = memo(function MiniHealth({
           <MiniHealthBars kind="loss" buckets={pingBuckets} />
         </div>
       </div>
-    </>
+      {/* 迷你卡同样只画条，上报率在 tooltip 里。 */}
+      <NodeHistoryStrip history={history} redrawKey={redrawKey} height={12} />
+    </div>
   );
 });
 
 export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string }) {
   const { resolvedAppearance } = usePreferences();
+  const redrawKey = useCanvasRedrawKey();
   const model = useNodeCardModel(uuid, HEALTH_BAR_COUNT);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
@@ -444,6 +456,8 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
     hasHomepagePingBinding,
     isOffline,
     osName,
+    attention,
+    history,
   } = model;
   const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
   const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
@@ -452,6 +466,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
     <article
       className={clsx("mini-node-card", isOffline && "is-offline")}
       data-appearance={resolvedAppearance}
+      {...attentionAttrs(attention)}
     >
       <MiniHeader node={node} osName={osName} />
       <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
@@ -466,6 +481,8 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
         latencyColor={latencyColor}
         lossColor={lossColor}
         hasHomepagePingBinding={hasHomepagePingBinding}
+        history={history}
+        redrawKey={redrawKey}
       />
     </article>
   );

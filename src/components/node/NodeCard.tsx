@@ -15,10 +15,10 @@ import {
   CircleDollarSign,
   Database,
   Network,
+  History,
 } from "lucide-react";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
-import { usePreferences } from "@/hooks/usePreferences";
-import { useMetricColorsVersion } from "@/hooks/useMetricColors";
+import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
 import {
@@ -32,6 +32,7 @@ import { OsLogo } from "@/components/ui/OsLogo";
 import { MetricBar } from "./MetricBar";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
+import { NodeHistoryStrip } from "./NodeHistoryStrip";
 import { QualityBars } from "./QualityBars";
 import { CanvasStrip, mixSrgbTowardWhite, safeCanvasColor } from "./CanvasStrip";
 import {
@@ -47,6 +48,8 @@ import {
   formatPingBucketWindow,
   formatPingHourStatsTitle,
 } from "./pingBucketText";
+import { formatReportedPercent } from "@/utils/nodeHistory";
+import { attentionAttrs } from "@/utils/nodeAttention";
 import { clsx } from "clsx";
 import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
 import type { ByteRateDisplay } from "@/utils/format";
@@ -60,10 +63,8 @@ export const NodeCard = memo(function NodeCard({
 }: {
   uuid: string;
 }) {
-  const { resolvedAppearance } = usePreferences();
-  // 自定义配色改动时 version 自增，拼进 redrawKey 让 canvas 进度条即时重画（含离线静态卡）。
-  const colorsVersion = useMetricColorsVersion();
-  const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
+  // 外观或自定义配色变化时重绘 canvas 进度条（含离线静态卡）。
+  const redrawKey = useCanvasRedrawKey();
   const themeSettings = useThemeSettings();
   const model = useNodeCardModel(uuid);
   const [hoveredLatencyIndex, setHoveredLatencyIndex] = useState<number | null>(null);
@@ -138,6 +139,8 @@ export const NodeCard = memo(function NodeCard({
     isOnline,
     isOffline,
     osName,
+    attention,
+    history,
   } = model;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
   const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
@@ -156,6 +159,7 @@ export const NodeCard = memo(function NodeCard({
   return (
     <article
       className={clsx("server-card", isOffline && "is-offline")}
+      {...attentionAttrs(attention)}
     >
       <div className="server-card-content">
         <NodeCardHeader node={node} subtitle={subtitle} systemInfo={systemInfo} osName={osName} />
@@ -219,6 +223,21 @@ export const NodeCard = memo(function NodeCard({
             onLatencyHover={setHoveredLatencyIndex}
             onLossHover={setHoveredLossIndex}
           />
+
+          {history.slots.length > 0 && (
+            <div className="card-metric-section card-metric-divided server-history-section">
+              <div className="server-history-head">
+                <div className="server-health-label">
+                  <History size={13} strokeWidth={2} />
+                  <span>近 24 小时</span>
+                </div>
+                <span className="server-history-ratio tabular">
+                  {formatReportedPercent(history)}
+                </span>
+              </div>
+              <NodeHistoryStrip history={history} redrawKey={redrawKey} />
+            </div>
+          )}
         </div>
 
         <NodeCardFooter

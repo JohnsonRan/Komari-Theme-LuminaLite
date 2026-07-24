@@ -85,6 +85,21 @@ const BACKGROUND_POSITION_OPTIONS: Array<{ value: BackgroundPosition; label: str
   { value: "bottom", label: "底部" },
 ];
 
+// 异常阈值的输入框清单。key 与 AttentionThresholds 同名，新增一项只需在这里加一行。
+const ATTENTION_THRESHOLD_FIELDS = [
+  { key: "cpuPct", label: "CPU 使用率 ≥", unit: "%", max: 100 },
+  { key: "memoryPct", label: "内存使用率 ≥", unit: "%", max: 100 },
+  { key: "diskPct", label: "磁盘使用率 ≥", unit: "%", max: 100 },
+  { key: "lossPct", label: "丢包率 ≥", unit: "%", max: 100 },
+  { key: "trafficRemainPct", label: "剩余流量 ≤", unit: "%", max: 100 },
+  { key: "expireDays", label: "距到期 ≤", unit: "天", max: 365 },
+] as const satisfies ReadonlyArray<{
+  key: keyof ResolvedThemeSettings["attentionThresholds"];
+  label: string;
+  unit: string;
+  max: number;
+}>;
+
 // 吸顶分区导航:点击 chip 滚动到对应 InstancePanel(锚点 id = `theme-section-${id}`)。
 // 编号与下方各分区的 kicker 序号一一对应,新增分区时两处同步维护。
 const THEME_SECTIONS = [
@@ -235,6 +250,10 @@ function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
     showCardGroup: settings.showCardGroup,
     homeGroupOrder: settings.homeGroupOrder,
     enableHomeSort: settings.enableHomeSort,
+    enableAttentionSort: settings.enableAttentionSort,
+    showNodeHistory: settings.showNodeHistory,
+    showVisitorInfo: settings.showVisitorInfo,
+    attentionThresholds: settings.attentionThresholds,
     homeSortField: settings.homeSortField,
     homeSortDirection: settings.homeSortDirection,
     compactShowTrafficTotal: settings.compactShowTrafficTotal,
@@ -985,7 +1004,60 @@ export function ThemeManage() {
             checked={draft.enableHomeSort}
             onChange={(value) => patch("enableHomeSort", value)}
           />
+          <ToggleField
+            title="显示访客 IP 信息条"
+            description="页面底部居中显示访客自己的 IP、归属地与运营商。信息由访客浏览器直接向第三方接口（ipwho.is / ipapi.co / ip.sb）查询——不经过本站后端，但访客 IP 会被这些接口看到；三家都失败时整条不显示。默认开启。"
+            checked={draft.showVisitorInfo}
+            onChange={(value) => patch("showVisitorInfo", value)}
+          />
+          <ToggleField
+            title="显示 24 小时历史"
+            description="大卡片底部增加一条 24 小时条：格高是该时段平均 CPU，缺口表示探针那段时间没有上报。会额外批量拉取一次指标（全站一次请求，5 分钟刷新一次），可回看的时长受后端保留期限制。默认关闭。"
+            checked={draft.showNodeHistory}
+            onChange={(value) => patch("showNodeHistory", value)}
+          />
+          <ToggleField
+            title="异常节点置顶"
+            description="离线或命中下方阈值的节点排到最前并标出原因。注意：开启后离线节点从「恒定置底」变为置顶——首页从展示牌变成分诊台。默认关闭。"
+            checked={draft.enableAttentionSort}
+            onChange={(value) => patch("enableAttentionSort", value)}
+          />
         </div>
+
+        {draft.enableAttentionSort && (
+          <div className="surface-inset mt-4 px-4 py-4">
+            <div className="mb-3">
+              <div className="text-[13px] font-semibold text-[var(--text-primary)]">异常阈值</div>
+              <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                达到即视为异常。留 0 表示不检查该项；数值在阈值附近抖动时带 3 个百分点的回滞，
+                避免节点每秒在置顶区进出。离线永远算异常，且排在阈值命中之前。
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {ATTENTION_THRESHOLD_FIELDS.map((field) => (
+                <label key={field.key} className="flex flex-col gap-1">
+                  <span className="text-[12px] text-[var(--text-secondary)]">{field.label}</span>
+                  <span className="surface-inset flex items-center gap-2 px-3 py-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={field.max}
+                      value={draft.attentionThresholds[field.key]}
+                      onChange={(event) =>
+                        patch("attentionThresholds", {
+                          ...draft.attentionThresholds,
+                          [field.key]: Number(event.target.value),
+                        })
+                      }
+                      className="min-w-0 flex-1 bg-transparent text-[13px] tabular-nums outline-none"
+                    />
+                    <span className="text-[11px] text-[var(--text-tertiary)]">{field.unit}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)]">
           <div>

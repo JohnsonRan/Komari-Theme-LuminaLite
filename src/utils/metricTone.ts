@@ -32,6 +32,17 @@ export function latencyHeatColor(ms: number | null | undefined): string {
   return heatRamp(ms, [100, 150, 200, 300], 300);
 }
 
+// CPU 使用率热力色，供 24 小时历史条按格着色：低负载保持中性绿，
+// 越接近满载越暖，让一天里的尖峰在密集的小格子里也能跳出来。
+// 卡片上那条当前值进度条仍用平铺的 --progress-cpu，两者用途不同：
+// 一个读"现在多少"，一个读"哪一段不对劲"。
+export function cpuHeatColor(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct) || pct < 0) {
+    return "var(--text-tertiary)";
+  }
+  return heatRamp(pct, [50, 70, 85, 95], 100);
+}
+
 // 流量使用率：0–50% 保持绿色，之后随配额耗尽转为琥珀和红色。
 export function trafficUsageColor(fraction: number | null | undefined): string {
   if (fraction == null || !Number.isFinite(fraction) || fraction <= 0) {

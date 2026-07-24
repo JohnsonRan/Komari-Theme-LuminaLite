@@ -502,23 +502,30 @@
    无限循环的 `filter` keyframe 动画会在每张卡片(含屏幕外)上对最多 16 个圆点运行——这是持续的
    合成/绘制开销,拖累滚动。静态圆点能传达同样的信号。 */
 
-/* 多任务延迟标签紧贴健康区上方,自己带上边框——下面的 .compact-node-bottom 有了它就不再画线。
-   有标签行时改由它吸底(否则 margin-top:auto 会同时作用在两处、把富余空间平分到标签与健康区
-   之间,标签就和它标注的柱状图脱开了)。 */
-.compact-node-ping-tabs {
+/* 卡片底部那一组(延迟标签 + 健康区 + 24 小时条)整体吸底。
+   margin-top:auto 只写在这一层：之前是每个成员各自 auto、再用相邻选择器互相清零，
+   每加一个底部元素就要多一条规则；收到容器上之后，加多少个成员都不用再动吸底逻辑。
+   gap 与卡片自身的 10px 一致，包一层前后间距不变。 */
+.compact-node-tail {
+  display: flex;
   margin-top: auto;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 多任务延迟标签紧贴健康区上方,自己带上边框——下面的 .compact-node-bottom 有了它就不再画线。 */
+.compact-node-ping-tabs {
   border-top: 1px solid color-mix(in srgb, var(--hairline) 88%, transparent);
   padding-top: 8px;
 }
 
 .compact-node-ping-tabs + .compact-node-bottom {
-  margin-top: 0;
   border-top: none;
   padding-top: 6px;
 }
 
 .compact-node-bottom {
-  margin-top: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;

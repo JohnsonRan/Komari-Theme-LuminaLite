@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearCssColorCache } from "@/components/node/CanvasStrip";
+import { usePreferences } from "@/hooks/usePreferences";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { saveThemeSettings } from "@/services/api";
 import type { PublicConfig } from "@/types/komari";
@@ -169,6 +170,18 @@ export function useMetricColorsVersion(): number {
     () => version,
     () => version,
   );
+}
+
+/**
+ * canvas 组件的重绘键：外观（明/暗）与自定义配色任一变化，都要重新解析 CSS 变量。
+ *
+ * 收在这里是因为「什么会让 canvas 失效」是本模块的知识 —— 之前四个卡片各自拼这个字符串，
+ * 已经拼歪了一个（迷你卡只带外观，配色改动后残留旧像素）。
+ */
+export function useCanvasRedrawKey(): string {
+  const { resolvedAppearance } = usePreferences();
+  const colorsVersion = useMetricColorsVersion();
+  return `${resolvedAppearance}:${colorsVersion}`;
 }
 
 /** 读取每个指标当前生效的 hex（含默认 token），供取色器显示初值。 */

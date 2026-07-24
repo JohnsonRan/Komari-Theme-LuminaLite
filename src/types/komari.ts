@@ -180,6 +180,17 @@ export interface ThemeSettings {
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic";
   homeSortDirection?: "asc" | "desc";
+  enableAttentionSort?: boolean;
+  showNodeHistory?: boolean;
+  showVisitorInfo?: boolean;
+  attentionThresholds?: {
+    cpuPct?: number;
+    memoryPct?: number;
+    diskPct?: number;
+    lossPct?: number;
+    trafficRemainPct?: number;
+    expireDays?: number;
+  };
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;
   compactShowUptime?: boolean;

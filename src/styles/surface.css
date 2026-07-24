@@ -1974,3 +1974,118 @@ body::after {
   }
 
 }
+
+/* ── 访客信息条 ─────────────────────────────────────────────────────────────
+   底部居中的浮层，显示访客自己的 IP / 归属地 / 运营商。
+   原型用的是硬编码的白/黑半透明加自己的一套深色规则；这里改走主题 token，
+   于是明暗、卡片不透明度、自定义配色全都自动跟随，不需要第二套规则。 */
+.visitor-pill {
+  position: fixed;
+  bottom: max(16px, calc(16px + env(safe-area-inset-bottom, 0px)));
+  left: 50%;
+  z-index: 45;
+  display: flex;
+  /* 680px 是实测的「全部展开不截断」所需宽度（完整 IPv6 277 + 归属地/运营商 240 +
+     图标与间距 121）。先前定的 560px 太窄，在宽屏上也会逼出一次截断。 */
+  max-width: min(calc(100vw - 24px), 680px);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elev) 92%, transparent);
+  box-shadow: 0 10px 24px -18px rgba(0, 0, 0, 0.55);
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  transform: translateX(-50%);
+  /* 数据到了才挂载，所以入场动画只跑一次，不需要额外的延时开关。 */
+  animation: visitor-pill-in 320ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes visitor-pill-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visitor-pill {
+    animation: none;
+  }
+}
+
+.visitor-pill > * {
+  flex: none;
+}
+
+.visitor-pill-icon {
+  color: var(--text-tertiary);
+}
+
+.visitor-pill-label {
+  color: var(--text-tertiary);
+}
+
+/* 空间不够时只让 IP 收缩：它大半是零、完整值还留在 title 里，窄屏另有保头保尾的缩写；
+   而「日本 · 中国电信」短而有界，截掉就是净损失。min-width 兜住下限，
+   避免把它压成一个光秃秃的省略号。 */
+.visitor-pill-ip {
+  flex: 0 1 auto;
+  min-width: 6rem;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: 640;
+  text-overflow: ellipsis;
+}
+
+.visitor-pill-divider {
+  width: 1px;
+  height: 11px;
+  background: var(--border-strong);
+}
+
+/* 归属地与运营商不参与收缩：它本身就短，而且是这条里信息密度最高的一段。
+   窄屏由下面的 max-width 兜底（届时 IP 也已换成缩写形式，两者不会互相挤）。 */
+.visitor-pill-meta {
+  flex: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.visitor-pill-ip.is-short {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .visitor-pill {
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 11.5px;
+  }
+
+  .visitor-pill-ip.is-full {
+    display: none;
+  }
+
+  .visitor-pill-ip.is-short {
+    display: inline;
+  }
+
+  /* 窄屏下三段各自设上限，保证 图标+标签 + IP下限 + 运营商上限 之和不超过条宽。 */
+  .visitor-pill-ip {
+    min-width: 4rem;
+  }
+
+  .visitor-pill-meta {
+    max-width: 38vw;
+  }
+}

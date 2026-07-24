@@ -19,6 +19,7 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
 import {
@@ -40,6 +41,8 @@ import {
 } from "./nodeCardShared";
 import { IpStackBadges } from "./IpStackBadges";
 import { PingTaskTabs } from "./PingTaskTabs";
+import { NodeHistoryStrip } from "./NodeHistoryStrip";
+import { attentionAttrs } from "@/utils/nodeAttention";
 import { CanvasStrip, safeCanvasColor } from "./CanvasStrip";
 import type {
   NodeInfo,
@@ -50,6 +53,7 @@ import type {
 } from "@/types/komari";
 import type { ByteRateDisplay } from "@/utils/format";
 import type { TrafficDisplay } from "@/utils/traffic";
+import type { NodeHistory } from "@/utils/nodeHistory";
 
 const TRAFFIC_DOT_COUNT = 16;
 const HEALTH_BAR_COUNT = 18;
@@ -632,6 +636,8 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
+  history,
+  redrawKey,
 }: {
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
@@ -641,12 +647,17 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
   latencyColor: string;
   lossColor: string;
   hasHomepagePingBinding: boolean;
+  history: NodeHistory;
+  redrawKey: string;
 }) {
   // 已绑定但无样本时显示"无样本",未绑定时显示"未配置" —— 见 pingEmptyLabels。
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   const hourStatsTitle = formatPingHourStatsTitle(ping);
   return (
-    <>
+    // 整组吸底：margin-top:auto 只写在这一层，内部元素一条 auto 都不需要。
+    // 之前是「标签行和健康区各自 auto、再用相邻选择器把后者清零」的三条规则链，
+    // 每加一个底部元素就多一种组合；包一层之后加多少个都不用再动吸底逻辑。
+    <div className="compact-node-tail">
       {pingSeries.length > 1 && (
         <div className="compact-node-ping-tabs">
           <PingTaskTabs
@@ -678,7 +689,10 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
           <HealthBars buckets={pingBuckets} max={1} kind="loss" />
         </CompactHealthItem>
       </div>
-    </>
+      {/* 小卡不放标题行，只画条：上报率与说明都在 tooltip 里，省下约 18px。
+          无数据时组件自己返回 null，这里不必再判一次。 */}
+      <NodeHistoryStrip history={history} redrawKey={redrawKey} height={14} />
+    </div>
   );
 });
 
@@ -689,6 +703,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
 }) {
   const model = useNodeCardModel(uuid, HEALTH_BAR_COUNT);
   const themeSettings = useThemeSettings();
+  const redrawKey = useCanvasRedrawKey();
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
 
@@ -755,6 +770,8 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     loadFraction,
     hasHomepagePingBinding,
     osName,
+    attention,
+    history,
   } = model;
   const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
   const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
@@ -770,7 +787,10 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       : "";
 
   return (
-    <article className={clsx("compact-node-card", isOffline && "is-offline")}>
+    <article
+      className={clsx("compact-node-card", isOffline && "is-offline")}
+      {...attentionAttrs(attention)}
+    >
       <CompactNodeHeader node={node} osName={osName} systemInfo={systemInfo} />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />
@@ -796,6 +816,8 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         latencyColor={latencyColor}
         lossColor={lossColor}
         hasHomepagePingBinding={hasHomepagePingBinding}
+        history={history}
+        redrawKey={redrawKey}
       />
     </article>
   );

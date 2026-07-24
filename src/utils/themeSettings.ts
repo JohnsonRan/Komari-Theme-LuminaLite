@@ -16,6 +16,11 @@ import {
   type HomeSortField,
 } from "@/utils/homeSort";
 import { normalizeHomepagePingTaskBindings, type HomepagePingTaskBindings } from "@/utils/pingTasks";
+import {
+  DEFAULT_ATTENTION_THRESHOLDS,
+  normalizeAttentionThresholds,
+  type AttentionThresholds,
+} from "@/utils/nodeAttention";
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
@@ -39,6 +44,10 @@ export interface ResolvedThemeSettings {
   enableHomeSort: boolean;
   homeSortField: HomeSortField;
   homeSortDirection: HomeSortDirection;
+  enableAttentionSort: boolean;
+  showNodeHistory: boolean;
+  showVisitorInfo: boolean;
+  attentionThresholds: AttentionThresholds;
   compactShowTrafficTotal: boolean;
   compactShowBilling: boolean;
   compactShowUptime: boolean;
@@ -70,6 +79,15 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   enableHomeSort: false,
   homeSortField: "default",
   homeSortDirection: HOME_SORT_NATURAL_DIRECTION.default,
+  // 默认关闭:它会改变访客看到的节点顺序,与 enableHomeSort 一样交由站长显式开启。
+  enableAttentionSort: false,
+  // 默认关闭:开启后首页会额外批量拉一次 24 小时指标(全站一次请求,节点多时载荷不小),
+  // 由站长权衡后再开。
+  showNodeHistory: false,
+  // 默认开启：它展示的是访客自己的 IP，不涉及站点数据；站长若不希望页面向第三方
+  // 接口发请求，可在设置里关掉。
+  showVisitorInfo: true,
+  attentionThresholds: DEFAULT_ATTENTION_THRESHOLDS,
   compactShowTrafficTotal: true,
   compactShowBilling: true,
   compactShowUptime: true,
@@ -172,6 +190,12 @@ export function normalizeThemeSettings(
     // 默认关闭(需手动开启):与参考站点默认一致,访客端排序由站长显式开启。
     enableHomeSort: settings?.enableHomeSort === true,
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),
+    enableAttentionSort: settings?.enableAttentionSort === true,
+    showNodeHistory: settings?.showNodeHistory === true,
+    showVisitorInfo: enabledUnlessFalse(settings?.showVisitorInfo),
+    attentionThresholds: normalizeAttentionThresholds(
+      settings?.attentionThresholds as Record<string, unknown> | null | undefined,
+    ),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),

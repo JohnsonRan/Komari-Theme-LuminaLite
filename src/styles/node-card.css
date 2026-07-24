@@ -462,6 +462,39 @@
   margin-bottom: 10px;
 }
 
+/* 24 小时历史条:整宽一条,96 格才有足够的水平分辨率;放在健康区之下、页脚之上。
+   它在 .server-card-stack 内,而页脚在 stack 之外,所以不影响页脚的 margin-top:auto 吸底。 */
+.server-history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.server-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.server-history-ratio {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.node-history-strip {
+  width: 100%;
+  min-width: 0;
+}
+
+.node-history-canvas {
+  display: block;
+  width: 100%;
+}
+
 .server-health-block {
   display: flex;
   flex-direction: column;
@@ -502,6 +535,52 @@
   display: block;
   width: 100%;
   height: 16px;
+}
+
+/* 「需要关注」标记。四种卡片布局与列表行共用:左缘一条竖色条 + 极淡的整体染色。
+   刻意不用边框或角标 —— 卡片已经有 is-offline 的降饱和处理和一堆彩色进度条,再加边框会
+   和它们打架;左缘竖条在网格里能顺着一列扫下来,是最省视觉预算的"这几台要看"信号。
+   critical(离线)比 warning(阈值命中)更重,靠色相区分而不是靠更粗。 */
+.server-card[data-attention],
+.compact-node-card[data-attention],
+.mini-node-card[data-attention],
+.node-list-row[data-attention] {
+  position: relative;
+}
+
+.server-card[data-attention]::after,
+.compact-node-card[data-attention]::after,
+.mini-node-card[data-attention]::after,
+.node-list-row[data-attention]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--attention-accent);
+  pointer-events: none;
+}
+
+.server-card[data-attention="critical"],
+.compact-node-card[data-attention="critical"],
+.mini-node-card[data-attention="critical"],
+.node-list-row[data-attention="critical"] {
+  --attention-accent: var(--status-offline, hsl(6 84% 53%));
+  background: color-mix(in srgb, var(--attention-accent) 5%, var(--surface-a));
+}
+
+.server-card[data-attention="warning"],
+.compact-node-card[data-attention="warning"],
+.mini-node-card[data-attention="warning"],
+.node-list-row[data-attention="warning"] {
+  --attention-accent: var(--status-warning, hsl(38 92% 50%));
+  background: color-mix(in srgb, var(--attention-accent) 4%, var(--surface-a));
+}
+
+/* 列表行本身是透明底,染色会盖掉斑马纹和 hover;只保留左缘竖条。 */
+.node-list-row[data-attention] {
+  background: transparent;
 }
 
 /* 多任务延迟标签(三网延迟)。四种卡片布局共用同一套类名,只用 data-size 调字号,

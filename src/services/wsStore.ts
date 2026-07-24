@@ -37,6 +37,12 @@ export interface HomeNodeSummary {
   netDown: number;
   connectionsTcp: number;
   connectionsUdp: number;
+  /** 异常置顶判定用；与 netUp/netDown 一样每帧都变，不额外增加重建频率。 */
+  cpuPct: number;
+  ramPct: number;
+  diskPct: number;
+  /** 已绑定 ping 任务中最差的丢包率 (%)；未绑定或无样本为 null。 */
+  pingLoss: number | null;
 }
 
 interface TrafficTrendSeries {
@@ -208,6 +214,20 @@ function equalPingStatsMap(
   const keys = Object.keys(a);
   if (keys.length !== Object.keys(b).length) return false;
   return keys.every((key) => b[key] != null && equalPingStat(a[key], b[key]));
+}
+
+// 一个节点可绑多条线路，取最差的一条代表它的网络质量：只要有一条在丢包就值得关注。
+// 用 for-in 而不是 Object.values()：这里每帧对每个节点都会跑一次，是全站最热的循环，
+// 中间数组纯属浪费（这个循环里其它字段全是 ?? 直读，不分配）。
+function worstPingLoss(stats: Record<string, PingRealtimeStats> | null | undefined): number | null {
+  if (!stats) return null;
+  let worst: number | null = null;
+  for (const key in stats) {
+    const loss = stats[key].loss;
+    if (loss == null) continue;
+    if (worst == null || loss > worst) worst = loss;
+  }
+  return worst;
 }
 
 function resolveTrafficTotals(previous: NodeMetrics, nextUp: number, nextDown: number) {
@@ -1407,6 +1427,10 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
     const netDown = metrics?.netDown ?? 0;
     const connectionsTcp = metrics?.connectionsTcp ?? 0;
     const connectionsUdp = metrics?.connectionsUdp ?? 0;
+    const cpuPct = metrics?.cpuPct ?? 0;
+    const ramPct = metrics?.ramPct ?? 0;
+    const diskPct = metrics?.diskPct ?? 0;
+    const pingLoss = worstPingLoss(metrics?.pingStats);
 
     if (
       prev &&
@@ -1420,7 +1444,11 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
       prev.netUp === netUp &&
       prev.netDown === netDown &&
       prev.connectionsTcp === connectionsTcp &&
-      prev.connectionsUdp === connectionsUdp
+      prev.connectionsUdp === connectionsUdp &&
+      prev.cpuPct === cpuPct &&
+      prev.ramPct === ramPct &&
+      prev.diskPct === diskPct &&
+      prev.pingLoss === pingLoss
     ) {
       next.push(prev);
     } else {
@@ -1438,6 +1466,10 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
         netDown,
         connectionsTcp,
         connectionsUdp,
+        cpuPct,
+        ramPct,
+        diskPct,
+        pingLoss,
       });
     }
   }

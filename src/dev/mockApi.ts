@@ -231,6 +231,45 @@ function embeddedPingStats(baseline: number, nodeIndex: number, now: number) {
   );
 }
 
+// 首页 24 小时历史。刻意复刻真实后端的行为：**省略**没有数据的桶，而不是返回 count:0
+// 的空点（实测 tz.ihtw.moe，fill_empty 也只补 1~2 个边界 null 点）。
+// Frankfurt 在 30%~45% 区段留一段缺口、Sydney 整段无数据，用来检查缺口渲染与「上报率」。
+function homeHistoryPayload(params: { hours?: number; max_points?: number }) {
+  const slots = Number(params.max_points) || 96;
+  const hours = Number(params.hours) || 24;
+  const end = Date.now();
+  const start = end - hours * 3_600_000;
+  const slotMs = (end - start) / slots;
+
+  const series = nodes.map((node, index) => {
+    const base = statusProfiles[index][0] || 8;
+    const points: Array<{ time: string; value: number; count: number }> = [];
+    for (let i = 0; i < slots; i++) {
+      const frac = i / slots;
+      if (index === 2 && frac > 0.3 && frac < 0.45) continue;
+      if (index === 5) continue;
+      const wave = Math.sin(i / 7 + index) * 12 + Math.sin(i / 2.3 + index) * 5;
+      points.push({
+        time: new Date(start + i * slotMs).toISOString(),
+        value: Math.max(1, Math.min(100, base + wave)),
+        count: 15,
+      });
+    }
+    return {
+      metric_key: "cpu.usage",
+      entity_id: node.uuid,
+      interval_seconds: slotMs / 1000,
+      points,
+    };
+  });
+
+  return {
+    start: new Date(start).toISOString(),
+    end: new Date(end).toISOString(),
+    series,
+  };
+}
+
 function latestStatus() {
   const now = Date.now();
   return Object.fromEntries(
@@ -480,6 +519,25 @@ class MockLiveSocket {
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
+  // wsStore 用 on* 属性，但 rpc2Client 用的是 EventTarget 那套 API。只实现前者会让
+  // rpc2Client 的 cleanup() 抛 "ws.removeEventListener is not a function"，
+  // mock 下 RPC2 通道整个用不了。这里把两套接口桥接到同一组回调上。
+  private listeners = new Map<string, Set<(event: unknown) => void>>();
+
+  addEventListener(type: string, handler: (event: unknown) => void) {
+    const set = this.listeners.get(type) ?? new Set();
+    set.add(handler);
+    this.listeners.set(type, set);
+  }
+
+  removeEventListener(type: string, handler: (event: unknown) => void) {
+    this.listeners.get(type)?.delete(handler);
+  }
+
+  private emit(type: "open" | "message" | "close" | "error", event?: unknown) {
+    for (const handler of this.listeners.get(type) ?? []) handler(event ?? { type });
+  }
+
   constructor(url: string) {
     this.url = url;
     // 异步触发 onopen，模拟真实连接握手。
@@ -487,6 +545,7 @@ class MockLiveSocket {
       if (this.readyState !== MockLiveSocket.CONNECTING) return;
       this.readyState = MockLiveSocket.OPEN;
       this.onopen?.();
+      this.emit("open");
     }, 0);
   }
 
@@ -495,13 +554,44 @@ class MockLiveSocket {
     if (data === "get") {
       setTimeout(() => {
         if (this.readyState !== MockLiveSocket.OPEN) return;
-        this.onmessage?.({ data: buildLiveFrame() });
+        const frame = { data: buildLiveFrame() };
+        this.onmessage?.(frame);
+        this.emit("message", frame);
       }, 0);
+      return;
     }
+
+    // rpc2Client 在 WebSocket 可用时把 JSON-RPC 请求发到这里（不可用才回退 HTTP）。
+    // 转给同一套 mock fetch 处理，保证两条路给出一样的结果 —— 只补 addEventListener
+    // 而不接这一段，rpc2Client 会以为通道可用、请求却石沉大海。
+    let method: unknown;
+    try {
+      method = (JSON.parse(data) as { method?: unknown }).method;
+    } catch {
+      return;
+    }
+    if (typeof method !== "string") return;
+
+    void fetch("/api/rpc2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: data,
+    })
+      .then((response) => response.text())
+      .then((text) => {
+        if (this.readyState !== MockLiveSocket.OPEN) return;
+        const frame = { data: text };
+        this.onmessage?.(frame);
+        this.emit("message", frame);
+      })
+      .catch(() => {
+        /* mock 环境下静默即可：rpc2Client 自己有超时。 */
+      });
   }
 
   close() {
     this.readyState = MockLiveSocket.CLOSED;
+    this.listeners.clear();
     // 不触发 onclose：stopWsConnection 会先摘掉回调，不触发可避免
     // mock 环境误入重连 / 失败计数路径。
   }
@@ -526,6 +616,17 @@ export function installDevMockApi() {
         { base: "USD", quote: "EUR", rate: 0.86 },
         { base: "USD", quote: "JPY", rate: 146.4 },
       ]);
+    }
+
+    // 访客 IP 信息条的第一家接口。mock 下不真的往外发请求，也让离线开发能看到这条。
+    if (url.hostname === "ipwho.is") {
+      return json({
+        success: true,
+        ip: "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+        country: "日本",
+        country_code: "JP",
+        connection: { org: "Example Telecom Communications", isp: "Example ISP" },
+      });
     }
 
     if (url.origin !== window.location.origin || !url.pathname.startsWith("/api/")) {
@@ -563,6 +664,10 @@ export function installDevMockApi() {
           showRegionBar: true,
           showCardGroup: true,
           enableHomeSort: true,
+          // Frankfurt CPU 91% / 磁盘 83%、Sydney 离线、Tokyo 到期 24 天 —— 默认阈值下
+          // 前两台会被顶到最前，用来检查异常置顶与卡片标记。
+          enableAttentionSort: true,
+          showNodeHistory: true,
           showPingChart: true,
           // 1 号任务全量绑定，2/3 号只绑一部分：同一屏里既能看到单任务卡片，
           // 也能看到 2 个和 3 个任务的多任务标签。
@@ -623,12 +728,17 @@ export function installDevMockApi() {
           entity_ids?: string[];
           start?: string;
           end?: string;
+          hours?: number;
+          max_points?: number;
         };
       };
       let result: unknown = {};
       if (payload.method === "public:queryMetrics") {
         const metricKeys = payload.params?.metric_keys ?? [];
-        if (metricKeys.some((key) => key === "traffic.up" || key === "traffic.down")) {
+        if (metricKeys.length === 1 && metricKeys[0] === "cpu.usage") {
+          // 首页 24 小时历史：只查 cpu.usage 一个键（详情页发的是 LOAD_METRIC_KEYS 多键）。
+          result = homeHistoryPayload(payload.params ?? {});
+        } else if (metricKeys.some((key) => key === "traffic.up" || key === "traffic.down")) {
           result = trafficMetricPayload(payload.params ?? {});
         } else if (metricKeys.some((key) => key in LOAD_METRIC_TO_FIELD)) {
           // 模拟新版后端：返回 used/rate 类指标，不返回已废弃的 total 类指标。

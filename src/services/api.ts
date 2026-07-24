@@ -886,6 +886,55 @@ export async function saveThemeSettings(
   }
 }
 
+// 首页 24 小时历史。只查一个指标：cpu.usage 既是趋势要画的曲线，也是「探针有没有上报」
+// 的判据（后端省略空桶，缺格即缺样），一条请求同时喂 sparkline 和上报连续性条。
+// 多加一个指标就多一份同等大小的载荷，先不为 sparkline 的第二条线付这个钱。
+const HOME_HISTORY_METRIC = "cpu.usage";
+
+export interface HomeHistoryResponse {
+  rangeStartMs: number;
+  rangeEndMs: number;
+  /** entity_id → 该节点在区间内的原始点（稀疏，缺口即未上报）。 */
+  pointsByUuid: Map<string, Array<{ time: string; value: number | null; count: number }>>;
+}
+
+/**
+ * 首页全站一次查询：不传 entity_ids，后端返回全部节点。
+ * `maxPoints` 是上限而非精确值 —— 后端会吸附到标准间隔（实测 24h 请求 500 点得到
+ * 300 秒 × 288 点，请求 720 点得到 120 秒 × 720 点），调用方按分辨率与载荷取舍。
+ */
+export async function getHomeHistory(
+  hours: number,
+  maxPoints: number,
+  options?: { signal?: AbortSignal },
+): Promise<HomeHistoryResponse> {
+  const requestRange = createRequestRange(hours);
+  const payload = await queryMetricPayload(
+    {
+      hours,
+      metric_keys: [HOME_HISTORY_METRIC],
+      max_points: maxPoints,
+      aggregation: "avg",
+      fill_empty: false,
+    },
+    options?.signal,
+  );
+
+  // 只查一个 metric_key，所以每个 entity 至多一条 series，直接设入即可（无需合并/复制）。
+  const pointsByUuid = new Map<string, Array<{ time: string; value: number | null; count: number }>>();
+  for (const series of payload.series) {
+    if (series.metric_key !== HOME_HISTORY_METRIC || !series.entity_id) continue;
+    pointsByUuid.set(series.entity_id, series.points);
+  }
+
+  const range = getMetricPayloadRange(payload, requestRange);
+  return {
+    rangeStartMs: range.rangeStartMs,
+    rangeEndMs: range.rangeEndMs,
+    pointsByUuid,
+  };
+}
+
 export async function getPingOverview(
   hours = 1,
   taskId?: number,

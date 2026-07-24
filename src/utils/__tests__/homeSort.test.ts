@@ -20,6 +20,10 @@ function node(partial: Partial<HomeNodeSummary> & Pick<HomeNodeSummary, "uuid">)
     netUp: 0,
     connectionsTcp: 0,
     connectionsUdp: 0,
+    cpuPct: 0,
+    ramPct: 0,
+    diskPct: 0,
+    pingLoss: null,
     weight: 0,
     ...partial,
   };

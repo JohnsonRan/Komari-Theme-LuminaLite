@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Lock } from "lucide-react";
+import { VisitorInfoPill } from "@/components/shell/VisitorInfoPill";
 import { BackgroundLayer } from "./BackgroundLayer";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAppearance } from "@/hooks/useAppearance";
@@ -59,6 +60,8 @@ export function AppShell() {
           )}
         </div>
       </main>
+      {/* 私有站点未通过校验、或壳层还在校验时不显示 —— 那时页面上还没有任何站点内容。 */}
+      {!isCheckingShell && !accessError && !isPrivateVisitor && <VisitorInfoPill />}
     </div>
   );
 }

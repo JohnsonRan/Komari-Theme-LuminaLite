@@ -28,6 +28,8 @@ import {
 import { getDisplayRegionCode } from "@/utils/geo";
 import { useHomeSort } from "@/hooks/useHomeSort";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
+import { AttentionProvider, useNodeAttention } from "@/hooks/useNodeAttention";
+import { useHourlyClock } from "@/hooks/useClock";
 import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { useVersion } from "@/hooks/useVersion";
 import { HomeSortControl } from "./HomeSortControl";
@@ -422,6 +424,8 @@ export function NodeGrid() {
   const { data: publicConfig } = usePublicConfig();
   const siteName = publicConfig?.sitename?.trim() || "节点概览";
   const themeSettings = useThemeSettings();
+  // 到期天数按天变化，用小时钟即可；CPU/内存等每帧数据由 sortedNodes 的引用变化驱动重算。
+  const attentionClock = useHourlyClock();
   const { mode } = useViewMode();
   const sort = useHomeSort();
   // enableHomeSort 控制访客能否改排序;关闭时无视 session 覆盖、直接用管理员默认序(默认仍是 weight)。
@@ -540,12 +544,37 @@ export function NodeGrid() {
     [groupFilteredNodes, selectedRegion],
   );
   // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
-  const orderedNodes = useHomeNodeOrder({
+  const sortedNodes = useHomeNodeOrder({
     nodes: filteredNodes,
     field: sortField,
     direction: sortDirection,
     nameByUuid,
   });
+
+  const attentionByUuid = useNodeAttention(
+    sortedNodes,
+    allMeta,
+    themeSettings.attentionThresholds,
+    themeSettings.isReady && themeSettings.enableAttentionSort,
+    attentionClock,
+  );
+
+  // 异常置顶是排序之上的一层稳定分区：先按站长选的维度排好，再把 critical / warning 两档
+  // 整体提前，档内保持原有相对顺序。这样速度滞回、离线沉底等既有行为都原样保留 ——
+  // 唯一被反转的是离线节点：开启后它们从沉底变成置顶，因为「挂了」正是最该先看到的事。
+  const orderedNodes = useMemo(() => {
+    if (attentionByUuid.size === 0) return sortedNodes;
+    const critical: HomeNodeSummary[] = [];
+    const warning: HomeNodeSummary[] = [];
+    const rest: HomeNodeSummary[] = [];
+    for (const node of sortedNodes) {
+      const level = attentionByUuid.get(node.uuid)?.level;
+      if (level === "critical") critical.push(node);
+      else if (level === "warning") warning.push(node);
+      else rest.push(node);
+    }
+    return [...critical, ...warning, ...rest];
+  }, [sortedNodes, attentionByUuid]);
 
   useEffect(() => {
     if (selectedGroup !== HOME_ALL_GROUP && !groupOptions.includes(selectedGroup)) {
@@ -670,7 +699,8 @@ export function NodeGrid() {
   }
 
   return (
-    <>
+    // 卡片从 context 读各自的判定结果，避免每张卡再算一遍（见 useNodeAttention）。
+    <AttentionProvider value={attentionByUuid}>
       {homeHeader}
       {(showGroupTabs || showHomeSort) && (
         // 分组标签落首列、排序钉在末列右侧；窄屏时两者保持在同一控件栏内。
@@ -699,6 +729,6 @@ export function NodeGrid() {
           {cards}
         </div>
       )}
-    </>
+    </AttentionProvider>
   );
 }

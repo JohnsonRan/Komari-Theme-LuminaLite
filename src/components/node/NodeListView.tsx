@@ -5,13 +5,13 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
-import { usePreferences } from "@/hooks/usePreferences";
-import { useMetricColorsVersion } from "@/hooks/useMetricColors";
+import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { formatBytes } from "@/utils/format";
 import { speedRateColor } from "@/utils/metricTone";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
+import { attentionAttrs } from "@/utils/nodeAttention";
 import {
   clamp01,
   compactPercentText,
@@ -136,9 +136,7 @@ function ListLatency({
 }
 
 const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
-  const { resolvedAppearance } = usePreferences();
-  const colorsVersion = useMetricColorsVersion();
-  const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
+  const redrawKey = useCanvasRedrawKey();
   const model = useNodeCardModel(uuid, LIST_PING_BUCKETS);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
@@ -173,10 +171,13 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     downRate,
     isOffline,
     osName,
+    attention,
   } = model;
   const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
   const ping = pingSeries[pingIndex].ping;
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
+  // 未命中关注时保留原本的「查看详情」提示 —— 只有真的需要关注才占用 title。
+  const attentionProps = attentionAttrs(attention);
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
   const rowLabel = [
     node.name,
@@ -199,7 +200,8 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     <Link
       to={`/instance/${encodeURIComponent(uuid)}`}
       className={clsx("node-list-row", isOffline && "is-offline")}
-      title={detailLabels.title}
+      {...attentionProps}
+      title={attentionProps.title ?? detailLabels.title}
       aria-label={rowLabel}
     >
       <div className="node-list-cell node-list-node">
