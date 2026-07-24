@@ -67,7 +67,10 @@ export function InstanceDetails({
           />
           <InfoRow label="架构" value={meta.arch || "—"} />
           <InfoRow label="虚拟化" value={meta.virtualization || "—"} />
-          <InfoRow label="显卡" value={meta.gpu_name || "—"} />
+          {/* 与负载图表一致：没有显卡就不占一行显示「—」。 */}
+          {meta.gpu_name && meta.gpu_name !== "None" && (
+            <InfoRow label="显卡" value={meta.gpu_name} />
+          )}
           <InfoRow label="操作系统" value={meta.os || "—"} />
           <InfoRow label="内核版本" value={meta.kernel_version || "—"} />
         </div>

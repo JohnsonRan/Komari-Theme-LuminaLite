@@ -62,6 +62,12 @@
   background: color-mix(in srgb, var(--status-offline) 5%, var(--surface-a));
 }
 
+/* 与卡片视图一致：离线行的指标是停更的残影，压低饱和度，名称列保持可读。 */
+.node-list-row.is-offline .node-list-cell:not(.node-list-node) {
+  filter: saturate(0.3);
+  opacity: 0.66;
+}
+
 .node-list-row.is-loading {
   display: block;
   min-height: 46px;

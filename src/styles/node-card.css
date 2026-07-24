@@ -37,6 +37,19 @@
   box-shadow: none;
 }
 
+/* 离线节点的指标全是最后一帧的残影：0% 的进度条、停更的延迟/丢包柱，
+   与在线卡同等饱和度时会被误读成实时数据。压低饱和与对比，把注意力交还给
+   红色卡框和标题；名称、状态点、标签保持原样，扫视时仍能定位是哪台机器。 */
+.server-card.is-offline .server-card-stack,
+.compact-node-card.is-offline .compact-node-vitals,
+.compact-node-card.is-offline .compact-node-health-bars,
+.mini-node-card.is-offline .mini-node-vitals,
+.mini-node-card.is-offline .mini-node-flow,
+.mini-node-card.is-offline .mini-node-health {
+  filter: saturate(0.3);
+  opacity: 0.66;
+}
+
 .server-card-content {
   display: flex;
   flex-direction: column;

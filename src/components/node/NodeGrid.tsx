@@ -75,7 +75,6 @@ interface TopNodeEntry {
 }
 
 interface OverviewTopMetric {
-  title: string;
   // 累计流量是历史量，离线节点同样计入；实时指标只看在线节点。
   onlineOnly: boolean;
   valueOf: (node: HomeNodeSummary) => number;
@@ -84,19 +83,16 @@ interface OverviewTopMetric {
 
 const OVERVIEW_TOP_METRICS = {
   bandwidth: {
-    title: "实时带宽 TOP 3",
     onlineOnly: true,
     valueOf: (node) => node.netUp + node.netDown,
     format: formatByteRateLabel,
   },
   traffic: {
-    title: "累计流量 TOP 3",
     onlineOnly: false,
     valueOf: (node) => node.trafficUp + node.trafficDown,
     format: formatBytes,
   },
   connections: {
-    title: "实时连接 TOP 3",
     onlineOnly: true,
     valueOf: (node) => node.connectionsTcp + node.connectionsUdp,
     format: (value) => value.toLocaleString(),
@@ -127,19 +123,30 @@ function pickTopNodes(
   return top;
 }
 
+type TopShareStyle = CSSProperties & { "--top-share": string };
+
+// 名次由行序表达，无需再画一列 1/2/3；每行铺一条占比底纹（相对第一名），
+// 让「第一名是碾压还是接近」一眼可见——这才是悬停这张卡想问的问题。
 function OverviewTopTooltip({ metric, rows }: { metric: OverviewTopMetricKey; rows: TopNodeEntry[] }) {
   if (rows.length === 0) return null;
-  const { title, format } = OVERVIEW_TOP_METRICS[metric];
+  const { format } = OVERVIEW_TOP_METRICS[metric];
+  const peak = rows[0].value;
   return (
     <div className="overview-card-tooltip">
-      <div className="overview-card-tooltip-title">{title}</div>
-      {rows.map((node, index) => (
-        <div key={node.uuid} className="overview-card-tooltip-row">
-          <span className="overview-card-tooltip-rank">{index + 1}</span>
-          <span className="overview-card-tooltip-name">{node.name}</span>
-          <strong className="overview-card-tooltip-value">{format(node.value)}</strong>
-        </div>
-      ))}
+      <div className="overview-card-tooltip-title">TOP 3 节点</div>
+      {rows.map((node) => {
+        // 全为 0（如整批节点空闲）时不画底纹，避免三行都是空槽。
+        const share = peak > 0 ? Math.max(4, (node.value / peak) * 100) : 0;
+        const style: TopShareStyle = { "--top-share": `${share}%` };
+        return (
+          <div key={node.uuid} className="overview-card-tooltip-row">
+            <span className="overview-card-tooltip-track" style={style}>
+              <span className="overview-card-tooltip-name">{node.name}</span>
+            </span>
+            <strong className="overview-card-tooltip-value tabular">{format(node.value)}</strong>
+          </div>
+        );
+      })}
     </div>
   );
 }

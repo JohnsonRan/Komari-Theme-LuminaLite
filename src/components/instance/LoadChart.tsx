@@ -257,10 +257,33 @@ function formatBytesAxisValue(value: number) {
   return formatBytes(value);
 }
 
-function formatCountAxisValue(value: number, min: number, max: number) {
-  const span = Math.abs(max - min);
-  if (span < 10) return value.toFixed(1);
+function formatCountAxisValue(value: number) {
   return `${Math.round(value)}`;
+}
+
+// uPlot 默认按十进制取整生成刻度（50e9、2e9 字节），而字节标签按 1024 进制渲染，
+// 于是每个"整"刻度都变成 46.57 GB / 1.863 GB 这类怪数。改成直接在 1024 进制上取整。
+const BINARY_TICK_MULTIPLES = [1, 2, 4, 5, 8, 10, 16, 20, 32, 64, 128, 256, 512];
+
+function binaryAxisSplits(min: number, max: number, targetTicks = 4): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [min];
+  const rawStep = (max - min) / targetTicks;
+  const base = 1024 ** Math.max(0, Math.floor(Math.log(rawStep) / Math.log(1024)));
+  const step = base * (BINARY_TICK_MULTIPLES.find((mult) => base * mult >= rawStep) ?? 1024);
+  const splits: number[] = [];
+  for (let tick = Math.ceil(min / step) * step; tick <= max; tick += step) splits.push(tick);
+  return splits.length > 0 ? splits : [min];
+}
+
+// 进程数/连接数都是整数，刻度也必须落在整数上，否则会出现 "98.0 / 96.0" 这种读数。
+function integerAxisSplits(min: number, max: number, targetTicks = 4): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [Math.round(min)];
+  const rawStep = Math.max(1, (max - min) / targetTicks);
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const step = Math.max(1, Math.round(magnitude * ([1, 2, 5, 10].find((mult) => magnitude * mult >= rawStep) ?? 10)));
+  const splits: number[] = [];
+  for (let tick = Math.ceil(min / step) * step; tick <= max; tick += step) splits.push(tick);
+  return splits.length > 0 ? splits : [Math.round(min)];
 }
 
 // 不含尺寸的配置。width/height 由调用方在另一个 memo 里加上，resize 时只改这两个 key，
@@ -297,6 +320,8 @@ function buildBaseOptions({
   const resolvedAxisSize = axisSize ?? (axisKind === "bytes" ? 72 : 52);
   const isDark = resolvedAppearance === "dark";
   const { grid, text } = getAxisColors(isDark);
+  // 字节量与按字节计的速率都是 1024 进制；比特速率（mbps）是 1000 进制，用默认刻度即可。
+  const useBinarySplits = axisKind === "bytes" || (axisKind === "network" && networkUnit !== "mbps");
 
   return {
     padding: [8, 12, 10, 2],
@@ -317,7 +342,12 @@ function buildBaseOptions({
             },
           }
         : { time: true },
-      y: { auto: true },
+      // 磁盘/内存/显存这类有天然 0 基线的用量，自动收紧到数据附近会让 34% 的占用
+      // 看起来像快满了；固定从 0 起，画面才和卡片头部的「已用 / 总量」一致。
+      y:
+        axisKind === "bytes"
+          ? { auto: true, range: (_self, _min, max) => [0, max > 0 ? max * 1.08 : 1] }
+          : { auto: true },
     },
     axes: [
       {
@@ -332,6 +362,11 @@ function buildBaseOptions({
         grid: { stroke: grid, width: 1 },
         ticks: { stroke: grid },
         size: resolvedAxisSize,
+        splits: useBinarySplits
+          ? (_self, _axisIdx, min, max) => binaryAxisSplits(min, max)
+          : axisKind === "count"
+            ? (_self, _axisIdx, min, max) => integerAxisSplits(min, max)
+            : undefined,
         values: (self, splits) => {
           const min = Number(self.scales.y.min ?? 0);
           const max = Number(self.scales.y.max ?? 0);
@@ -340,7 +375,7 @@ function buildBaseOptions({
             if (axisKind === "network") return formatNetworkAxisValue(value, networkUnit);
             if (axisKind === "bytes") return formatBytesAxisValue(value);
             if (axisKind === "percent") return formatPercentAxisValue(value, min, max);
-            if (axisKind === "count") return formatCountAxisValue(value, min, max);
+            if (axisKind === "count") return formatCountAxisValue(value);
             return value === 0 ? "" : `${Math.round(value)}${unit}`;
           });
         },
