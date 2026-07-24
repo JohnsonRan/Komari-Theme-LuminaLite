@@ -68,6 +68,82 @@ function formatCompactBytes(value: number): string {
   return `${amount}${unit[0]}`;
 }
 
+interface TopNodeEntry {
+  uuid: string;
+  name: string;
+  value: number;
+}
+
+interface OverviewTopMetric {
+  title: string;
+  // 累计流量是历史量，离线节点同样计入；实时指标只看在线节点。
+  onlineOnly: boolean;
+  valueOf: (node: HomeNodeSummary) => number;
+  format: (value: number) => string;
+}
+
+const OVERVIEW_TOP_METRICS = {
+  bandwidth: {
+    title: "实时带宽 TOP 3",
+    onlineOnly: true,
+    valueOf: (node) => node.netUp + node.netDown,
+    format: formatByteRateLabel,
+  },
+  traffic: {
+    title: "累计流量 TOP 3",
+    onlineOnly: false,
+    valueOf: (node) => node.trafficUp + node.trafficDown,
+    format: formatBytes,
+  },
+  connections: {
+    title: "实时连接 TOP 3",
+    onlineOnly: true,
+    valueOf: (node) => node.connectionsTcp + node.connectionsUdp,
+    format: (value) => value.toLocaleString(),
+  },
+} as const satisfies Record<string, OverviewTopMetric>;
+
+type OverviewTopMetricKey = keyof typeof OVERVIEW_TOP_METRICS;
+
+// 单次遍历维护前三名，省掉整表 sort；只在悬停时调用。
+function pickTopNodes(
+  nodes: HomeNodeSummary[],
+  nameByUuid: Map<string, string>,
+  metric: OverviewTopMetric,
+): TopNodeEntry[] {
+  const top: TopNodeEntry[] = [];
+  for (const node of nodes) {
+    if (metric.onlineOnly && node.online !== true) continue;
+    const value = metric.valueOf(node);
+    if (top.length >= 3 && value <= top[2].value) continue;
+    const at = top.findIndex((entry) => value > entry.value);
+    top.splice(at === -1 ? top.length : at, 0, {
+      uuid: node.uuid,
+      name: nameByUuid.get(node.uuid) || node.uuid.slice(0, 8),
+      value,
+    });
+    if (top.length > 3) top.pop();
+  }
+  return top;
+}
+
+function OverviewTopTooltip({ metric, rows }: { metric: OverviewTopMetricKey; rows: TopNodeEntry[] }) {
+  if (rows.length === 0) return null;
+  const { title, format } = OVERVIEW_TOP_METRICS[metric];
+  return (
+    <div className="overview-card-tooltip">
+      <div className="overview-card-tooltip-title">{title}</div>
+      {rows.map((node, index) => (
+        <div key={node.uuid} className="overview-card-tooltip-row">
+          <span className="overview-card-tooltip-rank">{index + 1}</span>
+          <span className="overview-card-tooltip-name">{node.name}</span>
+          <strong className="overview-card-tooltip-value">{format(node.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formatCompactCount(value: number): string {
   if (value >= 10_000) return `${(value / 1000).toFixed(1)}k`;
   return value.toLocaleString();
@@ -135,34 +211,13 @@ function HomeOverviewCards({
   const connectionsDetailLabel = `TCP ${overview.connectionsTcp.toLocaleString()} · UDP ${overview.connectionsUdp.toLocaleString()}`;
   const connectionsCompactLabel = `TCP ${formatCompactCount(overview.connectionsTcp)} UDP ${formatCompactCount(overview.connectionsUdp)}`;
 
-  // 实时带宽/累计流量/实时连接 各自 TOP 3 节点
-  const topBandwidth = useMemo(
-    () =>
-      nodes
-        .filter((n) => n.online === true)
-        .map((n) => ({ uuid: n.uuid, name: nameByUuid.get(n.uuid) || n.uuid.slice(0, 8), value: n.netUp + n.netDown }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 3),
-    [nodes, nameByUuid],
+  // TOP 3 只在悬停那张卡片时才算：nodes 每个 WS tick 都会换引用，
+  // 无条件计算三份榜单等于每 2s 白跑三趟全表。
+  const [hoveredCard, setHoveredCard] = useState<OverviewTopMetricKey | null>(null);
+  const topNodes = useMemo(
+    () => (hoveredCard ? pickTopNodes(nodes, nameByUuid, OVERVIEW_TOP_METRICS[hoveredCard]) : []),
+    [hoveredCard, nodes, nameByUuid],
   );
-  const topTraffic = useMemo(
-    () =>
-      nodes
-        .map((n) => ({ uuid: n.uuid, name: nameByUuid.get(n.uuid) || n.uuid.slice(0, 8), value: n.trafficUp + n.trafficDown }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 3),
-    [nodes, nameByUuid],
-  );
-  const topConnections = useMemo(
-    () =>
-      nodes
-        .filter((n) => n.online === true)
-        .map((n) => ({ uuid: n.uuid, name: nameByUuid.get(n.uuid) || n.uuid.slice(0, 8), value: n.connectionsTcp + n.connectionsUdp }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 3),
-    [nodes, nameByUuid],
-  );
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   return (
     <section className={`home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
@@ -218,18 +273,7 @@ function HomeOverviewCards({
             <span className="overview-card-sub-compact">{bandwidthCompactLabel}</span>
           </p>
         </div>
-        {hoveredCard === "bandwidth" && topBandwidth.length > 0 && (
-          <div className="overview-card-tooltip">
-            <div className="overview-card-tooltip-title">实时带宽 TOP 3</div>
-            {topBandwidth.map((node, i) => (
-              <div key={node.uuid} className="overview-card-tooltip-row">
-                <span className="overview-card-tooltip-rank">{i + 1}</span>
-                <span className="overview-card-tooltip-name">{node.name}</span>
-                <strong className="overview-card-tooltip-value">{formatByteRateLabel(node.value)}</strong>
-              </div>
-            ))}
-          </div>
-        )}
+        {hoveredCard === "bandwidth" && <OverviewTopTooltip metric="bandwidth" rows={topNodes} />}
       </article>
 
       <article
@@ -263,18 +307,7 @@ function HomeOverviewCards({
             <span className="overview-card-sub-compact">{trafficCompactLabel}</span>
           </p>
         </div>
-        {hoveredCard === "traffic" && topTraffic.length > 0 && (
-          <div className="overview-card-tooltip">
-            <div className="overview-card-tooltip-title">累计流量 TOP 3</div>
-            {topTraffic.map((node, i) => (
-              <div key={node.uuid} className="overview-card-tooltip-row">
-                <span className="overview-card-tooltip-rank">{i + 1}</span>
-                <span className="overview-card-tooltip-name">{node.name}</span>
-                <strong className="overview-card-tooltip-value">{formatBytes(node.value)}</strong>
-              </div>
-            ))}
-          </div>
-        )}
+        {hoveredCard === "traffic" && <OverviewTopTooltip metric="traffic" rows={topNodes} />}
       </article>
 
       <article
@@ -295,18 +328,7 @@ function HomeOverviewCards({
             <span className="overview-card-sub-compact">{connectionsCompactLabel}</span>
           </p>
         </div>
-        {hoveredCard === "connections" && topConnections.length > 0 && (
-          <div className="overview-card-tooltip">
-            <div className="overview-card-tooltip-title">实时连接 TOP 3</div>
-            {topConnections.map((node, i) => (
-              <div key={node.uuid} className="overview-card-tooltip-row">
-                <span className="overview-card-tooltip-rank">{i + 1}</span>
-                <span className="overview-card-tooltip-name">{node.name}</span>
-                <strong className="overview-card-tooltip-value">{node.value.toLocaleString()}</strong>
-              </div>
-            ))}
-          </div>
-        )}
+        {hoveredCard === "connections" && <OverviewTopTooltip metric="connections" rows={topNodes} />}
       </article>
     </section>
   );

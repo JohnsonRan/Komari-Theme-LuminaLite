@@ -101,7 +101,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   // 浅比较缓存：避免每 tick 创建新的 { ...meta, ...metrics } 对象引用，
   // 让子组件在值未变时跳过 re-render。
   type NodeCombined = NodeInfo & NodeMetrics;
-  const nodeCacheRef = useRef<NodeCombined | undefined>(undefined);
+  // 连 key 列表一起缓存：每 tick 只需为新对象取一次 Object.keys。
+  const nodeCacheRef = useRef<{ node: NodeCombined; keys: string[] } | undefined>(undefined);
 
   return useMemo(() => {
     if (!meta || !metrics || !metaModel) {
@@ -141,19 +142,18 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
 
     // 浅比较：值未变则复用旧引用，避免子组件无谓 re-render。
     const candidate: NodeCombined = { ...meta, ...metrics };
+    const nextKeys = Object.keys(candidate);
     const prev = nodeCacheRef.current;
-    let node: NodeCombined;
-    if (prev) {
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(candidate);
-      const same =
-        prevKeys.length === nextKeys.length &&
-        nextKeys.every((key) => (prev as unknown as Record<string, unknown>)[key] === (candidate as unknown as Record<string, unknown>)[key]);
-      node = same ? prev : candidate;
-    } else {
-      node = candidate;
-    }
-    nodeCacheRef.current = node;
+    const same =
+      prev !== undefined &&
+      prev.keys.length === nextKeys.length &&
+      nextKeys.every(
+        (key) =>
+          (prev.node as unknown as Record<string, unknown>)[key] ===
+          (candidate as unknown as Record<string, unknown>)[key],
+      );
+    const node = same ? prev.node : candidate;
+    nodeCacheRef.current = same ? prev : { node, keys: nextKeys };
 
     return {
       node,

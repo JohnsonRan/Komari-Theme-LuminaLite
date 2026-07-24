@@ -29,6 +29,7 @@ import {
 } from "@/utils/metricTone";
 import { formatHealthBucketTooltip, formatPingHourStatsTitle } from "./pingBucketText";
 import {
+  clamp01,
   formatCompactExpire,
   formatCompactPercent,
   formatCompactUptime,
@@ -54,11 +55,6 @@ const HEALTH_BAR_COUNT = 18;
 type CompactNode = NodeInfo & NodeMetrics;
 type CompactTag = { label: string; color: string };
 type CompactExpire = { value: string; unit: string };
-
-function clamp01(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
-}
 
 function CompactGauge({
   icon,

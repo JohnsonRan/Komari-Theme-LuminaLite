@@ -7,7 +7,21 @@ export function joinTagTitle(tags: { label: string }[]) {
   return tags.map((tag) => tag.label).join(" / ");
 }
 
-/** ≥10% 取整，否则保留一位小数。 */
+/** 0..1 之间的填充比例，非数值按 0 处理。 */
+export function clamp01(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * ≥10 取整、否则保留一位小数，不带 % 后缀也不特判 0（迷你卡/列表用，
+ * 保留 "0.0" 这类定宽写法）。带后缀且去尾零的版本见 formatCompactPercent。
+ */
+export function compactPercentText(value: number) {
+  return value >= 10 ? Math.round(value).toString() : value.toFixed(1);
+}
+
+/** ≥10% 取整，否则保留一位小数并去掉尾零（紧凑卡用）。 */
 export function formatCompactPercent(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0%";
   if (value >= 10) return `${Math.round(value)}%`;

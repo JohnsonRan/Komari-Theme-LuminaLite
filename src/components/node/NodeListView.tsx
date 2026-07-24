@@ -11,19 +11,21 @@ import { formatBytes } from "@/utils/format";
 import { speedRateColor } from "@/utils/metricTone";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
-import { formatOsLabel, joinTagTitle, nodeDetailLinkLabels } from "./nodeCardShared";
+import {
+  clamp01,
+  compactPercentText,
+  formatOsLabel,
+  joinTagTitle,
+  nodeDetailLinkLabels,
+} from "./nodeCardShared";
 
 const GAUGE_SEGMENTS = 14;
 // 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
 const LIST_PING_BUCKETS = 12;
 
-function clamp01(value: number) {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
-}
-
 function pctText(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0";
-  return value >= 10 ? Math.round(value).toString() : value.toFixed(1);
+  return compactPercentText(value);
 }
 
 // 细 canvas 分段条 + 百分比,与大卡 MetricBar 同一视觉语言,但压成一格(数值在上、细条在下)。

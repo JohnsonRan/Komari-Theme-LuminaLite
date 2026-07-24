@@ -18,7 +18,13 @@ import { IpStackBadges } from "./IpStackBadges";
 import { useNodeCardModel } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
-import { joinTagTitle, nodeDetailLinkLabels, pingEmptyLabels } from "./nodeCardShared";
+import {
+  clamp01,
+  compactPercentText,
+  joinTagTitle,
+  nodeDetailLinkLabels,
+  pingEmptyLabels,
+} from "./nodeCardShared";
 import { formatPingHourStatsTitle } from "./pingBucketText";
 import { formatBytes, type ByteRateDisplay } from "@/utils/format";
 import type { NodeInfo, NodeMetrics, PingOverviewItem, PingOverviewBucket } from "@/types/komari";
@@ -106,7 +112,7 @@ function MiniMetricBar({
   fraction: number;
   paint: string;
 }) {
-  const clamped = Math.max(0, Math.min(1, fraction));
+  const clamped = clamp01(fraction);
   const fullValue = `${valueText}${unit ?? ""}`;
   const style: MiniMetricStyle = {
     "--mini-metric-fill": `${clamped * 100}%`,
@@ -142,7 +148,7 @@ function MiniVitals({
       <MiniMetricBar
         icon={<Cpu size={12} strokeWidth={2} />}
         label="CPU"
-        valueText={node.cpuPct.toFixed(node.cpuPct >= 10 ? 0 : 1)}
+        valueText={compactPercentText(node.cpuPct)}
         unit="%"
         fraction={node.cpuPct / 100}
         paint="var(--progress-cpu)"
@@ -150,7 +156,7 @@ function MiniVitals({
       <MiniMetricBar
         icon={<MemoryStick size={12} strokeWidth={2} />}
         label="内存"
-        valueText={node.ramPct.toFixed(node.ramPct >= 10 ? 0 : 1)}
+        valueText={compactPercentText(node.ramPct)}
         unit="%"
         fraction={node.ramPct / 100}
         paint="var(--progress-memory)"
@@ -158,7 +164,7 @@ function MiniVitals({
       <MiniMetricBar
         icon={<HardDrive size={12} strokeWidth={2} />}
         label="磁盘"
-        valueText={node.diskPct.toFixed(node.diskPct >= 10 ? 0 : 1)}
+        valueText={compactPercentText(node.diskPct)}
         unit="%"
         fraction={node.diskPct / 100}
         paint="var(--progress-disk)"

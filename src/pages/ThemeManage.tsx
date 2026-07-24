@@ -271,6 +271,41 @@ function draftFromSettings(settings: ResolvedThemeSettings): ThemeDraft {
   };
 }
 
+// 十余处开关行结构完全一致，只有标题/说明/绑定字段不同；样式与无障碍属性改一处即可。
+function ToggleField({
+  title,
+  description,
+  checked,
+  onChange,
+  className,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  className?: string;
+}) {
+  return (
+    <label
+      className={clsx(
+        "surface-inset flex items-center justify-between gap-3 px-4 py-3",
+        className,
+      )}
+    >
+      <span className="min-w-0">
+        <span className="block text-[13px] font-medium text-[var(--text-primary)]">{title}</span>
+        <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">{description}</span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
+      />
+    </label>
+  );
+}
+
 export function ThemeManage() {
   const {
     data: config,
@@ -797,22 +832,12 @@ export function ThemeManage() {
         aside={<Wallpaper size={16} />}
       >
         <div className="flex flex-col gap-4">
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                启用背景图
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                关闭后不加载任何背景图（下方 URL 配置会保留），站点回到纯色主题；再次开启即恢复。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.enableBackgroundImage}
-              onChange={(event) => patch("enableBackgroundImage", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
+          <ToggleField
+            title="启用背景图"
+            description="关闭后不加载任何背景图（下方 URL 配置会保留），站点回到纯色主题；再次开启即恢复。"
+            checked={draft.enableBackgroundImage}
+            onChange={(value) => patch("enableBackgroundImage", value)}
+          />
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex min-w-0 flex-col gap-2">
               <span className="text-[12px] font-medium text-[var(--text-secondary)]">
@@ -933,86 +958,36 @@ export function ThemeManage() {
         aside={<ListFilter size={16} />}
       >
         <div className="grid gap-3 md:grid-cols-3">
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示顶部总览
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                展示时间、在线数、地区、流量和速率。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.showHomeOverview}
-              onChange={(event) => patch("showHomeOverview", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示分组筛选
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                根据后端节点分组生成首页 Tab。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.showGroupTabs}
-              onChange={(event) => patch("showGroupTabs", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示地区筛选
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                按节点地区生成国旗筛选栏，点击某地区只看该地区节点。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.showRegionBar}
-              onChange={(event) => patch("showRegionBar", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                卡片显示分组
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                关闭后卡片内不再显示节点分组名（不影响分组筛选栏与备注）。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.showCardGroup}
-              onChange={(event) => patch("showCardGroup", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                启用排序切换
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                首页显示排序控件，访客可临时切换排序方式（离线节点恒定置底）。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.enableHomeSort}
-              onChange={(event) => patch("enableHomeSort", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
+          <ToggleField
+            title="显示顶部总览"
+            description="展示时间、在线数、地区、流量和速率。"
+            checked={draft.showHomeOverview}
+            onChange={(value) => patch("showHomeOverview", value)}
+          />
+          <ToggleField
+            title="显示分组筛选"
+            description="根据后端节点分组生成首页 Tab。"
+            checked={draft.showGroupTabs}
+            onChange={(value) => patch("showGroupTabs", value)}
+          />
+          <ToggleField
+            title="显示地区筛选"
+            description="按节点地区生成国旗筛选栏，点击某地区只看该地区节点。"
+            checked={draft.showRegionBar}
+            onChange={(value) => patch("showRegionBar", value)}
+          />
+          <ToggleField
+            title="卡片显示分组"
+            description="关闭后卡片内不再显示节点分组名（不影响分组筛选栏与备注）。"
+            checked={draft.showCardGroup}
+            onChange={(value) => patch("showCardGroup", value)}
+          />
+          <ToggleField
+            title="启用排序切换"
+            description="首页显示排序控件，访客可临时切换排序方式（离线节点恒定置底）。"
+            checked={draft.enableHomeSort}
+            onChange={(value) => patch("enableHomeSort", value)}
+          />
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)]">
@@ -1150,70 +1125,30 @@ export function ThemeManage() {
         aside={<Rows3 size={16} />}
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示累计流量
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                展示出站与入站累计流量。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.compactShowTrafficTotal}
-              onChange={(event) => patch("compactShowTrafficTotal", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示费用到期
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                展示续费价格与剩余天数。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.compactShowBilling}
-              onChange={(event) => patch("compactShowBilling", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示在线时间
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                在小卡片流量栏右侧展示在线时长。默认开启。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.compactShowUptime}
-              onChange={(event) => patch("compactShowUptime", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                显示连接数（TCP/UDP）
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                在大卡片与小卡片展示实时 TCP / UDP 连接数；需被控端上报，未上报显示 0。默认关闭。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.showConnections}
-              onChange={(event) => patch("showConnections", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
+          <ToggleField
+            title="显示累计流量"
+            description="展示出站与入站累计流量。"
+            checked={draft.compactShowTrafficTotal}
+            onChange={(value) => patch("compactShowTrafficTotal", value)}
+          />
+          <ToggleField
+            title="显示费用到期"
+            description="展示续费价格与剩余天数。"
+            checked={draft.compactShowBilling}
+            onChange={(value) => patch("compactShowBilling", value)}
+          />
+          <ToggleField
+            title="显示在线时间"
+            description="在小卡片流量栏右侧展示在线时长。默认开启。"
+            checked={draft.compactShowUptime}
+            onChange={(value) => patch("compactShowUptime", value)}
+          />
+          <ToggleField
+            title="显示连接数（TCP/UDP）"
+            description="在大卡片与小卡片展示实时 TCP / UDP 连接数；需被控端上报，未上报显示 0。默认关闭。"
+            checked={draft.showConnections}
+            onChange={(value) => patch("showConnections", value)}
+          />
         </div>
       </InstancePanel>
 
@@ -1260,23 +1195,12 @@ export function ThemeManage() {
             </div>
           </div>
 
-          <label className="surface-inset flex items-center justify-between gap-3 px-4 py-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-                未绑定节点显示模拟延迟
-              </span>
-              <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-                未绑定 Ping 任务的在线节点在首页卡片显示前端生成的模拟数据（延迟 1-10ms、丢包
-                0%），仅用于视觉统一，不代表真实网络质量；离线节点仍显示“未配置”。
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.fakePingForUnbound}
-              onChange={(event) => patch("fakePingForUnbound", event.target.checked)}
-              className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-            />
-          </label>
+          <ToggleField
+            title="未绑定节点显示模拟延迟"
+            description="未绑定 Ping 任务的在线节点在首页卡片显示前端生成的模拟数据（延迟 1-10ms、丢包 0%），仅用于视觉统一，不代表真实网络质量；离线节点仍显示“未配置”。"
+            checked={draft.fakePingForUnbound}
+            onChange={(value) => patch("fakePingForUnbound", value)}
+          />
 
           {(tasksLoading || clientsLoading) && (
             <div className="flex min-h-[20vh] items-center justify-center">
@@ -1524,22 +1448,13 @@ export function ThemeManage() {
             </div>
           </div>
         </div>
-        <label className="surface-inset mt-4 flex items-center justify-between gap-3 px-4 py-3">
-          <span className="min-w-0">
-            <span className="block text-[13px] font-medium text-[var(--text-primary)]">
-              分栏布局（左侧服务器列表）
-            </span>
-            <span className="mt-1 block text-[11px] text-[var(--text-tertiary)]">
-              详情页左侧固定服务器列表、右侧显示详情与图表，点击即可切换节点；窄屏自动收为单列。默认开启。
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            checked={draft.detailSplitLayout}
-            onChange={(event) => patch("detailSplitLayout", event.target.checked)}
-            className="h-4 w-4 shrink-0 accent-[var(--accent-500)]"
-          />
-        </label>
+        <ToggleField
+          className="mt-4"
+          title="分栏布局（左侧服务器列表）"
+          description="详情页左侧固定服务器列表、右侧显示详情与图表，点击即可切换节点；窄屏自动收为单列。默认开启。"
+          checked={draft.detailSplitLayout}
+          onChange={(value) => patch("detailSplitLayout", value)}
+        />
       </InstancePanel>
     </div>
   );

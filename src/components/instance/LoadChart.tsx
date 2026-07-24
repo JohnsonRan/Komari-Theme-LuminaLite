@@ -59,11 +59,13 @@ const CONNECTION_KEYS = ["connections", "udp"];
 const CONNECTION_COLORS = [CHART_PALETTE.memory, CHART_PALETTE.cpu];
 const PROCESS_KEYS = ["process"];
 const PROCESS_COLORS = [CHART_PALETTE.warning];
-const GPU_KEYS = ["gpu", "gpuMem"];
-const GPU_COLORS = ["#e05d7b", "#c77dff"];
-const GPU_BYTES_KEYS = ["gpuMemBytes"];
+// GPU 使用率(%)、显存(% 或字节)、温度(°C) 各有独立量纲，拆成三张图各自用自己的坐标轴。
 // 模块级常量，避免每次渲染创建新数组引用导致 chart options 变化、图表被整体重建。
-const GPU_BYTES_COLORS = [GPU_COLORS[1]];
+const GPU_USAGE_KEYS = ["gpu"];
+const GPU_USAGE_COLORS = ["#e05d7b"];
+const GPU_MEM_KEYS = ["gpuMem"];
+const GPU_BYTES_KEYS = ["gpuMemBytes"];
+const GPU_MEM_COLORS = ["#c77dff"];
 const GPU_TEMP_KEYS = ["gpuTemp"];
 const GPU_TEMP_COLORS = ["#f4a261"];
 const SERIES_LABELS: Record<string, string> = {
@@ -108,8 +110,8 @@ interface ChartPoint {
   [key: string]: number | null;
 }
 
-function metricData(points: ChartPoint[], keys: string[]): uPlot.AlignedData {
-  const times = points.map((point) => point.time);
+// times 由调用方统一算好：同一批 points 会喂给多张图，逐图重算时间轴是纯浪费。
+function metricData(times: number[], points: ChartPoint[], keys: string[]): uPlot.AlignedData {
   return [times, ...keys.map((key) => points.map((point) => point[key] ?? null))] as uPlot.AlignedData;
 }
 
@@ -159,6 +161,59 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
     gpuMem: node.gpuMemTotal > 0 ? (node.gpuMemUsed / node.gpuMemTotal) * 100 : 0,
     gpuMemBytes: node.gpuMemUsed,
     gpuTemp: node.gpuTemp,
+  };
+}
+
+// 历史记录与近期缓冲字段名一致（后者类型更宽松），按结构取二者共有的字段。
+type ChartSourceRecord = Pick<
+  LoadRecord,
+  | "cpu"
+  | "ram"
+  | "ram_total"
+  | "swap"
+  | "swap_total"
+  | "disk"
+  | "disk_total"
+  | "net_in"
+  | "net_out"
+  | "connections"
+  | "connections_udp"
+  | "process"
+  | "gpu"
+  | "gpu_memory_used"
+  | "gpu_memory_total"
+  | "gpu_temperature"
+>;
+
+// 记录自带 total 为 0（新版后端不再存储 *_total 序列）时回退到节点注册时的静态总量。
+function pointFromRecord(
+  record: ChartSourceRecord,
+  time: number,
+  fallbackRamTotal: number,
+  fallbackSwapTotal: number,
+  fallbackDiskTotal: number,
+): ChartPoint {
+  const ramTotal = record.ram_total > 0 ? record.ram_total : fallbackRamTotal;
+  const swapTotal = record.swap_total > 0 ? record.swap_total : fallbackSwapTotal;
+  const diskTotal = record.disk_total > 0 ? record.disk_total : fallbackDiskTotal;
+  return {
+    time,
+    cpu: record.cpu,
+    ram: ramTotal > 0 ? (record.ram / ramTotal) * 100 : 0,
+    swap: swapTotal > 0 ? (record.swap / swapTotal) * 100 : 0,
+    disk: diskTotal > 0 ? (record.disk / diskTotal) * 100 : 0,
+    ramBytes: record.ram,
+    swapBytes: record.swap,
+    diskBytes: record.disk,
+    netIn: record.net_in,
+    netOut: record.net_out,
+    connections: record.connections,
+    udp: record.connections_udp,
+    process: record.process,
+    gpu: record.gpu,
+    gpuMem: record.gpu_memory_total > 0 ? (record.gpu_memory_used / record.gpu_memory_total) * 100 : 0,
+    gpuMemBytes: record.gpu_memory_used,
+    gpuTemp: record.gpu_temperature,
   };
 }
 
@@ -320,6 +375,7 @@ const ChartCard = memo(function ChartCard({
   note,
   uuid,
   points,
+  times,
   keys,
   colors,
   resolvedAppearance,
@@ -338,6 +394,7 @@ const ChartCard = memo(function ChartCard({
   note?: ReactNode;
   uuid: string;
   points: ChartPoint[];
+  times: number[];
   keys: string[];
   colors: string[];
   resolvedAppearance: "light" | "dark";
@@ -367,7 +424,7 @@ const ChartCard = memo(function ChartCard({
     zoomXRangeRef,
     onUnpin: () => setTooltip((prev) => (prev.show ? { ...prev, show: false } : prev)),
   });
-  const data = useMemo(() => metricData(points, keys), [points, keys]);
+  const data = useMemo(() => metricData(times, points, keys), [times, points, keys]);
   useLayoutEffect(() => {
     dataRef.current = data;
   }, [data]);
@@ -517,13 +574,19 @@ export function LoadChart({
     const buffered = realtimeBufferRef.current;
     realtimeBufferRef.current = [];
     setRealtimePoints((prev) => {
-      let next = prev;
-      for (const candidate of [...buffered, pointFromNode(node)]) {
-        const last = next[next.length - 1];
-        if (last && Math.abs(last.time - candidate.time) < 1) continue;
-        next = [...next, candidate];
+      // 逐点 [...next, candidate] 会把整段窗口（最多 600 点）复制一遍，
+      // 悬停期间攒下的几十个缓冲点一次性补回时是 O(n²)；先攒后拼一次。
+      const appended: ChartPoint[] = [];
+      let lastTime = prev.length > 0 ? prev[prev.length - 1].time : null;
+      for (const candidate of buffered) {
+        if (lastTime !== null && Math.abs(lastTime - candidate.time) < 1) continue;
+        appended.push(candidate);
+        lastTime = candidate.time;
       }
-      return next === prev ? prev : next.slice(-REALTIME_SAMPLE_LIMIT);
+      const latest = pointFromNode(node);
+      if (lastTime === null || Math.abs(lastTime - latest.time) >= 1) appended.push(latest);
+      if (appended.length === 0) return prev;
+      return prev.concat(appended).slice(-REALTIME_SAMPLE_LIMIT);
     });
   }, [active, isRealtime, node, chartHovered]);
 
@@ -553,30 +616,9 @@ export function LoadChart({
   const fallbackDiskTotal = meta?.disk_total ?? 0;
 
   const historyPoints = useMemo<ChartPoint[]>(() => {
-    const rawPoints = historyRecords.map(({ record, time }) => {
-      const ramTotal = record.ram_total > 0 ? record.ram_total : fallbackRamTotal;
-      const swapTotal = record.swap_total > 0 ? record.swap_total : fallbackSwapTotal;
-      const diskTotal = record.disk_total > 0 ? record.disk_total : fallbackDiskTotal;
-      return {
-        time,
-        cpu: record.cpu,
-        ram: ramTotal > 0 ? (record.ram / ramTotal) * 100 : 0,
-        swap: swapTotal > 0 ? (record.swap / swapTotal) * 100 : 0,
-        disk: diskTotal > 0 ? (record.disk / diskTotal) * 100 : 0,
-        ramBytes: record.ram,
-        swapBytes: record.swap,
-        diskBytes: record.disk,
-        netIn: record.net_in,
-        netOut: record.net_out,
-        connections: record.connections,
-        udp: record.connections_udp,
-        process: record.process,
-        gpu: record.gpu,
-        gpuMem: record.gpu_memory_total > 0 ? (record.gpu_memory_used / record.gpu_memory_total) * 100 : 0,
-        gpuMemBytes: record.gpu_memory_used,
-        gpuTemp: record.gpu_temperature,
-      };
-    });
+    const rawPoints = historyRecords.map(({ record, time }) =>
+      pointFromRecord(record, time, fallbackRamTotal, fallbackSwapTotal, fallbackDiskTotal),
+    );
     const sampled = downsamplePoints(rawPoints, getHistoryRenderLimit(hours));
     const filled = fillMissingMetricPoints(sampled);
     return interpolateMetricGaps(filled, LOAD_INTERPOLATE_KEYS) as ChartPoint[];
@@ -589,28 +631,7 @@ export function LoadChart({
       .map((rec) => {
         const time = toChartSeconds(rec.time);
         if (time <= 0) return null;
-        const ramTotal = rec.ram_total > 0 ? rec.ram_total : fallbackRamTotal;
-        const swapTotal = rec.swap_total > 0 ? rec.swap_total : fallbackSwapTotal;
-        const diskTotal = rec.disk_total > 0 ? rec.disk_total : fallbackDiskTotal;
-        return {
-          time,
-          cpu: rec.cpu,
-          ram: ramTotal > 0 ? (rec.ram / ramTotal) * 100 : 0,
-          swap: swapTotal > 0 ? (rec.swap / swapTotal) * 100 : 0,
-          disk: diskTotal > 0 ? (rec.disk / diskTotal) * 100 : 0,
-          ramBytes: rec.ram,
-          swapBytes: rec.swap,
-          diskBytes: rec.disk,
-          netIn: rec.net_in,
-          netOut: rec.net_out,
-          connections: rec.connections,
-          udp: rec.connections_udp,
-          process: rec.process,
-          gpu: rec.gpu,
-          gpuMem: rec.gpu_memory_total > 0 ? (rec.gpu_memory_used / rec.gpu_memory_total) * 100 : 0,
-          gpuMemBytes: rec.gpu_memory_used,
-          gpuTemp: rec.gpu_temperature,
-        } as ChartPoint;
+        return pointFromRecord(rec, time, fallbackRamTotal, fallbackSwapTotal, fallbackDiskTotal);
       })
       .filter((p): p is ChartPoint => p !== null)
       .sort((a, b) => a.time - b.time);
@@ -629,6 +650,9 @@ export function LoadChart({
     // 完整历史到达前用近期缓冲作为临时数据源。
     return historyPoints.length > 0 ? historyPoints : recentPoints;
   }, [historyPoints, recentPoints, isRealtime, realtimePoints]);
+
+  // 时间轴所有图表共用，算一次即可。
+  const times = useMemo(() => points.map((point) => point.time), [points]);
 
   // 即使节点标有 GPU 型号，若无实际数据上报（gpu_memory_total 始终为 0）
   // 则 GPU 图表无意义，直接隐藏。
@@ -668,6 +692,9 @@ export function LoadChart({
   const lastRamTotal = (lastRecord?.ram_total ?? 0) > 0 ? lastRecord!.ram_total : fallbackRamTotal;
   const lastSwapTotal = (lastRecord?.swap_total ?? 0) > 0 ? lastRecord!.swap_total : fallbackSwapTotal;
   const lastDiskTotal = (lastRecord?.disk_total ?? 0) > 0 ? lastRecord!.disk_total : fallbackDiskTotal;
+  const lastGpuMemUsed = lastRecord?.gpu_memory_used ?? 0;
+  const lastGpuMemTotal =
+    (lastRecord?.gpu_memory_total ?? 0) > 0 ? lastRecord!.gpu_memory_total : (node?.gpuMemTotal ?? 0);
 
   if (isLoading && !recentPoints.length) {
     return <InstanceChartLoading title="负载图表" />;
@@ -699,6 +726,18 @@ export function LoadChart({
       </InstancePanel>
     );
   }
+
+  // 各图仅在 icon/title/value/keys/colors/坐标轴上有差异，其余接线九张图完全一致。
+  const sharedChartProps = {
+    uuid,
+    points,
+    times,
+    resolvedAppearance,
+    rangeHours: hours,
+    spanGaps: connectNulls,
+    xRange: requestedXRange,
+    resetSignal,
+  };
 
   return (
     <InstancePanel
@@ -741,30 +780,24 @@ export function LoadChart({
         onMouseLeave={onChartGridLeave}
       >
         <ChartCard
+          {...sharedChartProps}
           icon={<Cpu size={13} />}
           title="CPU"
-          uuid={uuid}
           value={
             isRealtime && node
               ? `${node.cpuPct.toFixed(2)}%`
               : `${(points[points.length - 1]?.cpu ?? 0).toFixed(2)}%`
           }
           note="使用率"
-          points={points}
           keys={CPU_KEYS}
           colors={CPU_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
           unit="%"
-          spanGaps={connectNulls}
           axisKind="percent"
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         <ChartCard
+          {...sharedChartProps}
           icon={<MemoryStick size={13} />}
           title="内存"
-          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatBytes(node.ramUsed)} / ${formatBytes(node.ramTotal)}`
@@ -781,21 +814,15 @@ export function LoadChart({
                 ? `Swap ${formatBytes(lastRecord.swap)} / ${formatBytes(lastSwapTotal)}`
                 : "Swap 无"
           }
-          points={points}
           keys={useBytesUnit ? MEMORY_BYTES_KEYS : MEMORY_KEYS}
           colors={MEMORY_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
           unit={useBytesUnit ? "" : "%"}
-          spanGaps={connectNulls}
           axisKind={useBytesUnit ? "bytes" : "percent"}
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         <ChartCard
+          {...sharedChartProps}
           icon={<HardDrive size={13} />}
           title="磁盘"
-          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`
@@ -804,21 +831,15 @@ export function LoadChart({
                 : "—"
           }
           note="已用空间"
-          points={points}
           keys={useBytesUnit ? DISK_BYTES_KEYS : DISK_KEYS}
           colors={DISK_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
           unit={useBytesUnit ? "" : "%"}
-          spanGaps={connectNulls}
           axisKind={useBytesUnit ? "bytes" : "percent"}
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         <ChartCard
+          {...sharedChartProps}
           icon={<Network size={13} />}
           title="网络"
-          uuid={uuid}
           value={
             isRealtime && node
               ? `${formatNetworkRate(node.netDown, networkUnit)} / ${formatNetworkRate(node.netUp, networkUnit)}`
@@ -832,22 +853,16 @@ export function LoadChart({
               <span className="inline-flex items-center gap-1"><ArrowUp size={11} />{isRealtime && node ? formatBytes(node.trafficUp) : data?.records.length ? formatBytes(data.records[data.records.length - 1]?.net_total_up ?? 0) : "—"}</span>
             </span>
           }
-          points={points}
           keys={NETWORK_KEYS}
           colors={NETWORK_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
-          spanGaps={connectNulls}
           axisKind="network"
           axisSize={78}
           networkUnit={networkUnit}
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         <ChartCard
+          {...sharedChartProps}
           icon={<Workflow size={13} />}
           title="连接数"
-          uuid={uuid}
           value={
             isRealtime && node
               ? `TCP ${node.connectionsTcp} / UDP ${node.connectionsUdp}`
@@ -856,20 +871,14 @@ export function LoadChart({
                 : "—"
           }
           note="连接"
-          points={points}
           keys={CONNECTION_KEYS}
           colors={CONNECTION_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
-          spanGaps={connectNulls}
           axisKind="count"
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         <ChartCard
+          {...sharedChartProps}
           icon={<Gauge size={13} />}
           title="进程"
-          uuid={uuid}
           value={
             isRealtime && node
               ? node.process.toString()
@@ -884,48 +893,53 @@ export function LoadChart({
                 ? `负载 ${(data.records[data.records.length - 1]?.load ?? 0).toFixed(2)}`
                 : "—"
           }
-          points={points}
           keys={PROCESS_KEYS}
           colors={PROCESS_COLORS}
-          resolvedAppearance={resolvedAppearance}
-          rangeHours={hours}
-          spanGaps={connectNulls}
           axisKind="count"
-          xRange={requestedXRange}
-          resetSignal={resetSignal}
         />
         {hasGpuData && (
           <ChartCard
+            {...sharedChartProps}
             icon={<CircuitBoard size={13} />}
-            title="GPU"
-            uuid={uuid}
+            title="GPU 使用率"
             value={
               isRealtime && node
                 ? `${node.gpuPct.toFixed(2)}%`
                 : `${(points[points.length - 1]?.gpu ?? 0).toFixed(2)}%`
             }
-            note={
-              isRealtime && node && node.gpuMemTotal > 0
-                ? `显存 ${formatBytes(node.gpuMemUsed)} / ${formatBytes(node.gpuMemTotal)}`
-                : meta?.gpu_name || "使用率"
-            }
-            points={points}
-            keys={useBytesUnit ? GPU_BYTES_KEYS : GPU_KEYS}
-            colors={useBytesUnit ? GPU_BYTES_COLORS : GPU_COLORS}
-            resolvedAppearance={resolvedAppearance}
-            rangeHours={hours}
-            unit={useBytesUnit ? "" : "%"}
-            spanGaps={connectNulls}
-            axisKind={useBytesUnit ? "bytes" : "percent"}
-            xRange={requestedXRange}
-            resetSignal={resetSignal}
+            note={meta?.gpu_name || "使用率"}
+            keys={GPU_USAGE_KEYS}
+            colors={GPU_USAGE_COLORS}
+            unit="%"
+            axisKind="percent"
           />
         )}
         {hasGpuData && (
           <ChartCard
+            {...sharedChartProps}
+            icon={<MemoryStick size={13} />}
+            title="GPU 显存"
+            value={
+              isRealtime && node
+                ? node.gpuMemTotal > 0
+                  ? `${formatBytes(node.gpuMemUsed)} / ${formatBytes(node.gpuMemTotal)}`
+                  : formatBytes(node.gpuMemUsed)
+                : lastGpuMemTotal > 0
+                  ? `${formatBytes(lastGpuMemUsed)} / ${formatBytes(lastGpuMemTotal)}`
+                  : formatBytes(lastGpuMemUsed)
+            }
+            note={meta?.gpu_name || "显存占用"}
+            keys={useBytesUnit ? GPU_BYTES_KEYS : GPU_MEM_KEYS}
+            colors={GPU_MEM_COLORS}
+            unit={useBytesUnit ? "" : "%"}
+            axisKind={useBytesUnit ? "bytes" : "percent"}
+          />
+        )}
+        {hasGpuData && (
+          <ChartCard
+            {...sharedChartProps}
             icon={<Thermometer size={13} />}
             title="GPU 温度"
-            uuid={uuid}
             value={
               isRealtime && node
                 ? node.gpuTemp > 0 ? `${node.gpuTemp.toFixed(1)}°C` : "—"
@@ -934,16 +948,10 @@ export function LoadChart({
                   : "—"
             }
             note={meta?.gpu_name || "温度"}
-            points={points}
             keys={GPU_TEMP_KEYS}
             colors={GPU_TEMP_COLORS}
-            resolvedAppearance={resolvedAppearance}
-            rangeHours={hours}
             unit="°C"
-            spanGaps={connectNulls}
             axisKind="default"
-            xRange={requestedXRange}
-            resetSignal={resetSignal}
           />
         )}
       </div>
