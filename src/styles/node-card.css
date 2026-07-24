@@ -451,6 +451,11 @@
   gap: 22px;
 }
 
+/* 多任务标签独占健康分区的第一行(跨延迟/丢包两列),不挤压柱状图宽度。 */
+.server-health-tabs {
+  margin-bottom: 10px;
+}
+
 .server-health-block {
   display: flex;
   flex-direction: column;
@@ -491,6 +496,107 @@
   display: block;
   width: 100%;
   height: 16px;
+}
+
+/* 多任务延迟标签(三网延迟)。四种卡片布局共用同一套类名,只用 data-size 调字号,
+   保证“电信 / 联通 / 移动”在大卡、小卡、迷你卡、列表里读起来是同一个控件。 */
+.ping-task-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ping-task-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--hairline);
+  border-radius: 7px;
+  background: transparent;
+  /* 底部多留 2px 给丢包色条(::after),文字不会压在色条上。 */
+  padding: 2px 6px 4px;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+/* 丢包热力色条:绿=无丢包、黄/红=有丢包、轨道色=无样本。常驻但不占宽度,
+   于是"哪条线路在丢包"一眼扫得出来,而标签宽度与只显示延迟时完全一致。 */
+.ping-task-tab::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--ping-task-loss, var(--progress-bg));
+  opacity: 0.9;
+}
+
+.ping-task-tab:hover {
+  background: var(--hover-bg);
+}
+
+.ping-task-tab.is-active {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--hover-bg) 76%, transparent);
+  color: var(--text-secondary);
+}
+
+.ping-task-tab-label {
+  min-width: 0;
+  max-width: 5.5rem;
+  overflow: hidden;
+  font-weight: 620;
+  text-overflow: ellipsis;
+}
+
+.ping-task-tab-value {
+  font-weight: 700;
+  /* 未选中任务的值也保持可读:颜色由内联的延迟热力色覆盖,这里只兜底无样本情况。 */
+  color: var(--text-secondary);
+}
+
+.ping-task-tab-value small {
+  margin-left: 1px;
+  font-size: 0.82em;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+/* 只在真的丢包时渲染(见 LOSS_TEXT_THRESHOLD),所以这里不为常态的 "0.0%" 预留宽度。 */
+.ping-task-tab-loss {
+  margin-left: 1px;
+  font-weight: 700;
+}
+
+.ping-task-tab-loss small {
+  margin-left: 1px;
+  font-size: 0.82em;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.ping-task-tabs[data-size="small"] .ping-task-tab {
+  gap: 3px;
+  border-radius: 6px;
+  padding: 1px 5px 3px;
+  font-size: 9.5px;
+}
+
+.ping-task-tabs[data-size="small"] .ping-task-tab-label {
+  max-width: 4.25rem;
 }
 
 .server-card-footer {

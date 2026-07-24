@@ -206,6 +206,29 @@ const statusProfiles = [
   [0, 0, 0, 38, 232, 0, 0, 1.1 * TIB, 880 * GIB, false],
 ] as const;
 
+// 每个任务一份实时统计，键为 taskId 字符串（与 pingTasks 对齐）。任务间给固定偏移，
+// 再叠一点随时间走的抖动 —— 这样在页面上能直接看出三条线路各自都在 ~2s 刷新。
+// 3 号任务（移动 CMI）带上非零丢包，用来验证标签底部的丢包色条与数值。
+function embeddedPingStats(baseline: number, nodeIndex: number, now: number) {
+  const tick = now / 1000;
+  return Object.fromEntries(
+    pingTasks.map((task, taskIndex) => {
+      const jitter = Math.sin(tick / 3 + nodeIndex + taskIndex * 1.7) * 4;
+      const latest = Math.max(1, Math.round(baseline + taskIndex * 14 + jitter));
+      return [
+        String(task.id),
+        {
+          latest,
+          loss: taskIndex === 2 ? Math.max(0, Number((1.8 + jitter * 0.3).toFixed(1))) : 0,
+          avg: Math.round(latest * 1.12),
+          min: Math.max(1, Math.round(latest * 0.72)),
+          max: Math.round(latest * 1.68),
+        },
+      ];
+    }),
+  );
+}
+
 function latestStatus() {
   const now = Date.now();
   return Object.fromEntries(
@@ -238,17 +261,10 @@ function latestStatus() {
           connections: 180 + index * 44,
           connections_udp: 12 + index * 3,
           updated_at: now,
-          // 内嵌 ping 统计（键为 taskId 字符串，与 pingTask.id 对应），
-          // 与生产 WS 帧的 v1.Report 结构一致。
-          ping: {
-            "1": {
-              latest: ping,
-              loss: 0,
-              avg: Math.round(ping * 1.12),
-              min: Math.max(1, Math.round(ping * 0.72)),
-              max: Math.round(ping * 1.68),
-            },
-          },
+          // 内嵌 ping 统计（键为 taskId 字符串，与 pingTasks[].id 对应），
+          // 与生产 WS 帧的 v1.Report 结构一致：后端下发的是全量任务 map，
+          // 前端按节点绑定的任务各自取用，所以多任务标签上的延迟都是实时的。
+          ping: embeddedPingStats(ping, index, now),
         },
       ];
     }),
@@ -390,34 +406,40 @@ function trafficMetricPayload(params: {
   };
 }
 
-function pingRecords(uuid?: string) {
+function pingRecords(uuid?: string, taskId = 1) {
   const clients = uuid ? [uuid] : nodes.map((node) => node.uuid);
   const now = Date.now();
+  // 每个任务给一个固定偏移，让首页的多任务标签能明显区分出三条线路。
+  const taskOffset = (taskId - 1) * 14;
   return clients.flatMap((client) => {
     const index = nodes.findIndex((node) => node.uuid === client);
-    const baseline = statusProfiles[Math.max(0, index)][4];
+    const baseline = statusProfiles[Math.max(0, index)][4] + taskOffset;
     return Array.from({ length: 60 }, (_, sample) => ({
-      task_id: 1,
+      task_id: taskId,
       time: now - (59 - sample) * 60_000,
       value:
         index === 2 && sample % 17 === 0
           ? -1
-          : Math.max(1, baseline + Math.round(Math.sin(sample / 5 + index) * 9)),
+          : Math.max(1, baseline + Math.round(Math.sin(sample / 5 + index + taskId) * 9)),
       client,
     }));
   });
 }
 
-const pingTask = {
-  id: 1,
+// 4 个任务(多于每节点 3 个的上限):主题设置页里能看到「已达上限」的禁用态复选框。
+const pingTasks = [
+  { id: 1, name: "电信 CN2", target: "1.1.1.1" },
+  { id: 2, name: "联通 9929", target: "119.29.29.29" },
+  { id: 3, name: "移动 CMI", target: "223.5.5.5" },
+  { id: 4, name: "教育网 CERNET", target: "202.112.0.36" },
+].map((task, index) => ({
+  ...task,
   interval: 60,
-  name: "全球 ICMP",
   loss: 0,
   clients: nodes.map((node) => node.uuid),
   type: "icmp",
-  target: "1.1.1.1",
-  weight: 1,
-};
+  weight: index + 1,
+}));
 
 function json(data: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(data), {
@@ -480,6 +502,10 @@ class MockLiveSocket {
 
 export function installDevMockApi() {
   const nativeFetch = window.fetch.bind(window);
+  // 默认模拟未登录访客；?mock=1&admin=1 时模拟已登录管理员，用来预览主题设置页
+  // （含首页延迟绑定 UI，需要下面的 /api/admin/* mock）。
+  const mockLoggedIn =
+    new URLSearchParams(window.location.search).get("admin") === "1";
   // 实时数据走 mock WS（与生产同为唯一数据源，无 RPC 降级）。
   window.WebSocket = MockLiveSocket as unknown as typeof WebSocket;
 
@@ -500,7 +526,11 @@ export function installDevMockApi() {
     }
 
     if (url.pathname === "/api/me") {
-      return json({ logged_in: false, username: "", uuid: "" });
+      return json({
+        logged_in: mockLoggedIn,
+        username: mockLoggedIn ? "admin" : "",
+        uuid: "",
+      });
     }
 
     if (url.pathname === "/api/public") {
@@ -527,13 +557,40 @@ export function installDevMockApi() {
           showCardGroup: true,
           enableHomeSort: true,
           showPingChart: true,
-          homepagePingBindings: { "1": nodes.map((node) => node.uuid) },
+          // 1 号任务全量绑定，2/3 号只绑一部分：同一屏里既能看到单任务卡片，
+          // 也能看到 2 个和 3 个任务的多任务标签。
+          homepagePingBindings: {
+            "1": nodes.map((node) => node.uuid),
+            "2": nodes.slice(0, Math.ceil(nodes.length / 2)).map((node) => node.uuid),
+            "3": nodes.slice(0, Math.ceil(nodes.length / 3)).map((node) => node.uuid),
+          },
         },
       });
     }
 
     if (url.pathname === "/api/nodes") {
       return json(nodes);
+    }
+
+    // 主题设置页（?view=theme-manage）的两个管理端列表，用来调试首页延迟绑定 UI。
+    if (url.pathname === "/api/admin/ping/") {
+      return json(pingTasks);
+    }
+
+    if (url.pathname === "/api/admin/client/list") {
+      return json(
+        nodes.map(({ uuid, name, group, region, weight }) => ({
+          uuid,
+          name,
+          group,
+          region,
+          weight,
+        })),
+      );
+    }
+
+    if (url.pathname === "/api/admin/theme/settings") {
+      return json({ status: "success" });
     }
 
     if (url.pathname === "/api/rpc2") {
@@ -543,6 +600,7 @@ export function installDevMockApi() {
         params?: {
           uuid?: string;
           type?: string;
+          task_id?: number;
           metric_keys?: string[];
           entity_ids?: string[];
           start?: string;
@@ -574,15 +632,16 @@ export function installDevMockApi() {
         });
       }
       if (payload.method === "public:getPublicPingTasks") {
-        result = [pingTask];
+        result = pingTasks;
       } else if (payload.method === "common:getNodes") {
         result = Object.fromEntries(nodes.map((node) => [node.uuid, node]));
       } else if (payload.method === "common:getRecords") {
         const isPing = payload.params?.type === "ping";
+        const taskId = Number(payload.params?.task_id) || 1;
         const records = isPing
-          ? pingRecords(payload.params?.uuid)
+          ? pingRecords(payload.params?.uuid, taskId)
           : loadRecords(payload.params?.uuid ?? nodes[0].uuid);
-        result = { count: records.length, records, tasks: isPing ? [pingTask] : [] };
+        result = { count: records.length, records, tasks: isPing ? pingTasks : [] };
       }
       return json({ jsonrpc: "2.0", id: payload.id, result });
     }

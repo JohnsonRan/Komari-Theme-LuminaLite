@@ -14,7 +14,7 @@ import { withTimeoutSignal } from "@/utils/abort";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import { resolvePingSampleCounts } from "@/utils/pingMetrics";
 import {
-  invertHomepagePingTaskBindings,
+  resolveHomepagePingTaskIds,
   type HomepagePingTaskBindings,
 } from "@/utils/pingTasks";
 
@@ -25,7 +25,7 @@ const MAX_PING_REFRESH_INTERVAL = 300_000;
 // 绘制时要把较粗的后端区间投影到它覆盖的可视 bucket，同时保持卡片密度一致。
 const MAX_VISIBLE_HOMEPAGE_PING_BUCKETS = 24;
 
-const EMPTY_PING: PingOverviewItem = {
+export const EMPTY_PING: PingOverviewItem = {
   client: "",
   isAssigned: false,
   lastValue: null,
@@ -34,10 +34,13 @@ const EMPTY_PING: PingOverviewItem = {
   loss: null,
 };
 
+// 未绑定节点的快照。必须是模块级常量:useSyncExternalStore 要求 getSnapshot 返回稳定引用。
+const EMPTY_PING_LIST: PingOverviewItem[] = [];
+
 interface PingOverviewMapResult {
   assignmentKey: string;
   intervalMs: number;
-  items: Map<string, PingOverviewItem>;
+  items: Map<string, PingOverviewItem[]>;
 }
 
 type Listener = () => void;
@@ -100,6 +103,8 @@ function equalPingItem(a: PingOverviewItem | undefined, b: PingOverviewItem | un
   return (
     a.client === b.client &&
     a.isAssigned === b.isAssigned &&
+    a.taskId === b.taskId &&
+    a.taskName === b.taskName &&
     a.lastValue === b.lastValue &&
     a.metricIntervalMs === b.metricIntervalMs &&
     a.max === b.max &&
@@ -108,11 +113,21 @@ function equalPingItem(a: PingOverviewItem | undefined, b: PingOverviewItem | un
   );
 }
 
+function equalPingItems(
+  a: PingOverviewItem[] | undefined,
+  b: PingOverviewItem[] | undefined,
+) {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every((item, index) => equalPingItem(item, b[index]));
+}
+
 export function buildPingOverviewItems(
   taskId: number,
   records: PingRecord[],
   metricStats: PingTaskStats[] = [],
   metricIntervalSeconds?: number,
+  taskName?: string,
 ) {
   const metricIntervalMs =
     typeof metricIntervalSeconds === "number" &&
@@ -176,6 +191,8 @@ export function buildPingOverviewItems(
     result.set(client, {
       client,
       isAssigned: true,
+      taskId,
+      taskName,
       lastValue:
         serverStats?.latest ??
         (latestRecord && latestRecord.value >= 0 ? latestRecord.value : null),
@@ -195,23 +212,23 @@ function resolveSelectedTasks(
   clientUuids: string[],
   bindings: HomepagePingTaskBindings,
 ) {
-  const selectedTaskByClient = new Map<string, number>();
-  const bindingSelection = invertHomepagePingTaskBindings(bindings);
+  const selectedTasksByClient = new Map<string, number[]>();
+  const bindingSelection = resolveHomepagePingTaskIds(bindings);
 
   for (const uuid of clientUuids) {
-    const taskId = bindingSelection.get(uuid);
-    if (taskId != null) {
-      selectedTaskByClient.set(uuid, taskId);
+    const taskIds = bindingSelection.get(uuid);
+    if (taskIds && taskIds.length > 0) {
+      selectedTasksByClient.set(uuid, taskIds);
     }
   }
 
-  return selectedTaskByClient;
+  return selectedTasksByClient;
 }
 
-function buildAssignmentKey(selectedTaskByClient: Map<string, number>) {
-  return Array.from(selectedTaskByClient.entries())
+function buildAssignmentKey(selectedTasksByClient: Map<string, number[]>) {
+  return Array.from(selectedTasksByClient.entries())
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([uuid, taskId]) => `${uuid}:${taskId}`)
+    .map(([uuid, taskIds]) => `${uuid}:${taskIds.join(",")}`)
     .join("|");
 }
 
@@ -220,13 +237,19 @@ const PING_REQUEST_TIMEOUT_MS = 35_000;
 
 interface PreviousPingOverview {
   assignmentKey: string;
-  items: ReadonlyMap<string, PingOverviewItem>;
+  items: ReadonlyMap<string, PingOverviewItem[]>;
 }
 
-function assignedEmptyPing(client: string): PingOverviewItem {
+function assignedEmptyPing(
+  client: string,
+  taskId: number,
+  taskName?: string,
+): PingOverviewItem {
   return {
     client,
     isAssigned: true,
+    taskId,
+    taskName,
     lastValue: null,
     samples: [],
     max: 1,
@@ -246,21 +269,21 @@ async function buildOverviewMap(
     return {
       assignmentKey: "",
       intervalMs: DEFAULT_PING_REFRESH_INTERVAL,
-      items: new Map<string, PingOverviewItem>(),
+      items: new Map<string, PingOverviewItem[]>(),
     };
   }
 
-  const selectedTaskByClient = resolveSelectedTasks(normalizedUuids, bindings);
-  const selectedTaskIds = Array.from(new Set(selectedTaskByClient.values())).sort(
-    (left, right) => left - right,
-  );
-  const assignmentKey = buildAssignmentKey(selectedTaskByClient);
+  const selectedTasksByClient = resolveSelectedTasks(normalizedUuids, bindings);
+  const selectedTaskIds = Array.from(
+    new Set(Array.from(selectedTasksByClient.values()).flat()),
+  ).sort((left, right) => left - right);
+  const assignmentKey = buildAssignmentKey(selectedTasksByClient);
 
   if (selectedTaskIds.length === 0) {
     return {
       assignmentKey: "",
       intervalMs: DEFAULT_PING_REFRESH_INTERVAL,
-      items: new Map<string, PingOverviewItem>(),
+      items: new Map<string, PingOverviewItem[]>(),
     };
   }
 
@@ -268,8 +291,8 @@ async function buildOverviewMap(
     selectedTaskIds.map((taskId) =>
       withTimeoutSignal(
         async (requestSignal) => {
-          const entityIds = normalizedUuids.filter(
-            (uuid) => selectedTaskByClient.get(uuid) === taskId,
+          const entityIds = normalizedUuids.filter((uuid) =>
+            selectedTasksByClient.get(uuid)?.includes(taskId),
           );
           return {
             taskId,
@@ -286,6 +309,7 @@ async function buildOverviewMap(
   );
 
   const itemsByTask = new Map<number, Map<string, PingOverviewItem>>();
+  const taskNames = new Map<number, string>();
   const successfulTaskIds = new Set<number>();
   const refreshIntervals: number[] = [];
 
@@ -299,29 +323,39 @@ async function buildOverviewMap(
       overview: { records, tasks, stats, intervalSeconds },
     } = result.value;
     successfulTaskIds.add(taskId);
+    const task = tasks.find((entry) => entry.id === taskId);
+    const taskName = task?.name?.trim() || undefined;
+    if (taskName) taskNames.set(taskId, taskName);
     itemsByTask.set(
       taskId,
-      buildPingOverviewItems(taskId, records, stats, intervalSeconds),
+      buildPingOverviewItems(taskId, records, stats, intervalSeconds, taskName),
     );
 
-    const taskInterval = tasks.find((task) => task.id === taskId)?.interval;
-    refreshIntervals.push(normalizeRefreshInterval(taskInterval));
+    refreshIntervals.push(normalizeRefreshInterval(task?.interval));
   }
 
-  const items = new Map<string, PingOverviewItem>();
-  for (const [uuid, taskId] of selectedTaskByClient) {
-    if (!successfulTaskIds.has(taskId)) {
-      const previousItem =
-        previous?.assignmentKey === assignmentKey ? previous.items.get(uuid) : undefined;
-      items.set(uuid, previousItem ?? assignedEmptyPing(uuid));
-      continue;
-    }
-    const item = itemsByTask.get(taskId)?.get(uuid);
-    if (item) {
-      items.set(uuid, item);
-      continue;
-    }
-    items.set(uuid, assignedEmptyPing(uuid));
+  const items = new Map<string, PingOverviewItem[]>();
+  for (const [uuid, taskIds] of selectedTasksByClient) {
+    // 上一轮同一 assignment 下该节点的序列，用于对失败的任务做逐任务保留 —— 每个任务位
+    // 各自回退，一个任务超时不会把其他任务的数据一起清空。
+    const previousItems =
+      previous?.assignmentKey === assignmentKey ? previous.items.get(uuid) : undefined;
+
+    items.set(
+      uuid,
+      taskIds.map((taskId) => {
+        if (!successfulTaskIds.has(taskId)) {
+          return (
+            previousItems?.find((item) => item.taskId === taskId) ??
+            assignedEmptyPing(uuid, taskId, taskNames.get(taskId))
+          );
+        }
+        return (
+          itemsByTask.get(taskId)?.get(uuid) ??
+          assignedEmptyPing(uuid, taskId, taskNames.get(taskId))
+        );
+      }),
+    );
   }
 
   return {
@@ -337,7 +371,7 @@ async function buildOverviewMap(
 interface PingOverviewStoreState {
   assignmentKey: string;
   intervalMs: number;
-  items: Map<string, PingOverviewItem>;
+  items: Map<string, PingOverviewItem[]>;
 }
 
 let pingOverviewState: PingOverviewStoreState = {
@@ -385,10 +419,10 @@ function stopPingPolling() {
 function commitPingOverview(
   assignmentKey: string,
   intervalMs: number,
-  items: Map<string, PingOverviewItem>,
+  items: Map<string, PingOverviewItem[]>,
 ) {
   const prevItems = pingOverviewState.items;
-  const nextItems = new Map<string, PingOverviewItem>();
+  const nextItems = new Map<string, PingOverviewItem[]>();
   const touched = new Set<string>();
   const keys = new Set<string>([...prevItems.keys(), ...items.keys()]);
 
@@ -403,7 +437,7 @@ function commitPingOverview(
       continue;
     }
 
-    if (equalPingItem(prev, next)) {
+    if (equalPingItems(prev, next)) {
       nextItems.set(key, prev ?? next);
       continue;
     }
@@ -543,7 +577,7 @@ function subscribeToPingItem(uuid: string, listener: Listener) {
 }
 
 function getPingSnapshot(uuid: string) {
-  return pingOverviewState.items.get(uuid) ?? EMPTY_PING;
+  return pingOverviewState.items.get(uuid) ?? EMPTY_PING_LIST;
 }
 
 export function useHomepagePingOverview() {
@@ -579,32 +613,38 @@ export function useHomepagePingOverview() {
     };
   }, [themeSettings.homepagePingBindings, themeSettings.isReady, effectiveUuids]);
 
-  // 向 wsStore 注册 ping 绑定解析器，让内嵌 ping 数据能按绑定任务提取正确的延迟/丢包。
-  const invertedBindings = useMemo(
-    () => invertHomepagePingTaskBindings(themeSettings.homepagePingBindings),
-    [themeSettings.homepagePingBindings],
-  );
+  // 向 wsStore 注册 ping 绑定解析器，让内嵌 ping 帧按绑定任务提取延迟/丢包。
+  // 交出全部绑定任务（最多 3 个）而不只是主任务 —— 后端本来就按 taskId 下发全量 map，
+  // 这样首页多任务标签上的三个延迟都是 2s 实时的，而不是只有第一个。
+  const boundTaskIdsByClient = useMemo(() => {
+    const resolved = resolveHomepagePingTaskIds(themeSettings.homepagePingBindings);
+    return new Map(
+      Array.from(resolved, ([uuid, taskIds]) => [uuid, taskIds.map(String)] as const),
+    );
+  }, [themeSettings.homepagePingBindings]);
   useEffect(() => {
     if (!themeSettings.isReady) return;
-    const resolver = (uuid: string) => {
-      const taskId = invertedBindings.get(uuid);
-      return taskId != null ? String(taskId) : undefined;
-    };
-    setPingBindingResolver(resolver);
+    setPingBindingResolver((uuid: string) => boundTaskIdsByClient.get(uuid));
     return () => setPingBindingResolver(null);
-  }, [invertedBindings, themeSettings.isReady]);
+  }, [boundTaskIdsByClient, themeSettings.isReady]);
 }
 
-export function useNodePingOverview(uuid: string): PingOverviewItem {
+// 节点绑定的全部任务序列（按 task id 升序，最多 MAX_HOMEPAGE_PING_TASKS 条）。
+// 未绑定时是稳定的空数组引用。
+export function useNodePingOverviewList(uuid: string): PingOverviewItem[] {
   const subscribe = useCallback(
     (cb: Listener) => (uuid ? subscribeToPingItem(uuid, cb) : () => undefined),
     [uuid],
   );
   const getSnapshot = useCallback(
-    () => (uuid ? getPingSnapshot(uuid) : EMPTY_PING),
+    () => (uuid ? getPingSnapshot(uuid) : EMPTY_PING_LIST),
     [uuid],
   );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useNodePingOverview(uuid: string): PingOverviewItem {
+  return useNodePingOverviewList(uuid)[0] ?? EMPTY_PING;
 }
 
 export function buildPingBuckets(

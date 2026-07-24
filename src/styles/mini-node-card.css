@@ -266,12 +266,23 @@
   font-weight: 500;
 }
 
+/* 多任务延迟标签接管健康区的分隔线,健康区自己就不再画一条。 */
+.mini-node-ping-tabs {
+  padding-top: 8px;
+  border-top: 1px solid var(--hairline);
+}
+
 .mini-node-health {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   padding-top: 8px;
   border-top: 1px solid var(--hairline);
+}
+
+.mini-node-ping-tabs + .mini-node-health {
+  padding-top: 6px;
+  border-top: none;
 }
 
 .mini-node-health-item {

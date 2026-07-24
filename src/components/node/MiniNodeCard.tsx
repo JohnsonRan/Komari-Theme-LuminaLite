@@ -1,4 +1,4 @@
-import { memo, type CSSProperties, type ReactNode } from "react";
+import { memo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowDown,
@@ -15,7 +15,8 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { IpStackBadges } from "./IpStackBadges";
-import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { PingTaskTabs } from "./PingTaskTabs";
+import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
 import {
@@ -312,12 +313,18 @@ function MiniHealthBars({
 const MiniHealth = memo(function MiniHealth({
   ping,
   pingBuckets,
+  pingSeries,
+  activePingIndex,
+  onSelectPing,
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
 }: {
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
+  pingSeries: NodePingSeries[];
+  activePingIndex: number;
+  onSelectPing: (index: number) => void;
   latencyColor: string;
   lossColor: string;
   hasHomepagePingBinding: boolean;
@@ -325,56 +332,70 @@ const MiniHealth = memo(function MiniHealth({
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   const hourStatsTitle = formatPingHourStatsTitle(ping);
   return (
-    <div className="mini-node-health">
-      <div className="mini-node-health-item">
-        <div className="mini-node-health-head">
-          <span className="mini-node-health-label">
-            <Clock3 size={12} strokeWidth={2} />
-            延迟
-          </span>
-          <strong
-            className="mini-node-health-value tabular"
-            style={{ color: latencyColor }}
-            title={hourStatsTitle ?? undefined}
-          >
-            {ping.lastValue != null ? (
-              <>
-                {Math.round(ping.lastValue)}
-                <small>ms</small>
-              </>
-            ) : (
-              <span className="mini-node-health-empty">{emptyText}</span>
-            )}
-          </strong>
+    <>
+      {pingSeries.length > 1 && (
+        <div className="mini-node-ping-tabs">
+          <PingTaskTabs
+            series={pingSeries}
+            activeIndex={activePingIndex}
+            onSelect={onSelectPing}
+            size="small"
+          />
         </div>
-        <MiniHealthBars kind="latency" max={ping.max} buckets={pingBuckets} />
-      </div>
-      <div className="mini-node-health-item">
-        <div className="mini-node-health-head">
-          <span className="mini-node-health-label">
-            <Unplug size={12} strokeWidth={2} />
-            丢包
-          </span>
-          <strong className="mini-node-health-value tabular" style={{ color: lossColor }}>
-            {ping.loss != null ? (
-              <>
-                {ping.loss.toFixed(1)}
-                <small>%</small>
-              </>
-            ) : (
-              <span className="mini-node-health-empty">{emptyText}</span>
-            )}
-          </strong>
+      )}
+      <div className="mini-node-health">
+        <div className="mini-node-health-item">
+          <div className="mini-node-health-head">
+            <span className="mini-node-health-label">
+              <Clock3 size={12} strokeWidth={2} />
+              延迟
+            </span>
+            <strong
+              className="mini-node-health-value tabular"
+              style={{ color: latencyColor }}
+              title={hourStatsTitle ?? undefined}
+            >
+              {ping.lastValue != null ? (
+                <>
+                  {Math.round(ping.lastValue)}
+                  <small>ms</small>
+                </>
+              ) : (
+                <span className="mini-node-health-empty">{emptyText}</span>
+              )}
+            </strong>
+          </div>
+          <MiniHealthBars kind="latency" max={ping.max} buckets={pingBuckets} />
         </div>
-        <MiniHealthBars kind="loss" buckets={pingBuckets} />
+        <div className="mini-node-health-item">
+          <div className="mini-node-health-head">
+            <span className="mini-node-health-label">
+              <Unplug size={12} strokeWidth={2} />
+              丢包
+            </span>
+            <strong className="mini-node-health-value tabular" style={{ color: lossColor }}>
+              {ping.loss != null ? (
+                <>
+                  {ping.loss.toFixed(1)}
+                  <small>%</small>
+                </>
+              ) : (
+                <span className="mini-node-health-empty">{emptyText}</span>
+              )}
+            </strong>
+          </div>
+          <MiniHealthBars kind="loss" buckets={pingBuckets} />
+        </div>
       </div>
-    </div>
+    </>
   );
 });
 
 export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string }) {
   const { resolvedAppearance } = usePreferences();
   const model = useNodeCardModel(uuid, HEALTH_BAR_COUNT);
+  // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
+  const [activePingIndex, setActivePingIndex] = useState(0);
 
   if (!model.node) {
     return (
@@ -414,12 +435,9 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
 
   const {
     node,
-    ping,
-    pingBuckets,
+    pingSeries,
     footerTags,
     renewalPrice,
-    latencyColor,
-    lossColor,
     loadFraction,
     upRate,
     downRate,
@@ -427,6 +445,8 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
     isOffline,
     osName,
   } = model;
+  const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
+  const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
 
   return (
     <article
@@ -440,6 +460,9 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
       <MiniHealth
         ping={ping}
         pingBuckets={pingBuckets}
+        pingSeries={pingSeries}
+        activePingIndex={pingIndex}
+        onSelectPing={setActivePingIndex}
         latencyColor={latencyColor}
         lossColor={lossColor}
         hasHomepagePingBinding={hasHomepagePingBinding}

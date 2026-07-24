@@ -50,7 +50,9 @@ import {
   sortHomeGroupOptions,
 } from "@/utils/homeNodes";
 import {
+  MAX_HOMEPAGE_PING_TASKS,
   normalizeHomepagePingTaskBindings,
+  resolveHomepagePingTaskIds,
   type HomepagePingTaskBindings,
 } from "@/utils/pingTasks";
 import {
@@ -159,36 +161,36 @@ function applyClientAssignment(
   const taskKey = String(taskId);
   const next = pruneBindings(bindings);
 
-  for (const [currentTaskId, clients] of Object.entries(next)) {
-    const filtered = clients.filter((uuid) => uuid !== clientUuid);
-    if (filtered.length > 0) {
-      next[currentTaskId] = filtered;
-    } else {
-      delete next[currentTaskId];
-    }
+  if (!checked) {
+    const remaining = (next[taskKey] ?? []).filter((uuid) => uuid !== clientUuid);
+    if (remaining.length > 0) next[taskKey] = remaining;
+    else delete next[taskKey];
+    return next;
   }
 
-  if (checked) {
-    const selected = next[taskKey] ?? [];
-    next[taskKey] = Array.from(new Set([...selected, clientUuid])).sort((left, right) =>
-      left.localeCompare(right),
-    );
+  // 已达上限时静默忽略。UI 那边同一条件下会禁用复选框,这里再兜一次,防止「全选可用」
+  // 之类的批量入口越过上限写进草稿。
+  if ((assignedTaskKeys(next).get(clientUuid)?.length ?? 0) >= MAX_HOMEPAGE_PING_TASKS) {
+    return next;
   }
+
+  const selected = next[taskKey] ?? [];
+  next[taskKey] = Array.from(new Set([...selected, clientUuid])).sort((left, right) =>
+    left.localeCompare(right),
+  );
 
   return next;
 }
 
-// 反查:client uuid → 所属 task id(字符串 key)。UI 保证每个 client 最多归属一个
-// task,所以简单的后写覆盖 map 就是精确的。下面的「全选可用」reducer 和每次渲染的
-// 可选节点过滤共用它,把「某 client 归属哪个 task」的推导收在一处。
-function invertBindings(bindings: HomepagePingTaskBindings): Map<string, string> {
-  const assignedTaskByClient = new Map<string, string>();
-  for (const [taskId, clients] of Object.entries(bindings)) {
-    for (const clientUuid of clients) {
-      assignedTaskByClient.set(clientUuid, taskId);
-    }
+// 反查:client uuid → 所属 task id 列表(字符串 key,按 task id 升序、最多 3 个)。
+// 「全选可用」reducer、可选节点过滤和上限提示共用它,把「某 client 归属哪些 task」的
+// 推导收在一处。顺序与首页展示顺序一致(见 resolveHomepagePingTaskIds)。
+function assignedTaskKeys(bindings: HomepagePingTaskBindings): Map<string, string[]> {
+  const assignedTasksByClient = new Map<string, string[]>();
+  for (const [clientUuid, taskIds] of resolveHomepagePingTaskIds(bindings)) {
+    assignedTasksByClient.set(clientUuid, taskIds.map(String));
   }
-  return assignedTaskByClient;
+  return assignedTasksByClient;
 }
 
 function applyAvailableClientAssignments(
@@ -198,12 +200,13 @@ function applyAvailableClientAssignments(
 ) {
   const taskKey = String(taskId);
   const next = pruneBindings(bindings);
-  const assignedTaskByClient = invertBindings(next);
+  const assignedTasksByClient = assignedTaskKeys(next);
   const selected = new Set(next[taskKey] ?? []);
 
   for (const clientUuid of clientUuids) {
-    const assignedTaskId = assignedTaskByClient.get(clientUuid);
-    if (assignedTaskId && assignedTaskId !== taskKey) continue;
+    const assignedTaskIds = assignedTasksByClient.get(clientUuid) ?? [];
+    if (assignedTaskIds.includes(taskKey)) continue;
+    if (assignedTaskIds.length >= MAX_HOMEPAGE_PING_TASKS) continue;
     selected.add(clientUuid);
   }
 
@@ -472,22 +475,16 @@ export function ThemeManage() {
     if (isDirty) setMessage(null);
   }, [isDirty]);
 
-  const assignedNodeCount = useMemo(
-    () =>
-      Object.values(draft.homepagePingBindings).reduce(
-        (total, clients) => total + clients.length,
-        0,
-      ),
+  // 每个 client 归属哪些 task 的反查,只在绑定草稿变化时重建。与「全选可用」reducer
+  // 共用 assignedTaskKeys() 避免推导漂移,并把可选节点过滤保持在 O(tasks × clients),
+  // 而不是每个 client 都重扫一遍 bindings。
+  const assignedTasksByClientUuid = useMemo(
+    () => assignedTaskKeys(draft.homepagePingBindings),
     [draft.homepagePingBindings],
   );
 
-  // 每个 client 归属哪个 task 的反查,只在绑定草稿变化时重建。与「全选可用」reducer
-  // 共用 invertBindings() 避免推导漂移,并把可选节点过滤保持在 O(tasks × clients),
-  // 而不是每个 client 都重扫一遍 bindings。
-  const assignedTaskByClientUuid = useMemo(
-    () => invertBindings(draft.homepagePingBindings),
-    [draft.homepagePingBindings],
-  );
+  // 一个节点可绑定多个任务,所以按「有绑定的节点数」计,而不是绑定条数之和。
+  const assignedNodeCount = assignedTasksByClientUuid.size;
 
   const handleSave = async () => {
     if (!config?.theme || savingDraftRef.current) return;
@@ -1158,7 +1155,8 @@ export function ThemeManage() {
         title="主页延迟检测"
         description={
           <>
-            为首页延迟卡片指定对应的 Ping 任务与展示节点。每个节点只能归属一个任务；未分配的节点不会显示延迟。
+            为首页延迟卡片指定对应的 Ping 任务与展示节点。每个节点最多可绑定 {MAX_HOMEPAGE_PING_TASKS}{" "}
+            个任务（如电信 / 联通 / 移动），卡片按任务 ID 从小到大排列并可点击切换；未分配的节点不会显示延迟。
             {" "}
             如果当前还没有可用任务，请先前往
             {" "}
@@ -1188,7 +1186,7 @@ export function ThemeManage() {
               />
             </label>
             <div className="surface-inset flex items-center justify-between gap-3 px-3 py-2 text-[12px] text-[var(--text-secondary)]">
-              <span>首页绑定总数</span>
+              <span>已绑定节点</span>
               <strong className="text-[var(--text-primary)]">
                 {assignedNodeCount} / {sortedClients.length}
               </strong>
@@ -1231,8 +1229,11 @@ export function ThemeManage() {
               const assignedSummary = summarizeNodes(assigned, clientsById);
               const isExpanded = expandedTaskId === task.id;
               const selectableVisibleClients = visibleClients.filter((client) => {
-                const assignedTaskId = assignedTaskByClientUuid.get(client.uuid);
-                return !assignedTaskId || assignedTaskId === String(task.id);
+                const assignedTaskIds = assignedTasksByClientUuid.get(client.uuid) ?? [];
+                return (
+                  assignedTaskIds.includes(String(task.id)) ||
+                  assignedTaskIds.length < MAX_HOMEPAGE_PING_TASKS
+                );
               });
               const unselectedVisibleClients = selectableVisibleClients.filter(
                 (client) => !assigned.includes(client.uuid),
@@ -1338,20 +1339,40 @@ export function ThemeManage() {
                       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                         {visibleClients.map((client) => {
                           const checked = assigned.includes(client.uuid);
+                          const clientTaskIds =
+                            assignedTasksByClientUuid.get(client.uuid) ?? [];
+                          // 已达上限且不含本任务:禁用而不是静默失败,让站长看到为什么勾不上。
+                          const atLimit =
+                            !checked && clientTaskIds.length >= MAX_HOMEPAGE_PING_TASKS;
                           const subtitle = [client.group, client.uuid].filter(Boolean).join(" · ");
+                          const otherTaskNames = clientTaskIds
+                            .filter((taskKey) => taskKey !== String(task.id))
+                            .map(
+                              (taskKey) =>
+                                sortedTasks.find((entry) => String(entry.id) === taskKey)?.name ||
+                                `任务 #${taskKey}`,
+                            );
                           return (
                             <label
                               key={client.uuid}
+                              title={
+                                atLimit
+                                  ? `已绑定 ${MAX_HOMEPAGE_PING_TASKS} 个任务，需先取消其中一个`
+                                  : undefined
+                              }
                               className={clsx(
-                                "flex cursor-pointer items-start gap-3 rounded-[12px] border px-3 py-3 transition-colors",
-                                checked
-                                  ? "border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--hover-bg)_72%,transparent)]"
-                                  : "border-[var(--hairline)] bg-transparent hover:bg-[var(--hover-bg)]",
+                                "flex items-start gap-3 rounded-[12px] border px-3 py-3 transition-colors",
+                                atLimit
+                                  ? "cursor-not-allowed border-[var(--hairline)] bg-transparent opacity-55"
+                                  : checked
+                                    ? "cursor-pointer border-[var(--border-strong)] bg-[color-mix(in_srgb,var(--hover-bg)_72%,transparent)]"
+                                    : "cursor-pointer border-[var(--hairline)] bg-transparent hover:bg-[var(--hover-bg)]",
                               )}
                             >
                               <input
                                 type="checkbox"
                                 checked={checked}
+                                disabled={atLimit}
                                 onChange={(event) => {
                                   const nextChecked = event.target.checked;
                                   patchBindings((prev) =>
@@ -1370,6 +1391,14 @@ export function ThemeManage() {
                                 <div className="mt-1 text-[11px] text-[var(--text-tertiary)]">
                                   {subtitle || client.region || "未设置分组"}
                                 </div>
+                                {otherTaskNames.length > 0 && (
+                                  <div
+                                    className="mt-1 truncate text-[11px] text-[var(--text-tertiary)]"
+                                    title={otherTaskNames.join("、")}
+                                  >
+                                    另有：{otherTaskNames.join("、")}
+                                  </div>
+                                )}
                               </div>
                             </label>
                           );

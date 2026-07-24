@@ -1,4 +1,10 @@
-import type { NodeInfo, NodeMetrics, NodeRealtime, TrafficTrendSample } from "@/types/komari";
+import type {
+  NodeInfo,
+  NodeMetrics,
+  NodeRealtime,
+  PingRealtimeStats,
+  TrafficTrendSample,
+} from "@/types/komari";
 import { getNodes } from "@/services/api";
 
 type Listener = () => void;
@@ -128,6 +134,7 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     pingAvg: null,
     pingMin: null,
     pingMax: null,
+    pingStats: null,
     gpuPct: 0,
     gpuMemUsed: 0,
     gpuMemTotal: 0,
@@ -159,13 +166,53 @@ export function resolveTrafficTotal(previous: number, raw: number): number {
 }
 
 // ─── 内嵌 Ping 绑定解析器 ─────────────────────────────────────────────────────
-// 由 useHomepagePingOverview 挂载时注入，输入 uuid 输出当前绑定的 taskId 字符串。
-// 无绑定时返回 undefined，此时 mergeRealtime 会取 ping map 的第一个 task。
-type PingBindingResolver = (uuid: string) => string | undefined;
+// 由 useHomepagePingOverview 挂载时注入，输入 uuid 输出该节点绑定的全部 taskId 字符串
+// （按首页展示顺序，最多 3 个）。无绑定时返回 undefined 或空数组，此时 mergeRealtime
+// 会退回 ping map 的第一个 task。
+type PingBindingResolver = (uuid: string) => string[] | undefined;
 let pingBindingResolver: PingBindingResolver | null = null;
 
 export function setPingBindingResolver(resolver: PingBindingResolver | null) {
   pingBindingResolver = resolver;
+}
+
+type EmbeddedPingEntry = { latest: number; loss: number; avg?: number; min?: number; max?: number };
+
+function toPingStat(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readPingStats(entry: EmbeddedPingEntry): PingRealtimeStats {
+  return {
+    latest: toPingStat(entry.latest),
+    loss: toPingStat(entry.loss),
+    avg: toPingStat(entry.avg),
+    min: toPingStat(entry.min),
+    peak: toPingStat(entry.max),
+  };
+}
+
+function equalPingStat(a: PingRealtimeStats, b: PingRealtimeStats) {
+  return (
+    a.latest === b.latest &&
+    a.loss === b.loss &&
+    a.avg === b.avg &&
+    a.min === b.min &&
+    a.peak === b.peak
+  );
+}
+
+// 每帧都会新建 pingStats 对象;值没变时复用上一帧的引用,让依赖 metrics 的 memo
+// （如 useNodeCardModel 的 pingSeries）在稳态下能跳过重算。
+function equalPingStatsMap(
+  a: Record<string, PingRealtimeStats> | null,
+  b: Record<string, PingRealtimeStats> | null,
+) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => b[key] != null && equalPingStat(a[key], b[key]));
 }
 
 function resolveTrafficTotals(previous: NodeMetrics, nextUp: number, nextDown: number) {
@@ -194,23 +241,24 @@ function mergeRealtime(
     rt.network?.totalDown ?? 0,
   );
 
-  // 从内嵌 ping map 中提取当前绑定任务的实时延迟/丢包，以及后端缓存的近 1 小时统计。
-  let pingLatest: number | null = null;
-  let pingLoss: number | null = null;
-  let pingAvg: number | null = null;
-  let pingMin: number | null = null;
-  let pingMax: number | null = null;
+  // 后端内嵌的 ping 是 Record<taskId, stats> 全量 map —— 一个节点绑定了几个任务,
+  // 这里就取出几个任务的实时数据(不是只取主任务),让首页的多任务延迟标签全都是 2s 实时的。
+  let pingStats: Record<string, PingRealtimeStats> | null = null;
+  let primaryStats: PingRealtimeStats | null = null;
   if (rt.ping) {
-    const boundTaskId = pingBindingResolver?.(uuid);
-    const entry = boundTaskId != null
-      ? rt.ping[boundTaskId]
-      : Object.values(rt.ping)[0];
-    if (entry) {
-      pingLatest = Number.isFinite(entry.latest) ? entry.latest : null;
-      pingLoss = Number.isFinite(entry.loss) ? entry.loss : null;
-      pingAvg = typeof entry.avg === "number" && Number.isFinite(entry.avg) ? entry.avg : null;
-      pingMin = typeof entry.min === "number" && Number.isFinite(entry.min) ? entry.min : null;
-      pingMax = typeof entry.max === "number" && Number.isFinite(entry.max) ? entry.max : null;
+    const boundTaskIds = pingBindingResolver?.(uuid);
+    // 未绑定(含首页尚未挂载解析器时)退回帧里的第一个任务,保持"至少有个实时数值"的旧行为。
+    const taskIds =
+      boundTaskIds && boundTaskIds.length > 0 ? boundTaskIds : Object.keys(rt.ping).slice(0, 1);
+    const next: Record<string, PingRealtimeStats> = {};
+    for (const taskId of taskIds) {
+      const entry = rt.ping[taskId];
+      if (entry) next[taskId] = readPingStats(entry);
+    }
+    if (Object.keys(next).length > 0) {
+      // 显式按 taskIds[0] 取主任务:数字型字符串键在对象里会被重排,不能依赖插入顺序。
+      primaryStats = next[taskIds[0]] ?? Object.values(next)[0] ?? null;
+      pingStats = equalPingStatsMap(metrics.pingStats, next) ? metrics.pingStats : next;
     }
   }
 
@@ -237,11 +285,12 @@ function mergeRealtime(
     connectionsTcp: rt.connections?.tcp ?? 0,
     connectionsUdp: rt.connections?.udp ?? 0,
     updatedAt: updatedAt > 0 ? updatedAt : metrics.updatedAt,
-    pingLatest,
-    pingLoss,
-    pingAvg,
-    pingMin,
-    pingMax,
+    pingLatest: primaryStats?.latest ?? null,
+    pingLoss: primaryStats?.loss ?? null,
+    pingAvg: primaryStats?.avg ?? null,
+    pingMin: primaryStats?.min ?? null,
+    pingMax: primaryStats?.peak ?? null,
+    pingStats,
     // WS 帧未携带 GPU 字段时保留上一帧的值，避免偶发缺样导致 GPU 指标闪零。
     gpuPct: rt.gpu?.usage ?? metrics.gpuPct,
     gpuMemUsed: rt.gpu?.memoryUsed ?? metrics.gpuMemUsed,
@@ -279,6 +328,8 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.pingAvg === b.pingAvg &&
     a.pingMin === b.pingMin &&
     a.pingMax === b.pingMax &&
+    // 扁平的 ping* 字段只覆盖主任务;副任务的变化要靠这里才能触发重渲染。
+    equalPingStatsMap(a.pingStats, b.pingStats) &&
     a.gpuPct === b.gpuPct &&
     a.gpuMemUsed === b.gpuMemUsed &&
     a.gpuMemTotal === b.gpuMemTotal &&

@@ -16,7 +16,7 @@ import {
   Database,
   Network,
 } from "lucide-react";
-import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useMetricColorsVersion } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -31,6 +31,7 @@ import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { MetricBar } from "./MetricBar";
 import { LatencyBars } from "./LatencyBars";
+import { PingTaskTabs } from "./PingTaskTabs";
 import { QualityBars } from "./QualityBars";
 import { CanvasStrip, mixSrgbTowardWhite, safeCanvasColor } from "./CanvasStrip";
 import {
@@ -67,6 +68,8 @@ export const NodeCard = memo(function NodeCard({
   const model = useNodeCardModel(uuid);
   const [hoveredLatencyIndex, setHoveredLatencyIndex] = useState<number | null>(null);
   const [hoveredLossIndex, setHoveredLossIndex] = useState<number | null>(null);
+  // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
+  const [activePingIndex, setActivePingIndex] = useState(0);
 
   if (!model.node) {
     return (
@@ -120,8 +123,7 @@ export const NodeCard = memo(function NodeCard({
     node,
     traffic,
     trafficTrend,
-    ping,
-    pingBuckets,
+    pingSeries,
     footerTags,
     subtitle,
     systemInfo,
@@ -129,8 +131,6 @@ export const NodeCard = memo(function NodeCard({
     expireColor,
     uptime,
     renewalPrice,
-    latencyColor,
-    lossColor,
     loadFraction,
     upRate,
     downRate,
@@ -140,6 +140,8 @@ export const NodeCard = memo(function NodeCard({
     osName,
   } = model;
   const showConnections = themeSettings.isReady && themeSettings.showConnections;
+  const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
+  const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
   const hoveredLatencyBucket =
     hoveredLatencyIndex != null ? (pingBuckets[hoveredLatencyIndex] ?? null) : null;
   const hoveredLossBucket =
@@ -201,6 +203,9 @@ export const NodeCard = memo(function NodeCard({
           <NodeHealthSection
             ping={ping}
             pingBuckets={pingBuckets}
+            pingSeries={pingSeries}
+            activePingIndex={pingIndex}
+            onSelectPing={setActivePingIndex}
             redrawKey={redrawKey}
             hasHomepagePingBinding={hasHomepagePingBinding}
             latencyColor={latencyColor}
@@ -458,6 +463,9 @@ const NodeTrafficQuota = memo(function NodeTrafficQuota({
 const NodeHealthSection = memo(function NodeHealthSection({
   ping,
   pingBuckets,
+  pingSeries,
+  activePingIndex,
+  onSelectPing,
   redrawKey,
   hasHomepagePingBinding,
   latencyColor,
@@ -473,6 +481,9 @@ const NodeHealthSection = memo(function NodeHealthSection({
 }: {
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
+  pingSeries: NodePingSeries[];
+  activePingIndex: number;
+  onSelectPing: (index: number) => void;
   redrawKey: string;
   hasHomepagePingBinding: boolean;
   latencyColor: string;
@@ -490,92 +501,103 @@ const NodeHealthSection = memo(function NodeHealthSection({
   const hourStatsTitle = formatPingHourStatsTitle(ping);
 
   return (
-    <div className="card-metric-section card-metric-divided server-health-grid">
-      <div className="server-health-block">
-        <div className="server-health-head">
-          <div className="server-health-label">
-            <Clock3 size={13} strokeWidth={2} />
-            <span>延迟</span>
-          </div>
-          <span
-            className="server-health-value tabular"
-            style={{ color: latencyColor }}
-            title={hourStatsTitle ?? undefined}
-          >
-            {ping.lastValue != null ? (
-              <>
-                {Math.round(ping.lastValue)}
-                <span className="server-health-unit">ms</span>
-              </>
-            ) : (
-              <span className="server-health-empty" title={emptyTitle}>
-                {emptyText}
-              </span>
-            )}
-          </span>
+    <div className="card-metric-section card-metric-divided">
+      {pingSeries.length > 1 && (
+        <div className="server-health-tabs">
+          <PingTaskTabs
+            series={pingSeries}
+            activeIndex={activePingIndex}
+            onSelect={onSelectPing}
+          />
         </div>
-        <div className="server-health-chart-wrap">
-          {hasHomepagePingBinding ? (
-            <LatencyBars
-              max={ping.max}
-              buckets={pingBuckets}
-              redrawKey={redrawKey}
-              onHoverIndex={onLatencyHover}
-            />
-          ) : (
-            <div className="server-health-placeholder">未配置首页 Ping</div>
-          )}
-          {latencyHoverTime && hoveredLatencyBucket && (
-            <div className="server-health-tooltip">
-              <div className="instance-chart-tooltip-time">{latencyHoverTime}</div>
-              <div className="instance-chart-tooltip-row">
-                <span className="instance-chart-tooltip-dot" style={{ background: latencyHoverColor }} />
-                <span>延迟</span>
-                <strong>{formatLatencyBucketSummary(hoveredLatencyBucket)}</strong>
-              </div>
+      )}
+      <div className="server-health-grid">
+        <div className="server-health-block">
+          <div className="server-health-head">
+            <div className="server-health-label">
+              <Clock3 size={13} strokeWidth={2} />
+              <span>延迟</span>
             </div>
-          )}
-        </div>
-      </div>
-      <div className="server-health-block">
-        <div className="server-health-head">
-          <div className="server-health-label">
-            <Unplug size={13} strokeWidth={2} />
-            <span>丢包率</span>
+            <span
+              className="server-health-value tabular"
+              style={{ color: latencyColor }}
+              title={hourStatsTitle ?? undefined}
+            >
+              {ping.lastValue != null ? (
+                <>
+                  {Math.round(ping.lastValue)}
+                  <span className="server-health-unit">ms</span>
+                </>
+              ) : (
+                <span className="server-health-empty" title={emptyTitle}>
+                  {emptyText}
+                </span>
+              )}
+            </span>
           </div>
-          <span className="server-health-value tabular" style={{ color: lossColor }}>
-            {ping.loss != null ? (
-              <>
-                {ping.loss.toFixed(1)}
-                <span className="server-health-unit">%</span>
-              </>
+          <div className="server-health-chart-wrap">
+            {hasHomepagePingBinding ? (
+              <LatencyBars
+                max={ping.max}
+                buckets={pingBuckets}
+                redrawKey={redrawKey}
+                onHoverIndex={onLatencyHover}
+              />
             ) : (
-              <span className="server-health-empty" title={emptyTitle}>
-                {emptyText}
-              </span>
+              <div className="server-health-placeholder">未配置首页 Ping</div>
             )}
-          </span>
-        </div>
-        <div className="server-health-chart-wrap">
-          {hasHomepagePingBinding ? (
-            <QualityBars
-              buckets={pingBuckets}
-              redrawKey={redrawKey}
-              onHoverIndex={onLossHover}
-            />
-          ) : (
-            <div className="server-health-placeholder">未配置首页 Ping</div>
-          )}
-          {lossHoverTime && hoveredLossBucket && (
-            <div className="server-health-tooltip">
-              <div className="instance-chart-tooltip-time">{lossHoverTime}</div>
-              <div className="instance-chart-tooltip-row">
-                <span className="instance-chart-tooltip-dot" style={{ background: lossHoverColor ?? lossColor }} />
-                <span>丢包率</span>
-                <strong>{formatLossBucketSummary(hoveredLossBucket)}</strong>
+            {latencyHoverTime && hoveredLatencyBucket && (
+              <div className="server-health-tooltip">
+                <div className="instance-chart-tooltip-time">{latencyHoverTime}</div>
+                <div className="instance-chart-tooltip-row">
+                  <span className="instance-chart-tooltip-dot" style={{ background: latencyHoverColor }} />
+                  <span>延迟</span>
+                  <strong>{formatLatencyBucketSummary(hoveredLatencyBucket)}</strong>
+                </div>
               </div>
+            )}
+          </div>
+        </div>
+        <div className="server-health-block">
+          <div className="server-health-head">
+            <div className="server-health-label">
+              <Unplug size={13} strokeWidth={2} />
+              <span>丢包率</span>
             </div>
-          )}
+            <span className="server-health-value tabular" style={{ color: lossColor }}>
+              {ping.loss != null ? (
+                <>
+                  {ping.loss.toFixed(1)}
+                  <span className="server-health-unit">%</span>
+                </>
+              ) : (
+                <span className="server-health-empty" title={emptyTitle}>
+                  {emptyText}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="server-health-chart-wrap">
+            {hasHomepagePingBinding ? (
+              <QualityBars
+                buckets={pingBuckets}
+                redrawKey={redrawKey}
+                onHoverIndex={onLossHover}
+              />
+            ) : (
+              <div className="server-health-placeholder">未配置首页 Ping</div>
+            )}
+            {lossHoverTime && hoveredLossBucket && (
+              <div className="server-health-tooltip">
+                <div className="instance-chart-tooltip-time">{lossHoverTime}</div>
+                <div className="instance-chart-tooltip-row">
+                  <span className="instance-chart-tooltip-dot" style={{ background: lossHoverColor ?? lossColor }} />
+                  <span>丢包率</span>
+                  <strong>{formatLossBucketSummary(hoveredLossBucket)}</strong>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

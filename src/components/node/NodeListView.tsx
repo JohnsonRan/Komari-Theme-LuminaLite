@@ -1,16 +1,17 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
-import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useMetricColorsVersion } from "@/hooks/useMetricColors";
 import { formatBytes } from "@/utils/format";
 import { speedRateColor } from "@/utils/metricTone";
 import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
+import { PingTaskTabs } from "./PingTaskTabs";
 import {
   clamp01,
   compactPercentText,
@@ -100,26 +101,36 @@ function StackLine({
 }
 
 // 网络列:当前延迟在上,聚合延迟柱状图在下(热力着色,与大卡同一视觉语言)。
+// 绑定了多个 Ping 任务时,标签行让延迟柱切换到对应任务。
 function ListLatency({
-  latency,
-  latencyColor,
-  buckets,
-  max,
+  pingSeries,
+  activeIndex,
+  onSelect,
   redrawKey,
 }: {
-  latency: number | null;
-  latencyColor: string;
-  buckets: Parameters<typeof LatencyBars>[0]["buckets"];
-  max: number;
+  pingSeries: NodePingSeries[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
   redrawKey: string;
 }) {
+  const { ping, buckets, latencyColor } = pingSeries[activeIndex];
+  const latency = ping.lastValue;
   return (
     <div className="node-list-latency">
-      <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
-        {latency != null ? Math.round(latency) : "—"}
-        {latency != null && <small>ms</small>}
-      </span>
-      <LatencyBars buckets={buckets} max={max} redrawKey={redrawKey} height={14} />
+      <PingTaskTabs
+        series={pingSeries}
+        activeIndex={activeIndex}
+        onSelect={onSelect}
+        size="small"
+      />
+      {/* 多任务时标签行已经把三个延迟都读出来了,再重复一遍当前值只会撑高行高。 */}
+      {pingSeries.length === 1 && (
+        <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
+          {latency != null ? Math.round(latency) : "—"}
+          {latency != null && <small>ms</small>}
+        </span>
+      )}
+      <LatencyBars buckets={buckets} max={ping.max} redrawKey={redrawKey} height={14} />
     </div>
   );
 }
@@ -129,6 +140,8 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const colorsVersion = useMetricColorsVersion();
   const redrawKey = `${resolvedAppearance}:${colorsVersion}`;
   const model = useNodeCardModel(uuid, LIST_PING_BUCKETS);
+  // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
+  const [activePingIndex, setActivePingIndex] = useState(0);
 
   if (!model.node) {
     return (
@@ -149,20 +162,20 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const {
     node,
     traffic,
-    ping,
-    pingBuckets,
+    pingSeries,
     footerTags,
     expire,
     expireColor,
     uptime,
     renewalPrice,
-    latencyColor,
     loadFraction,
     upRate,
     downRate,
     isOffline,
     osName,
   } = model;
+  const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
+  const ping = pingSeries[pingIndex].ping;
   const detailLabels = nodeDetailLinkLabels(node.name, osName);
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
   const rowLabel = [
@@ -277,10 +290,9 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 
       <div className="node-list-cell col-net">
         <ListLatency
-          latency={ping.lastValue}
-          latencyColor={latencyColor}
-          buckets={pingBuckets}
-          max={ping.max}
+          pingSeries={pingSeries}
+          activeIndex={pingIndex}
+          onSelect={setActivePingIndex}
           redrawKey={redrawKey}
         />
       </div>

@@ -3,7 +3,11 @@ import type { NodeInfo, NodeMetrics } from "@/types/komari";
 import { useFakePingFallback } from "@/hooks/useFakePing";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useNodeCardSnapshots } from "@/hooks/useNode";
-import { useNodePingOverview, usePingBuckets } from "@/hooks/usePingOverview";
+import {
+  EMPTY_PING,
+  useNodePingOverviewList,
+  usePingBuckets,
+} from "@/hooks/usePingOverview";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatRenewalPrice } from "@/utils/billing";
 import { getExpireTextColor } from "@/utils/expireStatus";
@@ -23,20 +27,66 @@ import {
 } from "@/utils/metricTone";
 import { resolveTrafficUsage, trafficTypeLabel, type TrafficDisplay } from "@/utils/traffic";
 import { resolveOsInfo } from "@/components/ui/OsLogo";
+import { MAX_HOMEPAGE_PING_TASKS } from "@/utils/pingTasks";
+import type { PingOverviewBucket, PingOverviewItem, PingRealtimeStats } from "@/types/komari";
+
+export interface NodePingSeries {
+  taskId?: number;
+  /** 多任务时显示在卡片上的短标签；单任务时为空（沿用“延迟”标题）。 */
+  label: string;
+  ping: PingOverviewItem;
+  buckets: PingOverviewBucket[];
+  latencyColor: string;
+  lossColor: string;
+}
+
+// 把某条 ping 序列所属任务的 WS 实时统计盖到 overview 数据上。
+// 已绑定任务按 taskId 精确取；未绑定（模拟延迟 / 首页解析器尚未挂载）时退回扁平的
+// ping* 字段——它是帧里第一个任务的展开视图，与改动前的行为一致。
+function applyRealtimePing(
+  item: PingOverviewItem,
+  metrics: NodeMetrics | undefined,
+): PingOverviewItem {
+  if (!metrics) return item;
+  const stats: PingRealtimeStats | undefined =
+    item.taskId != null
+      ? metrics.pingStats?.[String(item.taskId)]
+      : {
+          latest: metrics.pingLatest,
+          loss: metrics.pingLoss,
+          avg: metrics.pingAvg,
+          min: metrics.pingMin,
+          peak: metrics.pingMax,
+        };
+  if (!stats || (stats.latest == null && stats.loss == null)) return item;
+
+  return {
+    ...item,
+    lastValue: stats.latest ?? item.lastValue,
+    loss: stats.loss ?? item.loss,
+    // 后端缓存的近 1 小时统计（avg/min/peak）：实时帧未下发时保留 overview 原值。
+    avg: stats.avg ?? item.avg,
+    min: stats.min ?? item.min,
+    peak: stats.peak ?? item.peak,
+  };
+}
 
 export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   const { meta, metrics, trafficTrend } = useNodeCardSnapshots(uuid);
-  const realPing = useNodePingOverview(uuid);
+  const pingList = useNodePingOverviewList(uuid);
   const { showCardGroup, fakePingForUnbound, homepagePingBindings } = useThemeSettings();
   const now = useHourlyClock();
   const ping = useFakePingFallback(
     uuid,
-    realPing,
+    pingList[0] ?? EMPTY_PING,
     metrics?.online === true,
     fakePingForUnbound,
     homepagePingBindings,
   );
+  // Hook 数量必须恒定，所以按上限逐位取序列(缺位用空 ping)，而不是按实际长度循环。
   const pingBuckets = usePingBuckets(ping, pingBucketCount);
+  const extraBuckets1 = usePingBuckets(pingList[1] ?? EMPTY_PING, pingBucketCount);
+  const extraBuckets2 = usePingBuckets(pingList[2] ?? EMPTY_PING, pingBucketCount);
 
   const metaModel = useMemo(() => {
     if (!meta) return null;
@@ -70,23 +120,37 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     };
   }, [meta, now, showCardGroup]);
 
-  // 内嵌 ping 实时数据优先：延迟/丢包数值每 2s 跟随 latestStatus 刷新，
-  // 历史柱状图仍由 overview 提供。无内嵌数据时回退到 overview 的 60s 数据。
-  const resolvedPing = useMemo(() => {
-    if (!metrics) return ping;
-    const latest = metrics.pingLatest;
-    const loss = metrics.pingLoss;
-    if (latest == null && loss == null) return ping;
-    return {
-      ...ping,
-      lastValue: latest ?? ping.lastValue,
-      loss: loss ?? ping.loss,
-      // 后端缓存的近 1 小时统计（avg/min/peak）：实时帧未下发时保留 overview 原值。
-      avg: metrics.pingAvg ?? ping.avg,
-      min: metrics.pingMin ?? ping.min,
-      peak: metrics.pingMax ?? ping.peak,
-    };
-  }, [ping, metrics]);
+  // 首页可绑定多个 Ping 任务(“三网延迟”)。第一条永远是主任务(未绑定/模拟延迟时的兜底),
+  // 所以长度恒 >= 1;多于一条时卡片才渲染任务切换标签。
+  //
+  // 每一条都合并各自任务的内嵌 ping 实时数据:延迟/丢包每 2s 跟随 latestStatus 刷新,
+  // 历史柱状图仍由 overview(~60s)提供。后端 WS 帧按 taskId 下发全量 map,所以副任务
+  // 与主任务是同一档实时性,不存在"只有第一个是实时的"。
+  const pingSeries = useMemo<NodePingSeries[]>(() => {
+    const entries = [
+      { item: ping, buckets: pingBuckets },
+      { item: pingList[1], buckets: extraBuckets1 },
+      { item: pingList[2], buckets: extraBuckets2 },
+    ].slice(0, MAX_HOMEPAGE_PING_TASKS);
+    const multi = pingList.length > 1;
+
+    return entries.flatMap(({ item, buckets }) => {
+      if (!item) return [];
+      const resolved = applyRealtimePing(item, metrics);
+      return [
+        {
+          taskId: resolved.taskId,
+          label: multi ? (resolved.taskName ?? `任务 #${resolved.taskId ?? "-"}`) : "",
+          ping: resolved,
+          buckets,
+          latencyColor: latencyHeatColor(resolved.lastValue),
+          lossColor: lossHeatColor(resolved.loss),
+        },
+      ];
+    });
+  }, [ping, pingList, metrics, pingBuckets, extraBuckets1, extraBuckets2]);
+
+  const resolvedPing = pingSeries[0].ping;
 
   // ping 派生的颜色只在解析后的 ping 值变化时才变。
   const pingModel = useMemo(
@@ -112,6 +176,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
         trafficTrend,
         ping,
         pingBuckets,
+        pingSeries,
       };
     }
 
@@ -160,6 +225,7 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
       trafficTrend,
       ping: resolvedPing,
       pingBuckets,
+      pingSeries,
       traffic,
       ...metaModel,
       ...pingModel,
@@ -173,5 +239,15 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
         ? formatRelativeTime(metrics.updatedAt)
         : null,
     };
-  }, [meta, metrics, metaModel, pingModel, ping, resolvedPing, pingBuckets, trafficTrend]);
+  }, [
+    meta,
+    metrics,
+    metaModel,
+    pingModel,
+    ping,
+    resolvedPing,
+    pingBuckets,
+    pingSeries,
+    trafficTrend,
+  ]);
 }

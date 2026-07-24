@@ -111,6 +111,19 @@ export interface NodeRealtime {
   ping?: Record<string, { latest: number; loss: number; avg?: number; min?: number; max?: number }>;
 }
 
+/**
+ * 单个 Ping 任务的实时统计,来自 WS 内嵌帧(~2s 刷新)。
+ * latest/loss 是瞬时值,avg/min/peak 是后端缓存的近 1 小时统计;字段缺失或无效时为 null。
+ */
+export interface PingRealtimeStats {
+  latest: number | null;
+  loss: number | null;
+  avg: number | null;
+  min: number | null;
+  /** 近 1 小时最高延迟 (ms)。与图表量程 max 区分,故名 peak(与 PingOverviewItem 一致)。 */
+  peak: number | null;
+}
+
 /** 展示用模型:扁平化的节点信息 + 实时指标 + 在线标志。 */
 export interface NodeMetrics {
   online: boolean | null;
@@ -145,6 +158,12 @@ export interface NodeMetrics {
   pingMin: number | null;
   /** 内嵌 ping 近 1 小时最高延迟 (ms)，后端未下发时为 null。 */
   pingMax: number | null;
+  /**
+   * 该节点绑定的每个首页 Ping 任务的实时统计，键为 taskId 字符串。
+   * 后端 WS 帧本来就按任务下发全量 map，这里只留下已绑定的任务（最多 3 个）。
+   * 上面的 pingLatest/pingLoss/... 是其中主任务的展开视图。
+   */
+  pingStats: Record<string, PingRealtimeStats> | null;
   /** GPU 使用率 (%)，无 GPU 或未上报时为 0。 */
   gpuPct: number;
   /** GPU 显存已用 (bytes)，无 GPU 或未上报时为 0。 */
@@ -393,6 +412,10 @@ export interface PingTaskStats {
 export interface PingOverviewItem {
   client: string;
   isAssigned: boolean;
+  /** 数据来自哪个首页 Ping 任务；一个节点最多绑定 3 个任务，各自是一条独立序列。 */
+  taskId?: number;
+  /** 任务名称，用于首页卡片上的多任务标签（如“电信 / 联通 / 移动”）。 */
+  taskName?: string;
   lastValue: number | null;
   /** metric API 聚合桶的真实宽度；旧 records 接口没有该字段。 */
   metricIntervalMs?: number;

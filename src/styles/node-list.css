@@ -27,7 +27,8 @@
     minmax(72px, 0.78fr)
     minmax(94px, 1fr)
     minmax(110px, 1.15fr)
-    minmax(82px, 0.9fr)
+    /* 网络列:多任务时这里要放下「任务名 + 延迟 + 丢包」三段，比单任务档宽一些。 */
+    minmax(108px, 1.1fr)
     minmax(102px, 1fr);
   align-items: center;
   gap: 12px;
@@ -279,6 +280,28 @@
   display: block;
   width: 100%;
   height: 14px;
+}
+
+/* 网络列很窄:多任务标签在这里居中折行(每行一个),单任务时 PingTaskTabs 不渲染,行高不变。
+   标签本身已经带出三个延迟值,所以多任务时列里不再重复渲染当前值(见 ListLatency)。 */
+.node-list-latency .ping-task-tabs {
+  width: 100%;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* 列很窄:横向 padding 收紧,把宽度让给任务名 —— 否则丢包值出现时任务名会先被省略号吃掉。 */
+.node-list-latency .ping-task-tab {
+  width: 100%;
+  justify-content: space-between;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.node-list-latency .ping-task-tab-label {
+  max-width: none;
+  flex: 1 1 auto;
+  text-align: left;
 }
 
 /* 流量列:↑↓ 两行在左,配额% 钉在两行后面、竖直居中。 */

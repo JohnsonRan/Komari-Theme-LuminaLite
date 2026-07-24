@@ -18,7 +18,7 @@ import {
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
-import { useNodeCardModel } from "@/hooks/useNodeCardModel";
+import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
 import {
@@ -39,6 +39,7 @@ import {
   TRAFFIC_SLIVER_RATIO,
 } from "./nodeCardShared";
 import { IpStackBadges } from "./IpStackBadges";
+import { PingTaskTabs } from "./PingTaskTabs";
 import { CanvasStrip, safeCanvasColor } from "./CanvasStrip";
 import type {
   NodeInfo,
@@ -625,12 +626,18 @@ function CompactTrafficBar({
 const CompactNodeHealth = memo(function CompactNodeHealth({
   ping,
   pingBuckets,
+  pingSeries,
+  activePingIndex,
+  onSelectPing,
   latencyColor,
   lossColor,
   hasHomepagePingBinding,
 }: {
   ping: PingOverviewItem;
   pingBuckets: PingOverviewBucket[];
+  pingSeries: NodePingSeries[];
+  activePingIndex: number;
+  onSelectPing: (index: number) => void;
   latencyColor: string;
   lossColor: string;
   hasHomepagePingBinding: boolean;
@@ -639,27 +646,39 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
   const { text: emptyText } = pingEmptyLabels(hasHomepagePingBinding);
   const hourStatsTitle = formatPingHourStatsTitle(ping);
   return (
-    <div className="compact-node-bottom">
-      <CompactHealthItem
-        icon={<Clock3 size={12} />}
-        label="延迟"
-        value={ping.lastValue != null ? Math.round(ping.lastValue).toString() : emptyText}
-        unit={ping.lastValue != null ? "ms" : undefined}
-        color={latencyColor}
-        title={hourStatsTitle ?? undefined}
-      >
-        <HealthBars buckets={pingBuckets} max={ping.max} kind="latency" />
-      </CompactHealthItem>
-      <CompactHealthItem
-        icon={<Unplug size={12} />}
-        label="丢包"
-        value={ping.loss != null ? ping.loss.toFixed(1) : emptyText}
-        unit={ping.loss != null ? "%" : undefined}
-        color={lossColor}
-      >
-        <HealthBars buckets={pingBuckets} max={1} kind="loss" />
-      </CompactHealthItem>
-    </div>
+    <>
+      {pingSeries.length > 1 && (
+        <div className="compact-node-ping-tabs">
+          <PingTaskTabs
+            series={pingSeries}
+            activeIndex={activePingIndex}
+            onSelect={onSelectPing}
+            size="small"
+          />
+        </div>
+      )}
+      <div className="compact-node-bottom">
+        <CompactHealthItem
+          icon={<Clock3 size={12} />}
+          label="延迟"
+          value={ping.lastValue != null ? Math.round(ping.lastValue).toString() : emptyText}
+          unit={ping.lastValue != null ? "ms" : undefined}
+          color={latencyColor}
+          title={hourStatsTitle ?? undefined}
+        >
+          <HealthBars buckets={pingBuckets} max={ping.max} kind="latency" />
+        </CompactHealthItem>
+        <CompactHealthItem
+          icon={<Unplug size={12} />}
+          label="丢包"
+          value={ping.loss != null ? ping.loss.toFixed(1) : emptyText}
+          unit={ping.loss != null ? "%" : undefined}
+          color={lossColor}
+        >
+          <HealthBars buckets={pingBuckets} max={1} kind="loss" />
+        </CompactHealthItem>
+      </div>
+    </>
   );
 });
 
@@ -670,6 +689,8 @@ export const CompactNodeCard = memo(function CompactNodeCard({
 }) {
   const model = useNodeCardModel(uuid, HEALTH_BAR_COUNT);
   const themeSettings = useThemeSettings();
+  // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
+  const [activePingIndex, setActivePingIndex] = useState(0);
 
   if (!model.node) {
     return (
@@ -721,8 +742,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     node,
     traffic,
     trafficTrend,
-    ping,
-    pingBuckets,
+    pingSeries,
     compactFooterTags: footerTags,
     subtitle,
     systemInfo,
@@ -732,12 +752,12 @@ export const CompactNodeCard = memo(function CompactNodeCard({
     upRate,
     downRate,
     isOffline,
-    latencyColor,
-    lossColor,
     loadFraction,
     hasHomepagePingBinding,
     osName,
   } = model;
+  const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
+  const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
   const showTrafficTotal = themeSettings.isReady && themeSettings.compactShowTrafficTotal;
   const showBilling = themeSettings.isReady && themeSettings.compactShowBilling;
   const showUptime = themeSettings.isReady && themeSettings.compactShowUptime;
@@ -770,6 +790,9 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       <CompactNodeHealth
         ping={ping}
         pingBuckets={pingBuckets}
+        pingSeries={pingSeries}
+        activePingIndex={pingIndex}
+        onSelectPing={setActivePingIndex}
         latencyColor={latencyColor}
         lossColor={lossColor}
         hasHomepagePingBinding={hasHomepagePingBinding}
