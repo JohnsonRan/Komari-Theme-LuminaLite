@@ -29,7 +29,7 @@ import { resolveTrafficUsage, trafficTypeLabel, type TrafficDisplay } from "@/ut
 import { resolveOsInfo } from "@/components/ui/OsLogo";
 import { hasPingSeriesData } from "@/utils/pingMetrics";
 import { MAX_HOMEPAGE_PING_TASKS } from "@/utils/pingTasks";
-import type { PingOverviewBucket, PingOverviewItem, PingRealtimeStats } from "@/types/komari";
+import type { PingOverviewBucket, PingOverviewItem } from "@/types/komari";
 
 export interface NodePingSeries {
   taskId?: number;
@@ -42,23 +42,14 @@ export interface NodePingSeries {
 }
 
 // 把某条 ping 序列所属任务的 WS 实时统计盖到 overview 数据上。
-// 已绑定任务按 taskId 精确取；未绑定（模拟延迟 / 首页解析器尚未挂载）时退回扁平的
-// ping* 字段——它是帧里第一个任务的展开视图，与改动前的行为一致。
+// 只对已绑定的任务生效：没有 taskId 的序列（未绑定节点、模拟延迟）拿不到实时数值，
+// 也不该拿——wsStore 对未绑定节点根本不提取 ping 数据。
 function applyRealtimePing(
   item: PingOverviewItem,
   metrics: NodeMetrics | undefined,
 ): PingOverviewItem {
-  if (!metrics) return item;
-  const stats: PingRealtimeStats | undefined =
-    item.taskId != null
-      ? metrics.pingStats?.[String(item.taskId)]
-      : {
-          latest: metrics.pingLatest,
-          loss: metrics.pingLoss,
-          avg: metrics.pingAvg,
-          min: metrics.pingMin,
-          peak: metrics.pingMax,
-        };
+  if (!metrics || item.taskId == null) return item;
+  const stats = metrics.pingStats?.[String(item.taskId)];
   if (!stats || (stats.latest == null && stats.loss == null)) return item;
 
   return {

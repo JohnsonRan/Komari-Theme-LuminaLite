@@ -129,11 +129,6 @@ function emptyMetrics(info: NodeInfo, online: boolean | null): NodeMetrics {
     connectionsTcp: 0,
     connectionsUdp: 0,
     updatedAt: 0,
-    pingLatest: null,
-    pingLoss: null,
-    pingAvg: null,
-    pingMin: null,
-    pingMax: null,
     pingStats: null,
     gpuPct: 0,
     gpuMemUsed: 0,
@@ -243,21 +238,19 @@ function mergeRealtime(
 
   // 后端内嵌的 ping 是 Record<taskId, stats> 全量 map —— 一个节点绑定了几个任务,
   // 这里就取出几个任务的实时数据(不是只取主任务),让首页的多任务延迟标签全都是 2s 实时的。
+  //
+  // 只取「主题设置里绑定了的」任务。未绑定的节点不取任何数据 —— 曾经这里会退回帧中的
+  // 第一个任务,于是卡片一边显示一个真实延迟数值、一边在图表处写「未配置首页 Ping」,
+  // 那个数字来自哪条线路站长根本无从得知。没配置就什么都不显示。
   let pingStats: Record<string, PingRealtimeStats> | null = null;
-  let primaryStats: PingRealtimeStats | null = null;
   if (rt.ping) {
     const boundTaskIds = pingBindingResolver?.(uuid);
-    // 未绑定(含首页尚未挂载解析器时)退回帧里的第一个任务,保持"至少有个实时数值"的旧行为。
-    const taskIds =
-      boundTaskIds && boundTaskIds.length > 0 ? boundTaskIds : Object.keys(rt.ping).slice(0, 1);
     const next: Record<string, PingRealtimeStats> = {};
-    for (const taskId of taskIds) {
+    for (const taskId of boundTaskIds ?? []) {
       const entry = rt.ping[taskId];
       if (entry) next[taskId] = readPingStats(entry);
     }
     if (Object.keys(next).length > 0) {
-      // 显式按 taskIds[0] 取主任务:数字型字符串键在对象里会被重排,不能依赖插入顺序。
-      primaryStats = next[taskIds[0]] ?? Object.values(next)[0] ?? null;
       pingStats = equalPingStatsMap(metrics.pingStats, next) ? metrics.pingStats : next;
     }
   }
@@ -285,11 +278,6 @@ function mergeRealtime(
     connectionsTcp: rt.connections?.tcp ?? 0,
     connectionsUdp: rt.connections?.udp ?? 0,
     updatedAt: updatedAt > 0 ? updatedAt : metrics.updatedAt,
-    pingLatest: primaryStats?.latest ?? null,
-    pingLoss: primaryStats?.loss ?? null,
-    pingAvg: primaryStats?.avg ?? null,
-    pingMin: primaryStats?.min ?? null,
-    pingMax: primaryStats?.peak ?? null,
     pingStats,
     // WS 帧未携带 GPU 字段时保留上一帧的值，避免偶发缺样导致 GPU 指标闪零。
     gpuPct: rt.gpu?.usage ?? metrics.gpuPct,
@@ -323,12 +311,6 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.connectionsTcp === b.connectionsTcp &&
     a.connectionsUdp === b.connectionsUdp &&
     a.updatedAt === b.updatedAt &&
-    a.pingLatest === b.pingLatest &&
-    a.pingLoss === b.pingLoss &&
-    a.pingAvg === b.pingAvg &&
-    a.pingMin === b.pingMin &&
-    a.pingMax === b.pingMax &&
-    // 扁平的 ping* 字段只覆盖主任务;副任务的变化要靠这里才能触发重渲染。
     equalPingStatsMap(a.pingStats, b.pingStats) &&
     a.gpuPct === b.gpuPct &&
     a.gpuMemUsed === b.gpuMemUsed &&

@@ -148,20 +148,10 @@ export interface NodeMetrics {
   connectionsTcp: number;
   connectionsUdp: number;
   updatedAt: number;
-  /** 内嵌 ping 实时延迟 (ms)，无数据时为 null。 */
-  pingLatest: number | null;
-  /** 内嵌 ping 实时丢包率 (%)，无数据时为 null。 */
-  pingLoss: number | null;
-  /** 内嵌 ping 近 1 小时平均延迟 (ms)，后端未下发时为 null。 */
-  pingAvg: number | null;
-  /** 内嵌 ping 近 1 小时最低延迟 (ms)，后端未下发时为 null。 */
-  pingMin: number | null;
-  /** 内嵌 ping 近 1 小时最高延迟 (ms)，后端未下发时为 null。 */
-  pingMax: number | null;
   /**
    * 该节点绑定的每个首页 Ping 任务的实时统计，键为 taskId 字符串。
-   * 后端 WS 帧本来就按任务下发全量 map，这里只留下已绑定的任务（最多 3 个）。
-   * 上面的 pingLatest/pingLoss/... 是其中主任务的展开视图。
+   * 后端 WS 帧本来就按任务下发全量 map，这里只留下主题设置里绑定了的任务（最多 3 个）；
+   * 未绑定的节点为 null —— 站长没配置延迟检测，卡片就不该显示任何延迟数值。
    */
   pingStats: Record<string, PingRealtimeStats> | null;
   /** GPU 使用率 (%)，无 GPU 或未上报时为 0。 */

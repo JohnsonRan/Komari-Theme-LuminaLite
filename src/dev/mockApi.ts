@@ -564,7 +564,9 @@ export function installDevMockApi() {
           // 1 号任务全量绑定，2/3 号只绑一部分：同一屏里既能看到单任务卡片，
           // 也能看到 2 个和 3 个任务的多任务标签。
           homepagePingBindings: {
-            "1": nodes.map((node) => node.uuid),
+            // 刻意漏掉 Hong Kong Cache(在线):后端照常下发它的 ping 实时数据，但主题设置里
+            // 没绑定任何任务 —— 用来验证「未配置延迟检测的节点不显示任何延迟数值」。
+            "1": nodes.filter((node) => node.uuid !== "hong-kong-cache-01").map((node) => node.uuid),
             "2": nodes.slice(0, Math.ceil(nodes.length / 2)).map((node) => node.uuid),
             "3": nodes.slice(0, Math.ceil(nodes.length / 3)).map((node) => node.uuid),
             // Frankfurt 绑了 4 号任务，但后端那个任务没有它的数据 —— 用来验证空任务不渲染。
