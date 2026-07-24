@@ -229,7 +229,9 @@ export const NodeCard = memo(function NodeCard({
               <div className="server-history-head">
                 <div className="server-health-label">
                   <History size={13} strokeWidth={2} />
-                  <span>近 24 小时</span>
+                  {/* 一条上叠了两件事：柱子是 CPU，右侧百分比是上报率。
+                      标题不点名 CPU 的话，一条橙色的带子旁边写着「上报 100%」会让人费解。 */}
+                  <span>近 24 小时 CPU</span>
                 </div>
                 <span className="server-history-ratio tabular">
                   {formatReportedPercent(history)}

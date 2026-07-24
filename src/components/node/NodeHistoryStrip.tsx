@@ -13,6 +13,11 @@ import { cpuHeatColor } from "@/utils/metricTone";
 //
 // 注意它测的是「探针有没有上报」，不是严格的 uptime：探针进程挂了和机器真的宕机
 // 在这里是一个样子。文案统一用「上报」而不是「在线」，别让它看起来比实际更权威。
+
+// 用绝对像素而不是条高百分比：迷你卡只有 12px 高，按比例算出来的两个下限会双双落到
+// 同一个像素上，"没数据"和"很闲"就分不开了。
+const GAP_HEIGHT_PX = 1;
+const REPORTED_MIN_HEIGHT_PX = 3;
 export const NodeHistoryStrip = memo(function NodeHistoryStrip({
   history,
   redrawKey,
@@ -51,14 +56,18 @@ export const NodeHistoryStrip = memo(function NodeHistoryStrip({
       bars.forEach((bar, index) => {
         const x = index * slotWidth;
         if (!bar.reported) {
-          // 未上报：画一道贴底的暗色短横，读作"这段时间是空的"，而不是"值为 0"。
-          const h = Math.max(1, canvasHeight * 0.14);
+          // 未上报：贴底一道 1px 暗线，读作"这段时间是空的"，而不是"值为 0"。
+          // 必须比下面上报格的最小高度更矮 —— 否则"没数据"看起来反而比"在跑但很闲"更高。
           ctx.globalAlpha = 0.5;
           ctx.fillStyle = gapColor;
-          ctx.fillRect(x, canvasHeight - h, barWidth, h);
+          ctx.fillRect(x, canvasHeight - GAP_HEIGHT_PX, barWidth, GAP_HEIGHT_PX);
           return;
         }
-        const barHeight = Math.max(2, canvasHeight * Math.min(1, Math.max(0.04, bar.value / 100)));
+        // 上报格的下限保证"有数据"始终看得见，且明显高于缺口那道线。
+        const barHeight = Math.max(
+          REPORTED_MIN_HEIGHT_PX,
+          canvasHeight * Math.min(1, bar.value / 100),
+        );
         ctx.globalAlpha = 0.9;
         ctx.fillStyle = bar.tone;
         ctx.fillRect(x, canvasHeight - barHeight, barWidth, barHeight);
