@@ -431,6 +431,9 @@ function pingRecords(uuid?: string, taskId = 1) {
 }
 
 // 4 个任务(多于每节点 3 个的上限):主题设置页里能看到「已达上限」的禁用态复选框。
+// 首页刻意不绑定任何 Ping 任务的节点（后端仍会下发它们的实时 ping 数据）。
+const UNBOUND_MOCK_NODES = new Set(["singapore-api-01", "hong-kong-cache-01"]);
+
 const pingTasks = [
   { id: 1, name: "电信 CN2", target: "1.1.1.1" },
   { id: 2, name: "联通 9929", target: "119.29.29.29" },
@@ -564,11 +567,18 @@ export function installDevMockApi() {
           // 1 号任务全量绑定，2/3 号只绑一部分：同一屏里既能看到单任务卡片，
           // 也能看到 2 个和 3 个任务的多任务标签。
           homepagePingBindings: {
-            // 刻意漏掉 Hong Kong Cache(在线):后端照常下发它的 ping 实时数据，但主题设置里
-            // 没绑定任何任务 —— 用来验证「未配置延迟检测的节点不显示任何延迟数值」。
-            "1": nodes.filter((node) => node.uuid !== "hong-kong-cache-01").map((node) => node.uuid),
-            "2": nodes.slice(0, Math.ceil(nodes.length / 2)).map((node) => node.uuid),
-            "3": nodes.slice(0, Math.ceil(nodes.length / 3)).map((node) => node.uuid),
+            // Singapore 与 Hong Kong 刻意完全不绑定(后端照常下发它们的 ping 实时数据)：
+            // 一来验证「未配置延迟检测的节点不显示任何延迟数值」，二来让首行就是
+            // 「3 任务 / 未配置 / 2 任务」的混排，方便检查卡片高度是否对齐。
+            "1": nodes.filter((node) => !UNBOUND_MOCK_NODES.has(node.uuid)).map((n) => n.uuid),
+            "2": nodes
+              .slice(0, 3)
+              .filter((node) => !UNBOUND_MOCK_NODES.has(node.uuid))
+              .map((n) => n.uuid),
+            "3": nodes
+              .slice(0, 2)
+              .filter((node) => !UNBOUND_MOCK_NODES.has(node.uuid))
+              .map((n) => n.uuid),
             // Frankfurt 绑了 4 号任务，但后端那个任务没有它的数据 —— 用来验证空任务不渲染。
             "4": [nodes[2].uuid],
           },

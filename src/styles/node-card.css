@@ -3,6 +3,11 @@
 .compact-node-card,
 .mini-node-card {
   position: relative;
+  /* 撑满网格行高。grid 的 stretch 落在外层的 .min-w-0 包装上，卡片自身是 height:auto，
+     所以同一行里内容多一点的卡片就会比邻居高出一截 —— 多任务延迟标签行(+30px)最明显，
+     标签/价格 chip 的差异也能造成 ±6px。撑满之后由各档卡片的末块 margin-top:auto 吸底，
+     富余空间落在图表与页脚之间，「在线 / 到期」这条横向扫描带才会齐平。 */
+  height: 100%;
   background: var(--surface-a);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -52,6 +57,7 @@
 
 .server-card-content {
   display: flex;
+  height: 100%;
   flex-direction: column;
   padding: 18px 18px 15px;
   gap: 14px;
@@ -600,6 +606,8 @@
 }
 
 .server-card-footer {
+  /* 吸底：卡片被撑到行高后，富余空间全部落在这条分隔线之上。 */
+  margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--hairline);
   display: flex;
