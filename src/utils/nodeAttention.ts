@@ -2,7 +2,14 @@
 //
 // 判定只依赖首页本来就有的数据(实时指标 + 节点元信息 + ping 概览),不额外请求。
 
-export type AttentionLevel = "critical" | "warning" | "none";
+/**
+ * 只有「命中/未命中」两档。
+ *
+ * 离线**不**算异常：它可能是有意的（关掉的备份机、下线待回收的机器），而且首页已经有
+ * 一整套表达离线的语言 —— 降饱和、状态点、排序沉底、顶部总览的在线计数。再标一次是
+ * 重复信息；更糟的是长期离线的机器会长期霸占前排，把真正需要处理的节点挤下去。
+ */
+export type AttentionLevel = "warning" | "none";
 
 export interface AttentionThresholds {
   /** CPU 使用率上限 (%)。 */
@@ -42,14 +49,11 @@ export interface AttentionInput {
 }
 
 /** 命中的判据。滞回按它比对，与展示文案解耦。 */
-export type AttentionKey =
-  | "offline"
-  | "cpu"
-  | "memory"
-  | "disk"
-  | "loss"
-  | "traffic"
-  | "expire";
+export type AttentionKey = "cpu" | "memory" | "disk" | "loss" | "traffic" | "expire";
+
+// 依赖节点当前在线才有意义的判据。离线节点的这些读数是最后一帧的残影，
+// 拿它去报「CPU 91%」只会误导；而到期、剩余流量与存活无关，照常参与判定。
+const LIVE_ONLY_KEYS: ReadonlySet<AttentionKey> = new Set(["cpu", "memory", "disk", "loss"]);
 
 export interface AttentionResult {
   level: AttentionLevel;
@@ -101,9 +105,7 @@ export function evaluateNodeAttention(
   thresholds: AttentionThresholds,
   previous?: AttentionResult,
 ): AttentionResult {
-  if (input.online === false) {
-    return { level: "critical", hits: ["offline"], reasons: ["离线"] };
-  }
+  const offline = input.online === false;
 
   // 滞回按 hits 里的 key 判断，不再靠前缀匹配 reasons 的展示文案 —— 那样改一次文案就会
   // 悄悄让该指标失去滞回，而失效是看不见的。
@@ -111,6 +113,8 @@ export function evaluateNodeAttention(
   const hits: AttentionKey[] = [];
   const reasons: string[] = [];
   const hit = (key: AttentionKey, reason: string) => {
+    // 离线时跳过依赖实时读数的判据，见 LIVE_ONLY_KEYS。
+    if (offline && LIVE_ONLY_KEYS.has(key)) return;
     hits.push(key);
     reasons.push(reason);
   };

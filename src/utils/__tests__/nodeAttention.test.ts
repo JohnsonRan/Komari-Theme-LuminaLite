@@ -25,12 +25,23 @@ describe("evaluateNodeAttention", () => {
     expect(evaluate({})).toEqual(NO_ATTENTION);
   });
 
-  it("ranks offline as critical and says nothing else", () => {
-    // 离线节点的 CPU/内存是最后一帧的残影，再列「CPU 95%」只会误导。
-    expect(evaluate({ online: false, cpuPct: 95 })).toEqual({
-      level: "critical",
-      hits: ["offline"],
-      reasons: ["离线"],
+  describe("离线", () => {
+    it("is not an anomaly by itself", () => {
+      // 离线可能是有意的（关掉的备份机），而且首页已用降饱和/状态点/沉底表达过了。
+      expect(evaluate({ online: false })).toEqual(NO_ATTENTION);
+    });
+
+    it("ignores live metrics, which are a stale last frame", () => {
+      // 一台停机一小时的机器报「CPU 95%」只会误导 —— 那是最后一帧的残影。
+      expect(evaluate({ online: false, cpuPct: 95, diskPct: 99, loss: 30 })).toEqual(
+        NO_ATTENTION,
+      );
+    });
+
+    it("still flags expiry and traffic, which do not depend on being up", () => {
+      const result = evaluate({ online: false, cpuPct: 95, expireDays: 2, trafficFraction: 0.97 });
+      expect(result.level).toBe("warning");
+      expect(result.reasons).toEqual(["剩余流量 3%", "2 天后到期"]);
     });
   });
 

@@ -1018,7 +1018,7 @@ export function ThemeManage() {
           />
           <ToggleField
             title="异常节点置顶"
-            description="离线或命中下方阈值的节点排到最前并标出原因。注意：开启后离线节点从「恒定置底」变为置顶——首页从展示牌变成分诊台。默认关闭。"
+            description="命中下方阈值的节点排到最前并标出原因。离线不计入——它可能是有意的，而且首页已用降饱和、状态点与排序沉底表达过了；离线节点仍会因到期或流量将尽被标记（这两项与是否在线无关）。默认关闭。"
             checked={draft.enableAttentionSort}
             onChange={(value) => patch("enableAttentionSort", value)}
           />

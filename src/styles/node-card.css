@@ -540,12 +540,13 @@
 /* 「需要关注」标记。四种卡片布局与列表行共用:左缘一条竖色条 + 极淡的整体染色。
    刻意不用边框或角标 —— 卡片已经有 is-offline 的降饱和处理和一堆彩色进度条,再加边框会
    和它们打架;左缘竖条在网格里能顺着一列扫下来,是最省视觉预算的"这几台要看"信号。
-   critical(离线)比 warning(阈值命中)更重,靠色相区分而不是靠更粗。 */
+   只有一档:离线不算异常(见 nodeAttention.ts 的 AttentionLevel),所以不需要靠色相分级。 */
 .server-card[data-attention],
 .compact-node-card[data-attention],
 .mini-node-card[data-attention],
 .node-list-row[data-attention] {
   position: relative;
+  --attention-accent: var(--status-warning, hsl(38 92% 50%));
 }
 
 .server-card[data-attention]::after,
@@ -562,25 +563,11 @@
   pointer-events: none;
 }
 
-.server-card[data-attention="critical"],
-.compact-node-card[data-attention="critical"],
-.mini-node-card[data-attention="critical"],
-.node-list-row[data-attention="critical"] {
-  --attention-accent: var(--status-offline, hsl(6 84% 53%));
-  background: color-mix(in srgb, var(--attention-accent) 5%, var(--surface-a));
-}
-
-.server-card[data-attention="warning"],
-.compact-node-card[data-attention="warning"],
-.mini-node-card[data-attention="warning"],
-.node-list-row[data-attention="warning"] {
-  --attention-accent: var(--status-warning, hsl(38 92% 50%));
+/* 卡片加一层极淡的整体染色;列表行本身是透明底,染色会盖掉斑马纹和 hover,只留左缘竖条。 */
+.server-card[data-attention],
+.compact-node-card[data-attention],
+.mini-node-card[data-attention] {
   background: color-mix(in srgb, var(--attention-accent) 4%, var(--surface-a));
-}
-
-/* 列表行本身是透明底,染色会盖掉斑马纹和 hover;只保留左缘竖条。 */
-.node-list-row[data-attention] {
-  background: transparent;
 }
 
 /* 多任务延迟标签(三网延迟)。四种卡片布局共用同一套类名,只用 data-size 调字号,

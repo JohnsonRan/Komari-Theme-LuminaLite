@@ -559,21 +559,18 @@ export function NodeGrid() {
     attentionClock,
   );
 
-  // 异常置顶是排序之上的一层稳定分区：先按站长选的维度排好，再把 critical / warning 两档
-  // 整体提前，档内保持原有相对顺序。这样速度滞回、离线沉底等既有行为都原样保留 ——
-  // 唯一被反转的是离线节点：开启后它们从沉底变成置顶，因为「挂了」正是最该先看到的事。
+  // 异常置顶是排序之上的一层稳定分区：先按站长选的维度排好，再把命中的整体提前，
+  // 组内保持原有相对顺序。速度滞回、离线沉底等既有行为都原样保留 —— 离线不算异常，
+  // 所以这一层不会把沉底的离线节点又捞回前面（见 nodeAttention 的 AttentionLevel）。
   const orderedNodes = useMemo(() => {
     if (attentionByUuid.size === 0) return sortedNodes;
-    const critical: HomeNodeSummary[] = [];
-    const warning: HomeNodeSummary[] = [];
+    const flagged: HomeNodeSummary[] = [];
     const rest: HomeNodeSummary[] = [];
     for (const node of sortedNodes) {
-      const level = attentionByUuid.get(node.uuid)?.level;
-      if (level === "critical") critical.push(node);
-      else if (level === "warning") warning.push(node);
+      if (attentionByUuid.has(node.uuid)) flagged.push(node);
       else rest.push(node);
     }
-    return [...critical, ...warning, ...rest];
+    return [...flagged, ...rest];
   }, [sortedNodes, attentionByUuid]);
 
   useEffect(() => {
