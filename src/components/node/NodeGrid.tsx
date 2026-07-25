@@ -268,16 +268,6 @@ function HomeOverviewCards({
       >
         <div className="overview-card-head">
           <span className="overview-card-label">实时带宽</span>
-          <Link
-            to="/bandwidth"
-            className="overview-card-action"
-            aria-label="打开今日带宽统计页"
-            title="今日带宽统计"
-            onPointerEnter={onWarmTraffic}
-            onFocus={onWarmTraffic}
-          >
-            <TrafficBarsIcon />
-          </Link>
         </div>
         <div className="overview-card-main">
           <p

@@ -40,45 +40,18 @@ export const trafficTodayConfig: TodayMetricConfig = {
   colorA: CHART_PALETTE.cpu,
   colorB: CHART_PALETTE.success,
   chartAriaLabel: "本日网络上行与下行速率折线图",
-  buildDetail: (node, stat): TodayMetricDetail => {
+  buildDetail: (node, stat, summary): TodayMetricDetail => {
     const s = statOf(node, stat);
     const total = s.trafficUp + s.trafficDown;
+    const currentUp = summary?.netUp ?? 0;
+    const currentDown = summary?.netDown ?? 0;
     return {
       node,
       hasSamples: s.hasSamples,
       primary: total,
       primarySub: `↑ ${formatBytes(s.trafficUp)} · ↓ ${formatBytes(s.trafficDown)}`,
-      up: { ...emptyDirection(), peak: s.peakUp, peakAt: s.peakUpAt },
-      down: { ...emptyDirection(), peak: s.peakDown, peakAt: s.peakDownAt },
-    };
-  },
-  buildSamples: (uuid, samplesByUuid) =>
-    (samplesByUuid[uuid] ?? []).map((s) => ({ timeMs: s.timeMs, a: s.up, b: s.down })),
-};
-
-/** 今日带宽：主值 = 当前合计速率，方向峰值 = 速率峰值，曲线 = 速率。 */
-export const bandwidthTodayConfig: TodayMetricConfig = {
-  summaryTitle: "今日带宽",
-  primaryColumnLabel: "当前带宽",
-  emptyLabel: "今日暂无采样",
-  upLabel: "上行",
-  downLabel: "下行",
-  formatPrimary: formatByteRateLabel,
-  formatRate: formatByteRateLabel,
-  colorA: CHART_PALETTE.cpu,
-  colorB: CHART_PALETTE.success,
-  chartAriaLabel: "本日网络上行与下行速率折线图",
-  buildDetail: (node, stat, summary): TodayMetricDetail => {
-    const s = statOf(node, stat);
-    const up = summary?.netUp ?? 0;
-    const down = summary?.netDown ?? 0;
-    return {
-      node,
-      hasSamples: s.hasSamples,
-      primary: up + down,
-      primarySub: `↑ ${formatByteRateLabel(up)} · ↓ ${formatByteRateLabel(down)}`,
-      up: { ...emptyDirection(), current: up, peak: s.peakUp, peakAt: s.peakUpAt },
-      down: { ...emptyDirection(), current: down, peak: s.peakDown, peakAt: s.peakDownAt },
+      up: { current: currentUp, peak: s.peakUp, peakAt: s.peakUpAt },
+      down: { current: currentDown, peak: s.peakDown, peakAt: s.peakDownAt },
     };
   },
   buildSamples: (uuid, samplesByUuid) =>

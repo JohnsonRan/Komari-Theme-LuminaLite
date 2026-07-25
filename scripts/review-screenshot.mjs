@@ -9,7 +9,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const MOCK = 'http://localhost:5199';
 const targets = [
-  { name: 'today-bandwidth', url: MOCK + '/bandwidth?mock=1', width: 1600, height: 1000, dark: true, expand: true },
+  { name: 'today-traffic', url: MOCK + '/traffic?mock=1', width: 1600, height: 1000, dark: true, expand: true },
   { name: 'today-connections', url: MOCK + '/connections?mock=1', width: 1600, height: 1000, dark: false, expand: true },
   { name: 'today-traffic-check', url: MOCK + '/traffic?mock=1', width: 1600, height: 1000, dark: false, expand: true },
   { name: 'home-overview-links', url: MOCK + '/?mock=1', width: 1600, height: 600, dark: false },

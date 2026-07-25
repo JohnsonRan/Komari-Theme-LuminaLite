@@ -178,9 +178,11 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
   const empty = details.filter((d) => !d.hasSamples);
   const updatedAt = query.data?.rangeEndMs ?? now;
 
-  // 汇总：主值总量 + 双向峰值节点。
+  // 汇总：主值总量 + 双向峰值节点 + 当前实时带宽。
   const totals = useMemo(() => {
     const primary = sampled.reduce((sum, d) => sum + d.primary, 0);
+    const currentUp = sampled.reduce((sum, d) => sum + d.up.current, 0);
+    const currentDown = sampled.reduce((sum, d) => sum + d.down.current, 0);
     const peakUp = sampled.reduce<TodayMetricDetail | null>(
       (best, d) => (!best || d.up.peak > best.up.peak ? d : best),
       null,
@@ -189,7 +191,7 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
       (best, d) => (!best || d.down.peak > best.down.peak ? d : best),
       null,
     );
-    return { primary, peakUp, peakDown };
+    return { primary, currentUp, currentDown, peakUp, peakDown };
   }, [sampled]);
 
   const summarySub = (
@@ -254,6 +256,26 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
                 {sampled.length > 0 ? config.formatPrimary(totals.primary) : "—"}
               </strong>
               <div className="traffic-summary-directions">{summarySub}</div>
+            </article>
+
+            <article className="traffic-summary-card">
+              <div className="traffic-summary-head">
+                <span className="assets-eyebrow">当前带宽</span>
+                <span>实时</span>
+              </div>
+              <strong className="traffic-summary-total">
+                {config.formatRate(totals.currentUp + totals.currentDown)}
+              </strong>
+              <div className="traffic-summary-directions">
+                <span>
+                  <ArrowUp size={13} aria-hidden />
+                  {config.formatRate(totals.currentUp)}
+                </span>
+                <span>
+                  <ArrowDown size={13} aria-hidden />
+                  {config.formatRate(totals.currentDown)}
+                </span>
+              </div>
             </article>
 
             <article className="traffic-summary-card is-peak">

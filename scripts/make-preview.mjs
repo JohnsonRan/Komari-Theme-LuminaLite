@@ -36,12 +36,12 @@ async function devServerUp() {
   }
 }
 
-// 要展示的界面：桌面亮/暗首页、详情、今日带宽、今日连接、移动端首页。
+// 要展示的界面：桌面亮/暗首页、详情、今日流量、今日连接、移动端首页。
 const FRAMES = [
   { key: "home-light", label: "首页 · 亮色", url: `${DEV}/?mock=1`, w: 1440, h: 900, dark: false },
   { key: "home-dark", label: "首页 · 暗色", url: `${DEV}/?mock=1`, w: 1440, h: 900, dark: true },
   { key: "instance", label: "节点详情", url: `${DEV}/instance/frankfurt-db-01?mock=1`, w: 1440, h: 900, dark: true },
-  { key: "bandwidth", label: "今日带宽", url: `${DEV}/bandwidth?mock=1`, w: 1440, h: 900, dark: false },
+  { key: "traffic", label: "今日流量", url: `${DEV}/traffic?mock=1`, w: 1440, h: 900, dark: false },
   { key: "connections", label: "今日连接", url: `${DEV}/connections?mock=1`, w: 1440, h: 900, dark: false },
   { key: "mobile-home", label: "移动端首页", url: `${DEV}/?mock=1`, w: 390, h: 780, dark: false },
 ];
@@ -113,7 +113,7 @@ function buildGridHtml(frames) {
   </style></head><body>
     <header>
       <h1>Komari-Theme-LuminaLite</h1>
-      <p>亮 / 暗双主题 · 四种节点视图 · 详情分栏图表 · 流量 / 带宽 / 连接统计 · 移动端适配</p>
+      <p>亮 / 暗双主题 · 四种节点视图 · 详情分栏图表 · 流量 / 连接统计 · 移动端适配</p>
     </header>
     <div class="grid">${cells}</div>
   </body></html>`;
