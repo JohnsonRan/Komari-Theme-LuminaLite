@@ -1315,26 +1315,99 @@ body::after {
   margin-top: 12px;
 }
 
-.instance-info-groups {
+/* Bento 散卡：相关性高的字段聚在一张卡，外壳与 .instance-chart-card 同一语言。 */
+.instance-bento {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 10px;
 }
 
-.instance-info-group {
+.instance-bento-card {
   min-width: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-elev) 92%, transparent);
-  padding: 9px 12px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elev) 97%, transparent) 0%,
+      color-mix(in srgb, var(--surface-elev) 92%, transparent) 100%
+    );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  padding: 12px 14px;
 }
 
-.instance-info-group-title {
-  margin-bottom: 6px;
+/* 桌面：状态 3 / 硬件 5 / 系统 4，网络整行。 */
+.instance-bento-status {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.instance-bento-hardware {
+  grid-column: span 5;
+}
+
+.instance-bento-system {
+  grid-column: span 4;
+}
+
+.instance-bento-network {
+  grid-column: 1 / -1;
+}
+
+/* 运行时长是全页第一落点，字号压过其余一切。 */
+.instance-bento-uptime {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.instance-bento-uptime-value {
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.instance-bento-uptime-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.instance-bento-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.instance-bento-updated {
+  margin-top: auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* 卡内字段网格：硬件 2 列、网络 4 列。 */
+.instance-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 12px;
+  column-gap: 12px;
+}
+
+.instance-bento-network .instance-bento-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* 系统卡用 label-左 value-右 的行式，与网格字段区分节奏。 */
+.instance-bento-rows {
+  display: flex;
+  flex-direction: column;
 }
 
 .instance-info-item {
@@ -1353,7 +1426,7 @@ body::after {
 
 .instance-info-label {
   flex: 0 0 auto;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -1369,31 +1442,69 @@ body::after {
   word-break: break-word;
 }
 
-/* 流量项带进度条，保留竖排 */
-.instance-info-item.is-stack {
-  display: block;
+.instance-hero-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.instance-info-item.is-stack .instance-info-label {
-  display: block;
-  margin-bottom: 3px;
+.instance-hero-status.is-online {
+  color: var(--status-online);
+  background: color-mix(in srgb, var(--status-online) 12%, transparent);
 }
 
-.instance-info-item.is-stack .instance-info-value {
-  text-align: left;
-  margin-bottom: 6px;
+.instance-hero-status.is-offline {
+  color: var(--status-offline);
+  background: color-mix(in srgb, var(--status-offline) 12%, transparent);
 }
 
-.instance-info-traffic {
+.instance-hero-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 规格字段：label 在上 value 在下，只呈现身份与累计量，
+   百分比/进度条交给下方负载图表。 */
+.instance-spec-item {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 3px;
 }
 
-.instance-info-note {
+.instance-spec-item.is-wide {
+  grid-column: 1 / -1;
+}
+
+.instance-spec-label {
   color: var(--text-tertiary);
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.instance-spec-value {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
+/* 硬件卡是唯一放大的一组，作为信息区视觉落点。 */
+.instance-spec-item.is-primary .instance-spec-value {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .instance-overview-multi {
@@ -1403,22 +1514,6 @@ body::after {
   color: var(--text-tertiary);
   font-size: 11px;
   font-weight: 500;
-}
-
-.instance-progress-track {
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--progress-bg);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.22);
-}
-
-/* 全站其余进度/占比元素都是单色，这里原本是唯一一处双色渐变，改回同一套语言。 */
-.instance-progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--progress-network);
 }
 
 .instance-series-stats {
@@ -1885,8 +1980,20 @@ body::after {
     justify-content: flex-start;
   }
 
-  .instance-info-groups {
+  /* Bento 卡片移动端全部竖堆，状态卡置顶。 */
+  .instance-bento {
     grid-template-columns: 1fr;
+  }
+
+  .instance-bento-status,
+  .instance-bento-hardware,
+  .instance-bento-system,
+  .instance-bento-network {
+    grid-column: 1 / -1;
+  }
+
+  .instance-bento-network .instance-bento-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .instance-ping-toolbar {
