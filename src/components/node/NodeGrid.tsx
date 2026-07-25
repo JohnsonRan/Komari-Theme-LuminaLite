@@ -266,7 +266,19 @@ function HomeOverviewCards({
         onPointerEnter={() => setHoveredCard("bandwidth")}
         onPointerLeave={() => setHoveredCard(null)}
       >
-        <span className="overview-card-label">实时带宽</span>
+        <div className="overview-card-head">
+          <span className="overview-card-label">实时带宽</span>
+          <Link
+            to="/bandwidth"
+            className="overview-card-action"
+            aria-label="打开今日带宽统计页"
+            title="今日带宽统计"
+            onPointerEnter={onWarmTraffic}
+            onFocus={onWarmTraffic}
+          >
+            <TrafficBarsIcon />
+          </Link>
+        </div>
         <div className="overview-card-main">
           <p
             className="overview-card-value"
@@ -325,7 +337,19 @@ function HomeOverviewCards({
         onPointerEnter={() => setHoveredCard("connections")}
         onPointerLeave={() => setHoveredCard(null)}
       >
-        <span className="overview-card-label">实时连接</span>
+        <div className="overview-card-head">
+          <span className="overview-card-label">实时连接</span>
+          <Link
+            to="/connections"
+            className="overview-card-action"
+            aria-label="打开今日连接统计页"
+            title="今日连接统计"
+            onPointerEnter={onWarmTraffic}
+            onFocus={onWarmTraffic}
+          >
+            <TrafficBarsIcon />
+          </Link>
+        </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
             {connectionsTotal.toLocaleString()}

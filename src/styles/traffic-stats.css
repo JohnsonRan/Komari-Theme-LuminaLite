@@ -524,7 +524,10 @@
   }
 
   .traffic-card-list {
+    /* 移动端卡片纵向堆叠；漏写 flex-direction 会默认 row，把全部卡片挤成一排竖条。 */
     display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 }
 

@@ -9,10 +9,11 @@ fs.mkdirSync(outDir, { recursive: true });
 
 const MOCK = 'http://localhost:5199';
 const targets = [
-  { name: 'inst-ping', url: MOCK + '/instance/tokyo-edge-01?mock=1', width: 1600, height: 1000, dark: false, clickPing: true },
-  { name: 'inst-scrolled', url: MOCK + '/instance/frankfurt-db-01?mock=1', width: 1600, height: 1000, dark: true, scroll: 900 },
-  { name: 'inst-offline', url: MOCK + '/instance/sydney-backup-01?mock=1', width: 1600, height: 1000, dark: false },
-  { name: 'inst-mobile-chart', url: MOCK + '/instance/tokyo-edge-01?mock=1', width: 390, height: 844, dark: false, scroll: 1400 },
+  { name: 'today-bandwidth', url: MOCK + '/bandwidth?mock=1', width: 1600, height: 1000, dark: true, expand: true },
+  { name: 'today-connections', url: MOCK + '/connections?mock=1', width: 1600, height: 1000, dark: false, expand: true },
+  { name: 'today-traffic-check', url: MOCK + '/traffic?mock=1', width: 1600, height: 1000, dark: false, expand: true },
+  { name: 'home-overview-links', url: MOCK + '/?mock=1', width: 1600, height: 600, dark: false },
+  { name: 'today-conn-mobile', url: MOCK + '/connections?mock=1', width: 390, height: 844, dark: false },
 ];
 
 const browser = await chromium.launch({ executablePath: base, headless: true });
@@ -32,6 +33,10 @@ for (const t of targets) {
       if (await pingBtn.count()) { await pingBtn.click(); await page.waitForTimeout(1500); }
     }
     if (t.scroll) { await page.mouse.wheel(0, t.scroll); await page.waitForTimeout(800); }
+    if (t.expand) {
+      const toggle = page.locator('.traffic-detail-toggle').first();
+      if (await toggle.count()) { await toggle.click(); await page.waitForTimeout(1500); }
+    }
     const file = path.join(outDir, `${t.name}.png`);
     await page.screenshot({ path: file, fullPage: false });
     console.log('saved', file);

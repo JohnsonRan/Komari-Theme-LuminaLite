@@ -1,10 +1,13 @@
 import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import { getLoadRecords, getTodayTrafficMetrics } from "@/services/api";
 import {
+  buildTodayConnectionMetricSamples,
+  buildTodayConnectionRecordSamples,
   buildTodayTrafficMetricSamples,
   buildTodayTrafficRecordSamples,
   summarizeTodayTrafficMetrics,
   summarizeTodayTrafficRecords,
+  type TodayConnectionSample,
   type TodayTrafficSample,
   type TodayTrafficStat,
 } from "@/utils/trafficStats";
@@ -17,6 +20,7 @@ const TRAFFIC_STATS_REFRESH_MS = 5 * 60 * 1000;
 export interface TodayTrafficStatsResponse {
   rows: TodayTrafficStat[];
   samplesByUuid: Record<string, TodayTrafficSample[]>;
+  connectionSamplesByUuid: Record<string, TodayConnectionSample[]>;
   rangeStartMs: number;
   rangeEndMs: number;
   intervalSeconds?: number;
@@ -34,9 +38,12 @@ async function loadRecordFallback(
   startMs: number,
   endMs: number,
   signal: AbortSignal,
-): Promise<Pick<TodayTrafficStatsResponse, "rows" | "samplesByUuid">> {
+): Promise<
+  Pick<TodayTrafficStatsResponse, "rows" | "samplesByUuid" | "connectionSamplesByUuid">
+> {
   const rows: TodayTrafficStat[] = [];
   const samplesByUuid: Record<string, TodayTrafficSample[]> = {};
+  const connectionSamplesByUuid: Record<string, TodayConnectionSample[]> = {};
   for (let index = 0; index < uuids.length; index += FALLBACK_CONCURRENCY) {
     const batch = uuids.slice(index, index + FALLBACK_CONCURRENCY);
     const responses = await Promise.all(
@@ -50,6 +57,7 @@ async function loadRecordFallback(
         return {
           row: summarizeTodayTrafficRecords(uuid, data.records, startMs, endMs),
           samples: buildTodayTrafficRecordSamples(data.records, startMs, endMs),
+          connectionSamples: buildTodayConnectionRecordSamples(data.records, startMs, endMs),
         };
       }),
     );
@@ -59,9 +67,10 @@ async function loadRecordFallback(
       if (!uuid || !response) continue;
       rows.push(response.row);
       samplesByUuid[uuid] = response.samples;
+      connectionSamplesByUuid[uuid] = response.connectionSamples;
     }
   }
-  return { rows, samplesByUuid };
+  return { rows, samplesByUuid, connectionSamplesByUuid };
 }
 
 function getTodayTrafficQueryOptions(uuids: string[], now: number) {
@@ -84,6 +93,12 @@ function getTodayTrafficQueryOptions(uuids: string[], now: number) {
             stableUuids.map((uuid) => [
               uuid,
               buildTodayTrafficMetricSamples(data.series, uuid),
+            ]),
+          ),
+          connectionSamplesByUuid: Object.fromEntries(
+            stableUuids.map((uuid) => [
+              uuid,
+              buildTodayConnectionMetricSamples(data.series, uuid),
             ]),
           ),
           rangeStartMs: data.rangeStartMs,

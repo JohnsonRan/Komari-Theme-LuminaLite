@@ -8,6 +8,12 @@ import { Home } from "@/pages/Home";
 const Traffic = lazy(() =>
   import("@/pages/Traffic").then((m) => ({ default: m.Traffic })),
 );
+const Bandwidth = lazy(() =>
+  import("@/pages/Bandwidth").then((m) => ({ default: m.Bandwidth })),
+);
+const Connections = lazy(() =>
+  import("@/pages/Connections").then((m) => ({ default: m.Connections })),
+);
 const Instance = lazy(() =>
   import("@/pages/Instance").then((m) => ({ default: m.Instance })),
 );
@@ -44,6 +50,14 @@ export const router = createBrowserRouter([
       {
         path: "traffic",
         element: suspended(<Traffic />),
+      },
+      {
+        path: "bandwidth",
+        element: suspended(<Bandwidth />),
+      },
+      {
+        path: "connections",
+        element: suspended(<Connections />),
       },
       {
         path: "404",

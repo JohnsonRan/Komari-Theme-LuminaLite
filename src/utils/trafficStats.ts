@@ -4,12 +4,16 @@ export const TRAFFIC_UP_METRIC = "traffic.up";
 export const TRAFFIC_DOWN_METRIC = "traffic.down";
 export const RATE_UP_METRIC = "net.out.rate";
 export const RATE_DOWN_METRIC = "net.in.rate";
+export const CONN_TCP_METRIC = "connections.tcp";
+export const CONN_UDP_METRIC = "connections.udp";
 
 export const TODAY_TRAFFIC_METRIC_KEYS = [
   TRAFFIC_UP_METRIC,
   TRAFFIC_DOWN_METRIC,
   RATE_UP_METRIC,
   RATE_DOWN_METRIC,
+  CONN_TCP_METRIC,
+  CONN_UDP_METRIC,
 ] as const;
 
 export const TODAY_TRAFFIC_AGGREGATION = {
@@ -17,6 +21,9 @@ export const TODAY_TRAFFIC_AGGREGATION = {
   [TRAFFIC_DOWN_METRIC]: "sum",
   [RATE_UP_METRIC]: "max",
   [RATE_DOWN_METRIC]: "max",
+  // 连接数看峰值（今日最高并发），与速率一致取 max。
+  [CONN_TCP_METRIC]: "max",
+  [CONN_UDP_METRIC]: "max",
 } as const;
 
 export interface TrafficMetricSeries {
@@ -34,6 +41,11 @@ export interface TodayTrafficStat {
   peakUpAt: number | null;
   peakDown: number;
   peakDownAt: number | null;
+  // 今日连接峰值（TCP / UDP），与速率峰值同取 max。
+  peakTcp: number;
+  peakTcpAt: number | null;
+  peakUdp: number;
+  peakUdpAt: number | null;
   sampleCount: number;
   hasSamples: boolean;
 }
@@ -42,6 +54,13 @@ export interface TodayTrafficSample {
   timeMs: number;
   up: number;
   down: number;
+}
+
+// 连接数采样（TCP / UDP），供「今日连接」页画曲线。
+export interface TodayConnectionSample {
+  timeMs: number;
+  tcp: number;
+  udp: number;
 }
 
 function emptyStat(uuid: string): TodayTrafficStat {
@@ -53,6 +72,10 @@ function emptyStat(uuid: string): TodayTrafficStat {
     peakUpAt: null,
     peakDown: 0,
     peakDownAt: null,
+    peakTcp: 0,
+    peakTcpAt: null,
+    peakUdp: 0,
+    peakUdpAt: null,
     sampleCount: 0,
     hasSamples: false,
   };
@@ -97,6 +120,18 @@ export function summarizeTodayTrafficMetrics(
           if (value > stat.peakDown || stat.peakDownAt == null) {
             stat.peakDown = value;
             stat.peakDownAt = timeMs;
+          }
+          break;
+        case CONN_TCP_METRIC:
+          if (value > stat.peakTcp || stat.peakTcpAt == null) {
+            stat.peakTcp = value;
+            stat.peakTcpAt = timeMs;
+          }
+          break;
+        case CONN_UDP_METRIC:
+          if (value > stat.peakUdp || stat.peakUdpAt == null) {
+            stat.peakUdp = value;
+            stat.peakUdpAt = timeMs;
           }
           break;
       }
@@ -181,6 +216,14 @@ export function summarizeTodayTrafficRecords(
       stat.peakDown = Math.max(0, record.net_in);
       stat.peakDownAt = timeMs;
     }
+    if (record.connections > stat.peakTcp || stat.peakTcpAt == null) {
+      stat.peakTcp = Math.max(0, record.connections);
+      stat.peakTcpAt = timeMs;
+    }
+    if (record.connections_udp > stat.peakUdp || stat.peakUdpAt == null) {
+      stat.peakUdp = Math.max(0, record.connections_udp);
+      stat.peakUdpAt = timeMs;
+    }
     previous = record;
   }
 
@@ -201,6 +244,48 @@ export function buildTodayTrafficRecordSamples(
       timeMs,
       up: Math.max(0, Number.isFinite(record.net_out) ? record.net_out : 0),
       down: Math.max(0, Number.isFinite(record.net_in) ? record.net_in : 0),
+    }))
+    .sort((left, right) => right.timeMs - left.timeMs);
+}
+
+// metrics 路径：从 CONN_TCP/UDP 序列拼出单节点的连接曲线。
+export function buildTodayConnectionMetricSamples(
+  series: TrafficMetricSeries[],
+  uuid: string,
+): TodayConnectionSample[] {
+  const samples = new Map<number, TodayConnectionSample>();
+  for (const item of series) {
+    if (item.client !== uuid || (item.metricKey !== CONN_TCP_METRIC && item.metricKey !== CONN_UDP_METRIC)) {
+      continue;
+    }
+    for (const point of item.points) {
+      if (!validPoint(point)) continue;
+      const timeMs = Date.parse(point.time);
+      if (!Number.isFinite(timeMs)) continue;
+      const sample = samples.get(timeMs) ?? { timeMs, tcp: 0, udp: 0 };
+      if (item.metricKey === CONN_TCP_METRIC) sample.tcp = Math.max(0, point.value ?? 0);
+      else sample.udp = Math.max(0, point.value ?? 0);
+      samples.set(timeMs, sample);
+    }
+  }
+  return [...samples.values()].sort((left, right) => right.timeMs - left.timeMs);
+}
+
+// records 回退路径：从 LoadRecord.connections / connections_udp 拼连接曲线。
+export function buildTodayConnectionRecordSamples(
+  records: LoadRecord[],
+  startMs: number,
+  endMs: number,
+): TodayConnectionSample[] {
+  return records
+    .map((record) => ({ record, timeMs: recordTimeMs(record) }))
+    .filter(
+      ({ timeMs }) => Number.isFinite(timeMs) && timeMs >= startMs && timeMs <= endMs,
+    )
+    .map(({ record, timeMs }) => ({
+      timeMs,
+      tcp: Math.max(0, Number.isFinite(record.connections) ? record.connections : 0),
+      udp: Math.max(0, Number.isFinite(record.connections_udp) ? record.connections_udp : 0),
     }))
     .sort((left, right) => right.timeMs - left.timeMs);
 }

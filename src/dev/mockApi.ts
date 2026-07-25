@@ -434,7 +434,11 @@ function trafficMetricPayload(params: {
               ? (28 + index * 5) * MIB * (0.74 + Math.cos(phase) * 0.22)
               : metricKey === "net.out.rate"
                 ? statusProfiles[index][5] * (0.62 + Math.sin(phase) * 0.34)
-                : statusProfiles[index][6] * (0.66 + Math.cos(phase) * 0.3);
+                : metricKey === "net.in.rate"
+                  ? statusProfiles[index][6] * (0.66 + Math.cos(phase) * 0.3)
+                  : metricKey === "connections.tcp"
+                    ? (140 + index * 36) * (0.8 + Math.sin(phase) * 0.25)
+                    : (10 + index * 3) * (0.85 + Math.cos(phase) * 0.2);
         return { time, value: Math.max(0, value), count: 1 };
       }),
     }));
