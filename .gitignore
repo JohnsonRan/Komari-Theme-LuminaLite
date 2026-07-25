@@ -28,3 +28,4 @@ coverage/
 # Local reference checkouts
 komari-main/
 komari-theme-purcarte-main/
+.pi/
