@@ -12,6 +12,7 @@ import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { attentionAttrs } from "@/utils/nodeAttention";
+import { AttentionReasons } from "./AttentionReasons";
 import {
   clamp01,
   compactPercentText,
@@ -205,6 +206,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
       aria-label={rowLabel}
     >
       <div className="node-list-cell node-list-node">
+        <AttentionReasons attention={attention} />
         <div className="node-list-node-text">
           <div className="node-list-node-head">
             <Flag region={node.region} size={14} />

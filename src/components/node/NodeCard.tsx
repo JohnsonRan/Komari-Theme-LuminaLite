@@ -50,6 +50,7 @@ import {
 } from "./pingBucketText";
 import { formatReportedPercent } from "@/utils/nodeHistory";
 import { attentionAttrs } from "@/utils/nodeAttention";
+import { AttentionReasons } from "./AttentionReasons";
 import { clsx } from "clsx";
 import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
 import type { ByteRateDisplay } from "@/utils/format";
@@ -163,6 +164,7 @@ export const NodeCard = memo(function NodeCard({
     >
       <div className="server-card-content">
         <NodeCardHeader node={node} subtitle={subtitle} systemInfo={systemInfo} osName={osName} />
+        <AttentionReasons attention={attention} />
 
         <div className="server-card-stack">
           <NodeMetricSection

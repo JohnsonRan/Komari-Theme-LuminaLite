@@ -18,6 +18,7 @@ import { IpStackBadges } from "./IpStackBadges";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { NodeHistoryStrip } from "./NodeHistoryStrip";
 import { attentionAttrs } from "@/utils/nodeAttention";
+import { AttentionReasons } from "./AttentionReasons";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
@@ -469,6 +470,7 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
       {...attentionAttrs(attention)}
     >
       <MiniHeader node={node} osName={osName} />
+      <AttentionReasons attention={attention} />
       <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
       <MiniVitals node={node} loadFraction={loadFraction} />
       <MiniFlow node={node} upRate={upRate} downRate={downRate} />

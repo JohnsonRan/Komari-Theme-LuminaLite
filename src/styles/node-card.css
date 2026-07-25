@@ -570,6 +570,56 @@
   background: color-mix(in srgb, var(--attention-accent) 4%, var(--surface-a));
 }
 
+/* 「需要关注」的可见原因条 —— 置顶后一眼能看出为什么被顶上来,不用 hover 等 tooltip。
+   三种卡片都是 padding 内收的 flex 列(大卡 content 18px/紧凑卡 14px/迷你卡 13px,卡片本体
+   overflow: hidden):负外边距把胶囊纵向压进既有 gap、横向拉到卡片边缘,全宽一条不会打断
+   指标扫读,也不额外占高。左缘的 3px 竖条与文字自然衔接。
+   列表行里的节点列没有横向 padding,负外边距收零,降级为节点名上方的一行小胶囊。 */
+.attention-reasons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  /* 横向出血只到边框内侧(13px = 18px padding − 4px 圆角留白 − 1px 边框),不全宽压过圆角。
+     上下负边距把胶囊压进卡片既有 gap,不额外占高。 */
+  margin: -8px -13px -8px;
+  border-radius: 8px;
+  padding: 4px 10px 4px 13px;
+  background: color-mix(in srgb, var(--status-warning, hsl(38 92% 50%)) 11%, transparent);
+  color: color-mix(in srgb, var(--status-warning, hsl(38 92% 50%)) 62%, var(--text-primary));
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.compact-node-card .attention-reasons {
+  /* 9px = 14px padding − 4px 留白 − 1px 边框。 */
+  margin: -4px -9px -4px;
+}
+
+.mini-node-card .attention-reasons {
+  /* 8px = 13px padding − 4px 留白 − 1px 边框。 */
+  margin: -3px -8px -3px;
+}
+
+.node-list-node .attention-reasons {
+  align-self: stretch;
+  margin: 0 0 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 6px;
+}
+
+.attention-reasons svg {
+  flex: none;
+}
+
+.attention-reasons > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 多任务延迟标签(三网延迟)。四种卡片布局共用同一套类名,只用 data-size 调字号,
    保证“电信 / 联通 / 移动”在大卡、小卡、迷你卡、列表里读起来是同一个控件。 */
 .ping-task-tabs {
@@ -755,6 +805,12 @@
 @media (max-width: 720px) {
   .server-card-content {
     padding: 16px;
+  }
+
+  /* 卡片内边距收窄时原因条同步收窄(11px = 16px padding − 4px 留白 − 1px 边框)。 */
+  .server-card .attention-reasons {
+    margin-left: -11px;
+    margin-right: -11px;
   }
 
   .server-card-title-link {

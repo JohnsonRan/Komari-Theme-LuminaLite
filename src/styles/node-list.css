@@ -108,10 +108,12 @@
   text-align: center;
 }
 
-/* ── 节点列:[旗+名/标签 文本块] + OS 图标(钉右缘、竖直居中,与卡片一样) ── */
+/* ── 节点列:[旗+名/标签 文本块] + OS 图标(钉右缘、竖直居中,与卡片一样) ──
+   flex-wrap 是为了「需要关注」原因条:命中时它以 align-self:stretch 独占一行排在节点名上方,
+   不挤右侧各指标列。 */
 .node-list-node {
   display: flex;
-  flex-direction: row;
+  flex-flow: row wrap;
   align-items: center;
   gap: 10px;
   min-width: 0;

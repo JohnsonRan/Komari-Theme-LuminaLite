@@ -43,6 +43,7 @@ import { IpStackBadges } from "./IpStackBadges";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { NodeHistoryStrip } from "./NodeHistoryStrip";
 import { attentionAttrs } from "@/utils/nodeAttention";
+import { AttentionReasons } from "./AttentionReasons";
 import { CanvasStrip, safeCanvasColor } from "./CanvasStrip";
 import type {
   NodeInfo,
@@ -792,6 +793,7 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       {...attentionAttrs(attention)}
     >
       <CompactNodeHeader node={node} osName={osName} systemInfo={systemInfo} />
+      <AttentionReasons attention={attention} />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />
       <CompactNodeInfoStrip
