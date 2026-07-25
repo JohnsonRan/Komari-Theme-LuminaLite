@@ -290,9 +290,11 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
             </article>
           </section>
 
-          <div className="assets-section-head">
-            <span className="assets-eyebrow">节点明细</span>
-            <span className="assets-count">{details.length} 台</span>
+          {/* assets-section-head 的样式是资产页旧皮肤留下的,现已无人定义 —— 这里用本页的
+              traffic-section-head,否则三段文字没有 flex 容器,直接挤成一团。 */}
+          <div className="traffic-section-head">
+            <span className="traffic-section-title">节点明细</span>
+            <span className="traffic-section-count">{details.length} 台</span>
             <span className="traffic-sample-note">峰值按历史采样计算</span>
           </div>
 
