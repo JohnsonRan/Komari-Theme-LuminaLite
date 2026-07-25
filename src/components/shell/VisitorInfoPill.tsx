@@ -1,7 +1,11 @@
-import { Globe } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Globe, X } from "lucide-react";
 import { Flag } from "@/components/ui/Flag";
 import { useVisitorInfo } from "@/hooks/useVisitorInfo";
 import { shortenIp } from "@/utils/visitorInfo";
+
+// 常驻悬浮会遮挡节点卡底部操作区，展示几秒后自动收起；也可手动关掉。
+const AUTO_DISMISS_MS = 8000;
 
 /**
  * 底部居中的访客信息条：你的 IP / 归属地 / 运营商。
@@ -12,7 +16,15 @@ import { shortenIp } from "@/utils/visitorInfo";
  */
 export function VisitorInfoPill() {
   const { data } = useVisitorInfo();
-  if (!data) return null;
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!data) return;
+    const handle = window.setTimeout(() => setDismissed(true), AUTO_DISMISS_MS);
+    return () => window.clearTimeout(handle);
+  }, [data]);
+
+  if (!data || dismissed) return null;
 
   const parts = [data.country, data.org].filter(Boolean);
 
@@ -40,6 +52,14 @@ export function VisitorInfoPill() {
           </span>
         </>
       )}
+      <button
+        type="button"
+        className="visitor-pill-close"
+        aria-label="关闭本机信息条"
+        onClick={() => setDismissed(true)}
+      >
+        <X size={12} strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

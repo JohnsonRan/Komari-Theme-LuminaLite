@@ -882,6 +882,58 @@
 }
 
 @media (max-width: 560px) {
+  /* 窄屏把四张总览卡压成单行横滑 KPI 带，把节点列表提上首屏。
+     卡片收窄到固定宽度，不再两列堆叠；次要数值行直接隐藏。 */
+  .home-overview {
+    display: flex;
+    gap: 8px;
+    margin-inline: -14px;
+    padding-inline: 14px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .home-overview::-webkit-scrollbar {
+    display: none;
+  }
+
+  .overview-card {
+    flex: 0 0 auto;
+    width: 132px;
+    min-height: 0;
+    gap: 4px;
+    scroll-snap-align: start;
+    padding: 10px 12px;
+  }
+
+  .overview-card-value {
+    font-size: 20px;
+  }
+
+  .overview-card[data-metric="online"] .overview-card-value {
+    font-size: 19px;
+  }
+
+  .overview-card-footer {
+    display: none;
+  }
+
+  /* 在线卡在窄带里保留绿/红条，但压扁成细条不占高度。 */
+  .overview-bar {
+    height: 4px;
+  }
+
+  .overview-blocks {
+    gap: 3px;
+  }
+
+  .overview-block {
+    height: 4px;
+  }
+
   .home-group-tabs {
     width: 100%;
     border-radius: 14px;
@@ -971,6 +1023,22 @@
   .home-region-chip {
     min-height: 30px;
     padding: 0 8px;
+  }
+
+  /* 窄屏地区 chips 不换行，改为单行横滑，省出一行垂直空间。 */
+  .home-region-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .home-region-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .home-region-chip {
+    flex: 0 0 auto;
   }
 }
 

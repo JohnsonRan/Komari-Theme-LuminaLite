@@ -125,6 +125,43 @@
   margin-left: auto;
 }
 
+/* assets-table 在别处无定义，这里是流量表唯一的表格骨架：合并边框、
+   单元格留白与数字列右对齐，让各列数字彼此分开、行与行有分隔。 */
+.traffic-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* 数字列 nowrap，节点列吃剩余空间，避免数字被顶到表格两端。 */
+  table-layout: auto;
+}
+
+.traffic-table td {
+  padding: 11px 14px;
+  border-top: 1px solid var(--hairline);
+  vertical-align: middle;
+}
+
+/* 节点列占满弹性空间，数字列收缩贴合内容，整体不至于拉成一整条宽带。 */
+.traffic-table th:first-child,
+.traffic-table td:first-child {
+  width: 100%;
+}
+
+/* 数字列右对齐、拉开列距，避免「6.5 GB25 MB/s78 MB/s」连成一片。 */
+.traffic-table td[data-numeric] {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.traffic-table th[data-numeric],
+.traffic-table td[data-numeric] {
+  padding-left: 22px;
+}
+
+/* 有采样行 hover 轻微浮起，空说明行不受影响。 */
+.traffic-table tbody tr:not(.traffic-empty-row):hover td {
+  background: var(--hover-bg-a);
+}
+
 .traffic-table th > span {
   display: inline-flex;
   width: 100%;
@@ -316,6 +353,27 @@
 .traffic-no-data {
   color: var(--text-tertiary);
   font-weight: 560;
+}
+
+/* 无采样节点不再逐行占位，合并成表格末尾一条说明。 */
+.traffic-empty-row > td {
+  padding: 0;
+}
+
+.traffic-empty-note {
+  display: block;
+  padding: 10px 14px 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 560;
+  line-height: 1.55;
+  white-space: normal;
+}
+
+.traffic-empty-note--card {
+  border: 1px dashed var(--hairline);
+  border-radius: 12px;
+  background: var(--surface-a);
 }
 
 .traffic-card-list {

@@ -1017,10 +1017,13 @@ body::after {
   color: var(--text-primary);
 }
 
+/* 原写法引用了从未定义的 --accent(token 是 --accent-500),导致选中态背景整段失效。
+   修正引用,并补一条左缘指示,让当前节点在列表里一眼可定位。 */
 .instance-sidebar-item.is-active {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent-500) 14%, transparent);
   color: var(--text-primary);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent-500);
 }
 
 .instance-sidebar-name {
@@ -1568,9 +1571,9 @@ body::after {
   align-items: center;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--chart-accent, var(--accent)) 45%, transparent);
-  background: color-mix(in srgb, var(--chart-accent, var(--accent)) 14%, transparent);
-  color: var(--chart-accent, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--chart-accent, var(--accent-500)) 45%, transparent);
+  background: color-mix(in srgb, var(--chart-accent, var(--accent-500)) 14%, transparent);
+  color: var(--chart-accent, var(--accent-500));
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1.4;
@@ -2063,6 +2066,23 @@ body::after {
 
 .visitor-pill-ip.is-short {
   display: none;
+}
+
+/* 关闭按钮：贴条尾、轻量，hover 才上色，避免与正文争焦点。 */
+.visitor-pill-close {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--text-tertiary);
+}
+
+.visitor-pill-close:hover {
+  background: var(--fill-secondary);
+  color: var(--text-primary);
 }
 
 @media (max-width: 640px) {

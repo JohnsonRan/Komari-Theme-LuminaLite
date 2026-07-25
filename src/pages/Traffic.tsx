@@ -172,6 +172,8 @@ export function Traffic() {
       );
   }, [nodes, trafficQuery.data?.rows]);
   const sampledDetails = details.filter((detail) => detail.stat.hasSamples);
+  // 无采样节点折叠成一条提示，不再逐行占位（详情/图表对空数据无意义）。
+  const emptyDetails = details.filter((detail) => !detail.stat.hasSamples);
   const totalUp = sampledDetails.reduce((sum, detail) => sum + detail.stat.trafficUp, 0);
   const totalDown = sampledDetails.reduce((sum, detail) => sum + detail.stat.trafficDown, 0);
   const peakUp = sampledDetails.reduce<TrafficDetail | null>(
@@ -268,13 +270,13 @@ export function Traffic() {
                 </tr>
               </thead>
               <tbody>
-                {details.map(({ node, stat, total }) => {
+                {sampledDetails.map(({ node, stat, total }) => {
                   const expanded = expandedUuid === node.uuid;
                   const detailId = `traffic-detail-${node.uuid}`;
                   const samples = trafficQuery.data?.samplesByUuid[node.uuid] ?? [];
                   return (
                     <Fragment key={node.uuid}>
-                      <tr data-empty={!stat.hasSamples || undefined}>
+                      <tr>
                         <td>
                           <Link
                             to={`/instance/${encodeURIComponent(node.uuid)}`}
@@ -286,20 +288,16 @@ export function Traffic() {
                           </Link>
                         </td>
                         <td data-numeric data-strong>
-                          {stat.hasSamples ? (
-                            <span className="traffic-volume-value">
-                              <strong>{formatBytes(total)}</strong>
-                              <small>↑ {formatBytes(stat.trafficUp)} · ↓ {formatBytes(stat.trafficDown)}</small>
-                            </span>
-                          ) : (
-                            <span className="traffic-no-data">无数据</span>
-                          )}
+                          <span className="traffic-volume-value">
+                            <strong>{formatBytes(total)}</strong>
+                            <small>↑ {formatBytes(stat.trafficUp)} · ↓ {formatBytes(stat.trafficDown)}</small>
+                          </span>
                         </td>
                         <td data-numeric>
-                          {stat.hasSamples ? <PeakValue value={stat.peakUp} timeMs={stat.peakUpAt} /> : "—"}
+                          <PeakValue value={stat.peakUp} timeMs={stat.peakUpAt} />
                         </td>
                         <td data-numeric>
-                          {stat.hasSamples ? <PeakValue value={stat.peakDown} timeMs={stat.peakDownAt} /> : "—"}
+                          <PeakValue value={stat.peakDown} timeMs={stat.peakDownAt} />
                         </td>
                         <td data-action>
                           <TrafficDetailToggle
@@ -319,24 +317,34 @@ export function Traffic() {
                     </Fragment>
                   );
                 })}
+                {emptyDetails.length > 0 && (
+                  <tr className="traffic-empty-row">
+                    <td colSpan={5}>
+                      <span className="traffic-empty-note">
+                        {emptyDetails.length} 台节点今日暂无采样：
+                        {emptyDetails.map(({ node }) => node.name).join("、")}
+                      </span>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
 
           <div className="assets-card-list traffic-card-list">
-            {details.map(({ node, stat, total }) => {
+            {sampledDetails.map(({ node, stat, total }) => {
               const expanded = expandedUuid === node.uuid;
               const detailId = `traffic-mobile-detail-${node.uuid}`;
               const samples = trafficQuery.data?.samplesByUuid[node.uuid] ?? [];
               return (
-                <article className="traffic-node-card" key={node.uuid} data-empty={!stat.hasSamples || undefined}>
+                <article className="traffic-node-card" key={node.uuid}>
                   <header className="traffic-node-card-head">
                     <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link">
                       <Flag region={node.region} size={12} />
                       <span>{node.name}</span>
                     </Link>
                     <div className="traffic-node-card-actions">
-                      <strong>{stat.hasSamples ? formatBytes(total) : "无数据"}</strong>
+                      <strong>{formatBytes(total)}</strong>
                       <TrafficDetailToggle
                         expanded={expanded}
                         controlsId={detailId}
@@ -344,28 +352,30 @@ export function Traffic() {
                       />
                     </div>
                   </header>
-                  {stat.hasSamples && (
-                    <>
-                      <div className="traffic-node-card-directions">
-                        <span>↑ {formatBytes(stat.trafficUp)}</span>
-                        <span>↓ {formatBytes(stat.trafficDown)}</span>
-                      </div>
-                      <dl className="traffic-node-card-peaks">
-                        <div>
-                          <dt>上行峰值</dt>
-                          <dd><PeakValue value={stat.peakUp} timeMs={stat.peakUpAt} /></dd>
-                        </div>
-                        <div>
-                          <dt>下行峰值</dt>
-                          <dd><PeakValue value={stat.peakDown} timeMs={stat.peakDownAt} /></dd>
-                        </div>
-                      </dl>
-                    </>
-                  )}
+                  <div className="traffic-node-card-directions">
+                    <span>↑ {formatBytes(stat.trafficUp)}</span>
+                    <span>↓ {formatBytes(stat.trafficDown)}</span>
+                  </div>
+                  <dl className="traffic-node-card-peaks">
+                    <div>
+                      <dt>上行峰值</dt>
+                      <dd><PeakValue value={stat.peakUp} timeMs={stat.peakUpAt} /></dd>
+                    </div>
+                    <div>
+                      <dt>下行峰值</dt>
+                      <dd><PeakValue value={stat.peakDown} timeMs={stat.peakDownAt} /></dd>
+                    </div>
+                  </dl>
                   {expanded && <TrafficSampleChart id={detailId} samples={samples} />}
                 </article>
               );
             })}
+            {emptyDetails.length > 0 && (
+              <div className="traffic-empty-note traffic-empty-note--card">
+                {emptyDetails.length} 台节点今日暂无采样：
+                {emptyDetails.map(({ node }) => node.name).join("、")}
+              </div>
+            )}
           </div>
         </>
       )}
