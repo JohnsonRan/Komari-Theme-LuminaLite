@@ -38,7 +38,8 @@ describe("a11y and mobile experience contracts", () => {
     expect(surfaceCss).toContain("width: 44px;");
     expect(surfaceCss).toContain("height: 44px;");
     expect(surfaceCss).toContain("min-width: 44px;");
-    expect(surfaceCss).toContain("min-height: 44px;");
+    expect(surfaceCss).toContain("flex-basis: 44px;");
+    expect(surfaceCss).not.toContain(".floating-controls-actions .control-button::before");
   });
 
   it("traffic-stats increases 26px/10.5px buttons to 28px/11.5px and improves 9px font sizes", () => {
