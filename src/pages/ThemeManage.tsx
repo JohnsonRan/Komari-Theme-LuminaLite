@@ -42,6 +42,8 @@ import {
 } from "@/services/api";
 import type { AdminClient, PingTask, ThemeSettings } from "@/types/komari";
 import {
+  type BackgroundPosition,
+  type BackgroundSize,
   normalizeBackgroundAlignment,
   normalizeBackgroundUrl,
   parseBackgroundAlignment,

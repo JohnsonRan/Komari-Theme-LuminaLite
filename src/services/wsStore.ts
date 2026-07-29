@@ -6,11 +6,7 @@ import type {
   TrafficTrendSample,
 } from "@/types/komari";
 import { getNodes } from "@/services/api";
-import {
-  asRecord,
-  normalizeRealtime,
-  resolveFlatConnectionsTcp,
-} from "@/services/ws/realtime";
+import { asRecord, normalizeRealtime } from "@/services/ws/realtime";
 
 export { resolveFlatConnectionsTcp } from "@/services/ws/realtime";
 
@@ -240,6 +236,19 @@ function resolveTrafficTotals(previous: NodeMetrics, nextUp: number, nextDown: n
     up: resolveTrafficTotal(previous.trafficUp, nextUp),
     down: resolveTrafficTotal(previous.trafficDown, nextDown),
   };
+}
+
+function toTimestamp(value: string | number | undefined): number {
+  if (typeof value === "number") {
+    return value > 1_000_000_000_000 ? value : value * 1000;
+  }
+  if (!value) return 0;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function mergeRealtime(
