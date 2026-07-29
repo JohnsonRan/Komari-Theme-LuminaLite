@@ -219,6 +219,7 @@ function HealthBars({
   const safeMax = Math.max(1, max);
   const bars = buckets.slice(-HEALTH_BAR_COUNT);
   const containerRef = useRef<HTMLDivElement>(null);
+  const barRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const activeIndex = hoveredIndex ?? selectedIndex;
@@ -229,9 +230,29 @@ function HealthBars({
       ? "50%"
       : `clamp(42px, ${((activeIndex + 0.5) / bars.length) * 100}%, calc(100% - 42px))`;
 
-  const selectIndex = (next: number) => {
+  const focusedIndex = selectedIndex ?? (bars.length > 0 ? bars.length - 1 : 0);
+
+  const selectAndFocus = (next: number) => {
     if (bars.length === 0) return;
-    setSelectedIndex(Math.max(0, Math.min(bars.length - 1, next)));
+    const target = Math.max(0, Math.min(bars.length - 1, next));
+    setSelectedIndex(target);
+    barRefs.current[target]?.focus();
+  };
+
+  const handleBarKeyDown = (event: React.KeyboardEvent, index: number) => {
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      selectAndFocus(index - 1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      selectAndFocus(index + 1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      selectAndFocus(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      selectAndFocus(bars.length - 1);
+    }
   };
 
   return (
@@ -240,28 +261,18 @@ function HealthBars({
       className="compact-node-health-bars"
       data-kind={kind}
       style={{ "--compact-health-tooltip-x": activeLeft } as CSSProperties}
-      tabIndex={0}
       role="group"
-      aria-label={`${kind === "latency" ? "延迟" : "丢包"}历史${activeTooltip ? `，${activeTooltip}` : ""}，使用左右方向键查看`}
-      onFocus={() => {
-        if (selectedIndex == null) selectIndex(bars.length - 1);
-      }}
-      onBlur={() => {
-        setHoveredIndex(null);
-        setSelectedIndex(null);
-      }}
-      onKeyDown={(event) => {
-        const current = selectedIndex ?? bars.length - 1;
-        if (event.key === "ArrowLeft") selectIndex(current - 1);
-        else if (event.key === "ArrowRight") selectIndex(current + 1);
-        else if (event.key === "Home") selectIndex(0);
-        else if (event.key === "End") selectIndex(bars.length - 1);
-        else return;
-        event.preventDefault();
+      aria-label={`${kind === "latency" ? "延迟" : "丢包"}历史`}
+      onMouseLeave={() => setHoveredIndex(null)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setHoveredIndex(null);
+          setSelectedIndex(null);
+        }
       }}
     >
       {activeTooltip && (
-        <span className="compact-node-health-tooltip" role="status">
+        <span className="compact-node-health-tooltip" aria-hidden="true">
           {activeTooltip}
         </span>
       )}
@@ -287,19 +298,21 @@ function HealthBars({
         const tooltip = formatHealthBucketTooltip(bucket, kind);
 
         return (
-          <span
+          <button
             key={`${bucket.index}-${index}`}
+            ref={(el) => {
+              barRefs.current[index] = el;
+            }}
+            type="button"
             className="compact-node-health-bar"
             style={style}
             data-selected={selectedIndex === index ? "true" : "false"}
-            aria-hidden="true"
+            tabIndex={index === focusedIndex ? 0 : -1}
+            aria-label={tooltip}
             title={tooltip}
             onMouseEnter={() => setHoveredIndex(index)}
-            onMouseLeave={() => setHoveredIndex(null)}
-            onClick={() => {
-              containerRef.current?.focus({ preventScroll: true });
-              setSelectedIndex(index);
-            }}
+            onClick={() => setSelectedIndex(index)}
+            onKeyDown={(e) => handleBarKeyDown(e, index)}
           />
         );
       })}

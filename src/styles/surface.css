@@ -221,6 +221,27 @@ body::after {
   flex: 0 0 36px;
 }
 
+@media (pointer: coarse), (max-width: 768px) {
+  .floating-controls-actions .control-button,
+  .floating-controls-trigger {
+    position: relative;
+    touch-action: manipulation;
+  }
+
+  .floating-controls-actions .control-button::before,
+  .floating-controls-trigger::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    transform: translate(-50%, -50%);
+  }
+}
+
 .floating-controls.is-collapsed .floating-controls-actions {
   max-width: 0;
   opacity: 0;
@@ -1261,9 +1282,12 @@ body::after {
 }
 
 .instance-switcher-item:hover,
-.home-sort-item:hover {
+.instance-switcher-item:focus-visible,
+.home-sort-item:hover,
+.home-sort-item:focus-visible {
   color: var(--text-primary);
   background: var(--hover-bg);
+  outline: none;
 }
 
 .instance-switcher-item[data-active="true"],

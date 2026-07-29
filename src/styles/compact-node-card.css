@@ -580,6 +580,7 @@
 
 .compact-node-health-bar {
   display: block;
+  appearance: none;
   width: 100%;
   min-width: 2px;
   height: var(--compact-health-height);
@@ -596,6 +597,7 @@
 }
 
 .compact-node-health-bar:hover,
+.compact-node-health-bar:focus-visible,
 .compact-node-health-bar[data-selected="true"] {
   filter: saturate(1.14) brightness(1.04);
   opacity: 1 !important;
