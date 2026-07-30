@@ -1827,21 +1827,20 @@ body::after {
 
 .instance-chart-tooltip {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 5;
   min-width: 132px;
   max-width: 220px;
   pointer-events: none;
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  /* 高频跟随光标：用近乎不透明实底，避免每帧 blur 合成。 */
+  background: color-mix(in srgb, var(--surface) 97%, var(--bg-0) 3%);
   box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.8);
   padding: 8px 9px;
-  backdrop-filter: blur(12px);
-  transition:
-    left 110ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    top 110ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 120ms ease;
-  will-change: left, top;
+  /* 位移由 translate3d 直写；只对显隐做过渡。 */
+  transition: opacity 120ms ease;
 }
 
 .instance-chart-tooltip-time {

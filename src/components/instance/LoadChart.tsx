@@ -21,6 +21,7 @@ import {
   buildChartTooltipHooks,
   CHART_PALETTE,
   createTimeAxisFormatter,
+  EMPTY_CHART_TOOLTIP,
   formatChartCoverageTime,
   getAxisColors,
   toChartSeconds,
@@ -44,6 +45,8 @@ const LOAD_HISTORY_SAMPLE_LIMIT = 360;
 const LOAD_HISTORY_RENDER_LIMIT = 720;
 const REALTIME_HISTORY_SEED_LIMIT = 120;
 const REALTIME_SAMPLE_LIMIT = 600;
+/** 实时点写入 React 的节流间隔：WS ~2s，750ms 足够顺滑且砍掉多余 setState。 */
+const REALTIME_FLUSH_MS = 750;
 
 const CPU_KEYS = ["cpu"];
 const CPU_COLORS = [CHART_PALETTE.cpu];
@@ -110,9 +113,74 @@ interface ChartPoint {
   [key: string]: number | null;
 }
 
-// times 由调用方统一算好：同一批 points 会喂给多张图，逐图重算时间轴是纯浪费。
-function metricData(times: number[], points: ChartPoint[], keys: string[]): uPlot.AlignedData {
-  return [times, ...keys.map((key) => points.map((point) => point[key] ?? null))] as uPlot.AlignedData;
+// 父级预对齐后，子图只按 keys 切片，避免 6–9 张图各自 points.map。
+function metricDataFromSeries(
+  times: number[],
+  seriesByKey: Record<string, Array<number | null>>,
+  keys: string[],
+): uPlot.AlignedData {
+  return [
+    times,
+    ...keys.map((key) => seriesByKey[key] ?? times.map(() => null)),
+  ] as uPlot.AlignedData;
+}
+
+/** 把 points 一次拆成各指标数组，所有 ChartCard 共享。 */
+function alignLoadSeries(
+  points: ChartPoint[],
+  keys: readonly string[],
+): Record<string, Array<number | null>> {
+  const result: Record<string, Array<number | null>> = {};
+  for (const key of keys) {
+    const column = new Array<number | null>(points.length);
+    for (let i = 0; i < points.length; i += 1) {
+      column[i] = points[i]?.[key] ?? null;
+    }
+    result[key] = column;
+  }
+  return result;
+}
+
+/** 实时点追加：正常时 O(k) 追加；仅乱序时才 sort。 */
+function appendRealtimePoints(prev: ChartPoint[], incoming: ChartPoint[]): ChartPoint[] {
+  if (incoming.length === 0) return prev;
+  let next = prev;
+  let copied = false;
+  for (const candidate of incoming) {
+    const last = next.length > 0 ? next[next.length - 1] : null;
+    if (last && Math.abs(last.time - candidate.time) < 1) {
+      if (!copied) {
+        next = next.slice();
+        copied = true;
+      }
+      next[next.length - 1] = candidate;
+      continue;
+    }
+    if (last && candidate.time < last.time) {
+      // 乱序：合并后排序去重。
+      const merged = (copied ? next : next.slice()).concat(candidate);
+      merged.sort((a, b) => a.time - b.time);
+      const deduped: ChartPoint[] = [];
+      for (const point of merged) {
+        const prevPoint = deduped[deduped.length - 1];
+        if (prevPoint && Math.abs(prevPoint.time - point.time) < 1) {
+          deduped[deduped.length - 1] = point;
+        } else {
+          deduped.push(point);
+        }
+      }
+      next = deduped;
+      copied = true;
+      continue;
+    }
+    if (!copied) {
+      next = next.slice();
+      copied = true;
+    }
+    next.push(candidate);
+  }
+  if (!copied) return prev;
+  return next.length > REALTIME_SAMPLE_LIMIT ? next.slice(-REALTIME_SAMPLE_LIMIT) : next;
 }
 
 function getHistoryRenderLimit(hours: number) {
@@ -409,8 +477,8 @@ const ChartCard = memo(function ChartCard({
   value,
   note,
   uuid,
-  points,
   times,
+  seriesByKey,
   keys,
   colors,
   resolvedAppearance,
@@ -428,8 +496,8 @@ const ChartCard = memo(function ChartCard({
   value: ReactNode;
   note?: ReactNode;
   uuid: string;
-  points: ChartPoint[];
   times: number[];
+  seriesByKey: Record<string, Array<number | null>>;
   keys: string[];
   colors: string[];
   resolvedAppearance: "light" | "dark";
@@ -445,21 +513,18 @@ const ChartCard = memo(function ChartCard({
   const { w, h, ref: chartSizeRef } = useResponsiveChartSize("grid");
   const dataRef = useRef<uPlot.AlignedData>([[]]);
   const zoomXRangeRef = useRef<[number, number] | null>(null);
-  const [tooltip, setTooltip] = useState<ChartTooltipState>({
-    show: false,
-    left: 0,
-    top: 0,
-    rows: [],
-    time: "",
-  });
+  const [tooltip, setTooltip] = useState<ChartTooltipState>(EMPTY_CHART_TOOLTIP);
   const { onCreate, pinned, zoomed, isGroupPinned } = useChartInteractions({
     fullRange: xRange ?? null,
     resetSignal,
     syncKey: "load-sync",
     zoomXRangeRef,
-    onUnpin: () => setTooltip((prev) => (prev.show ? { ...prev, show: false } : prev)),
+    onUnpin: () => setTooltip((prev) => (prev.show ? { ...prev, show: false, idx: null } : prev)),
   });
-  const data = useMemo(() => metricData(times, points, keys), [times, points, keys]);
+  const data = useMemo(
+    () => metricDataFromSeries(times, seriesByKey, keys),
+    [times, seriesByKey, keys],
+  );
   useLayoutEffect(() => {
     dataRef.current = data;
   }, [data]);
@@ -482,35 +547,40 @@ const ChartCard = memo(function ChartCard({
     [axisKind, axisSize, colors, keys, networkUnit, rangeHours, resolvedAppearance, spanGaps, title, unit, xRange],
   );
 
+  const tooltipHooks = useMemo(
+    () =>
+      buildChartTooltipHooks({
+        dataRef,
+        rangeHours,
+        estimatedWidth: 176,
+        setTooltip,
+        isPinned: isGroupPinned,
+        buildRows: (idx) =>
+          keys.map((key, keyIndex) => ({
+            label: getSeriesLabel(key),
+            value: formatTooltipValue(
+              key,
+              dataRef.current[keyIndex + 1]?.[idx] as number | null | undefined,
+              unit,
+              networkUnit,
+            ),
+            color: colors[keyIndex] ?? colors[0],
+          })),
+      }),
+    [colors, keys, networkUnit, isGroupPinned, rangeHours, unit],
+  );
+
   const enhancedOptions = useMemo<Omit<uPlot.Options, "width" | "height">>(() => {
-    const tooltip = buildChartTooltipHooks({
-      dataRef,
-      rangeHours,
-      estimatedWidth: 176,
-      setTooltip,
-      isPinned: isGroupPinned,
-      buildRows: (idx) =>
-        keys.map((key, keyIndex) => ({
-          label: getSeriesLabel(key),
-          value: formatTooltipValue(
-            key,
-            dataRef.current[keyIndex + 1]?.[idx] as number | null | undefined,
-            unit,
-            networkUnit,
-          ),
-          color: colors[keyIndex] ?? colors[0],
-        })),
-    });
     return {
       ...baseOptions,
       hooks: {
         ...baseOptions.hooks,
-        init: [...(baseOptions.hooks?.init ?? []), tooltip.onInit],
-        destroy: [...(baseOptions.hooks?.destroy ?? []), tooltip.onDestroy],
-        setCursor: [tooltip.onSetCursor],
+        init: [...(baseOptions.hooks?.init ?? []), tooltipHooks.onInit],
+        destroy: [...(baseOptions.hooks?.destroy ?? []), tooltipHooks.onDestroy],
+        setCursor: [tooltipHooks.onSetCursor],
       },
     };
-  }, [colors, keys, baseOptions, networkUnit, isGroupPinned, rangeHours, unit]);
+  }, [baseOptions, tooltipHooks]);
 
   const chartOptions = useMemo<uPlot.Options>(
     () => ({ ...enhancedOptions, width: w, height: h }) as uPlot.Options,
@@ -558,7 +628,7 @@ const ChartCard = memo(function ChartCard({
           resetScales={rangeHours === 0 ? !zoomed && !pinned : true}
           onCreate={onCreate}
         />
-        <ChartTooltip tooltip={tooltip} />
+        <ChartTooltip tooltip={tooltip} bindElement={tooltipHooks.bindElement} />
       </div>
     </div>
   );
@@ -598,37 +668,57 @@ export function LoadChart({
   // 鼠标悬停图表区域时暂停实时数据推送：避免滑动窗口在用户缩放/固定/阅读时
   // 不断位移，导致交互「随机失效」。离开后一次性补回缓冲期间的数据点。
   const [chartHovered, setChartHovered] = useState(false);
-  const realtimeBufferRef = useRef<ChartPoint[]>([]);
+  const realtimeHoverBufferRef = useRef<ChartPoint[]>([]);
+  // 非悬停时的待 flush 队列：合并多个 WS tick 再 setState。
+  const realtimePendingRef = useRef<ChartPoint[]>([]);
+  const realtimeFlushTimerRef = useRef<number | null>(null);
+
+  const flushRealtimePending = useCallback(() => {
+    realtimeFlushTimerRef.current = null;
+    const pending = realtimePendingRef.current;
+    if (pending.length === 0) return;
+    realtimePendingRef.current = [];
+    setRealtimePoints((prev) => appendRealtimePoints(prev, pending));
+  }, []);
+
+  const scheduleRealtimeFlush = useCallback(() => {
+    if (realtimeFlushTimerRef.current != null) return;
+    realtimeFlushTimerRef.current = window.setTimeout(flushRealtimePending, REALTIME_FLUSH_MS);
+  }, [flushRealtimePending]);
 
   useEffect(() => {
     if (!active || !isRealtime || !node) return;
     if (chartHovered) {
-      realtimeBufferRef.current.push(pointFromNode(node));
+      realtimeHoverBufferRef.current.push(pointFromNode(node));
       return;
     }
-    const buffered = realtimeBufferRef.current;
-    realtimeBufferRef.current = [];
-    setRealtimePoints((prev) => {
-      // 逐点 [...next, candidate] 会把整段窗口（最多 600 点）复制一遍，
-      // 悬停期间攒下的几十个缓冲点一次性补回时是 O(n²)；先攒后拼一次。
-      const appended: ChartPoint[] = [];
-      let lastTime = prev.length > 0 ? prev[prev.length - 1].time : null;
-      for (const candidate of buffered) {
-        if (lastTime !== null && Math.abs(lastTime - candidate.time) < 1) continue;
-        appended.push(candidate);
-        lastTime = candidate.time;
-      }
-      const latest = pointFromNode(node);
-      if (lastTime === null || Math.abs(lastTime - latest.time) >= 1) appended.push(latest);
-      if (appended.length === 0) return prev;
-      return prev.concat(appended).slice(-REALTIME_SAMPLE_LIMIT);
-    });
-  }, [active, isRealtime, node, chartHovered]);
+    const buffered = realtimeHoverBufferRef.current;
+    realtimeHoverBufferRef.current = [];
+    const latest = pointFromNode(node);
+    if (buffered.length > 0) {
+      realtimePendingRef.current.push(...buffered);
+    }
+    realtimePendingRef.current.push(latest);
+    scheduleRealtimeFlush();
+  }, [active, isRealtime, node, chartHovered, scheduleRealtimeFlush]);
 
   useEffect(() => {
-    realtimeBufferRef.current = [];
+    realtimeHoverBufferRef.current = [];
+    realtimePendingRef.current = [];
+    if (realtimeFlushTimerRef.current != null) {
+      window.clearTimeout(realtimeFlushTimerRef.current);
+      realtimeFlushTimerRef.current = null;
+    }
     setRealtimePoints([]);
   }, [hours, uuid]);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeFlushTimerRef.current != null) {
+        window.clearTimeout(realtimeFlushTimerRef.current);
+      }
+    };
+  }, []);
 
   const onChartGridEnter = useCallback(() => {
     if (isRealtime) setChartHovered(true);
@@ -674,20 +764,37 @@ export function LoadChart({
 
   const points = useMemo<ChartPoint[]>(() => {
     if (isRealtime) {
-      const initial = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
-      const merged = [...initial, ...realtimePoints].sort((a, b) => a.time - b.time);
-      const deduped = merged.filter((point, index, arr) => {
-        const next = arr[index + 1];
-        return !next || Math.abs(next.time - point.time) >= 1;
-      });
-      return deduped.slice(-REALTIME_SAMPLE_LIMIT);
+      const seed = historyPoints.slice(-REALTIME_HISTORY_SEED_LIMIT);
+      if (realtimePoints.length === 0) return seed;
+      // 正常路径：seed 已排序、realtime 近单调追加，O(n+k) 拼接，避免每 tick 全量 sort。
+      const lastSeedTime = seed.length > 0 ? seed[seed.length - 1]!.time : Number.NEGATIVE_INFINITY;
+      const out = seed.slice();
+      for (const point of realtimePoints) {
+        if (point.time < lastSeedTime - 0.001) continue;
+        const last = out.length > 0 ? out[out.length - 1]! : null;
+        if (last && Math.abs(last.time - point.time) < 1) {
+          out[out.length - 1] = point;
+          continue;
+        }
+        if (last && point.time < last.time) {
+          out.push(point);
+          out.sort((a, b) => a.time - b.time);
+          continue;
+        }
+        out.push(point);
+      }
+      return out.length > REALTIME_SAMPLE_LIMIT ? out.slice(-REALTIME_SAMPLE_LIMIT) : out;
     }
     // 完整历史到达前用近期缓冲作为临时数据源。
     return historyPoints.length > 0 ? historyPoints : recentPoints;
   }, [historyPoints, recentPoints, isRealtime, realtimePoints]);
 
-  // 时间轴所有图表共用，算一次即可。
+  // 时间轴 + 各指标列：父级算一次，子图只取自己的 keys。
   const times = useMemo(() => points.map((point) => point.time), [points]);
+  const seriesByKey = useMemo(
+    () => alignLoadSeries(points, LOAD_INTERPOLATE_KEYS),
+    [points],
+  );
 
   // 即使节点标有 GPU 型号，若无实际数据上报（gpu_memory_total 始终为 0）
   // 则 GPU 图表无意义，直接隐藏。
@@ -765,8 +872,8 @@ export function LoadChart({
   // 各图仅在 icon/title/value/keys/colors/坐标轴上有差异，其余接线九张图完全一致。
   const sharedChartProps = {
     uuid,
-    points,
     times,
+    seriesByKey,
     resolvedAppearance,
     rangeHours: hours,
     spanGaps: connectNulls,

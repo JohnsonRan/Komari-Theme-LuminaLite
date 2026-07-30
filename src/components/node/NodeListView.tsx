@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
 import { clsx } from "clsx";
@@ -8,7 +8,6 @@ import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel"
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { formatBytes } from "@/utils/format";
 import { speedRateColor } from "@/utils/metricTone";
-import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { attentionAttrs } from "@/utils/nodeAttention";
@@ -21,59 +20,42 @@ import {
   nodeDetailLinkLabels,
 } from "./nodeCardShared";
 
-const GAUGE_SEGMENTS = 14;
 // 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
 const LIST_PING_BUCKETS = 12;
+
+type ListGaugeStyle = CSSProperties & {
+  "--list-gauge-color": string;
+  "--list-gauge-fill": string;
+};
 
 function pctText(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "0";
   return compactPercentText(value);
 }
 
-// 细 canvas 分段条 + 百分比,与大卡 MetricBar 同一视觉语言,但压成一格(数值在上、细条在下)。
+// 细 CSS 分段条 + 百分比,与大卡 MetricBar 同一视觉语言,但压成一格(数值在上、细条在下)。
 function ListGauge({
   value,
   fraction,
   paint,
-  redrawKey,
   unit = "%",
 }: {
   value: string;
   fraction: number;
   paint: string;
-  redrawKey: string;
   unit?: string;
 }) {
-  const activeSegments = clamp01(fraction) * GAUGE_SEGMENTS;
-  const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-      const inactive = safeCanvasColor("var(--progress-bg)");
-      const active = safeCanvasColor(paint);
-      const gap = 2;
-      const segWidth = Math.max(1, (width - gap * (GAUGE_SEGMENTS - 1)) / GAUGE_SEGMENTS);
-      for (let i = 0; i < GAUGE_SEGMENTS; i += 1) {
-        const x = i * (segWidth + gap);
-        const fill = Math.max(0, Math.min(1, activeSegments - i));
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = inactive;
-        fillRoundedRect(ctx, x, 0, segWidth, height, 2);
-        if (fill > 0) {
-          ctx.globalAlpha = 0.42 + fill * 0.56;
-          ctx.fillStyle = active;
-          fillRoundedRect(ctx, x, 0, segWidth, height, 2);
-        }
-      }
-      ctx.globalAlpha = 1;
-    },
-    [activeSegments, paint],
-  );
+  const style: ListGaugeStyle = {
+    "--list-gauge-color": paint,
+    "--list-gauge-fill": `${clamp01(fraction) * 100}%`,
+  };
   return (
     <div className="node-list-gauge">
       <span className="node-list-gauge-value tabular">
         {value}
         {unit && <small>{unit}</small>}
       </span>
-      <CanvasStrip className="node-list-gauge-track" height={8} redrawKey={redrawKey} draw={draw} />
+      <span className="node-list-gauge-track" style={style} aria-hidden />
     </div>
   );
 }
@@ -245,13 +227,13 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
       </div>
 
       <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.cpuPct)} fraction={node.cpuPct / 100} paint="var(--progress-cpu)" redrawKey={redrawKey} />
+        <ListGauge value={pctText(node.cpuPct)} fraction={node.cpuPct / 100} paint="var(--progress-cpu)" />
       </div>
       <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.ramPct)} fraction={node.ramPct / 100} paint="var(--progress-memory)" redrawKey={redrawKey} />
+        <ListGauge value={pctText(node.ramPct)} fraction={node.ramPct / 100} paint="var(--progress-memory)" />
       </div>
       <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.diskPct)} fraction={node.diskPct / 100} paint="var(--progress-disk)" redrawKey={redrawKey} />
+        <ListGauge value={pctText(node.diskPct)} fraction={node.diskPct / 100} paint="var(--progress-disk)" />
       </div>
 
       <div className="node-list-cell col-load">
@@ -260,7 +242,6 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
           unit=""
           fraction={loadFraction}
           paint="var(--progress-load)"
-          redrawKey={redrawKey}
         />
       </div>
 

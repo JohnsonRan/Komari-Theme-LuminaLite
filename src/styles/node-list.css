@@ -193,7 +193,7 @@
   border-radius: 6px;
 }
 
-/* ── 指标格:数值 + 细 canvas 条 ── */
+/* ── 指标格:数值 + 细 CSS 分段条 ── */
 .node-list-gauge {
   display: flex;
   min-width: 0;
@@ -216,11 +216,49 @@
   font-weight: 500;
 }
 
+/* 14 段轨：窄列里比 18 段更清晰，与大卡 mask 分段同一手法。 */
 .node-list-gauge-track {
   display: block;
   width: 100%;
   max-width: 120px;
   height: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--list-gauge-color) 0,
+    var(--list-gauge-color) var(--list-gauge-fill, 0%),
+    var(--progress-bg) var(--list-gauge-fill, 0%),
+    var(--progress-bg) 100%
+  );
+  -webkit-mask: repeating-linear-gradient(
+    to right,
+    #000 0,
+    #000 calc((100% + 2px) / 14 - 2px),
+    transparent calc((100% + 2px) / 14 - 2px),
+    transparent calc((100% + 2px) / 14)
+  );
+  mask: repeating-linear-gradient(
+    to right,
+    #000 0,
+    #000 calc((100% + 2px) / 14 - 2px),
+    transparent calc((100% + 2px) / 14 - 2px),
+    transparent calc((100% + 2px) / 14)
+  );
+}
+
+@supports not (mask: repeating-linear-gradient(to right, #000 0, #000 1px)) {
+  .node-list-gauge-track {
+    --list-segment-mask: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27 preserveAspectRatio=%27none%27%3E%3Crect width=%2784%27 height=%27100%27 rx=%2716%27 ry=%2724%27 fill=%27black%27/%3E%3C/svg%3E");
+    -webkit-mask-image: var(--list-segment-mask);
+    -webkit-mask-position: left top;
+    -webkit-mask-repeat: repeat-x;
+    -webkit-mask-size: calc((100% + 2px) / 14) 100%;
+    mask-image: var(--list-segment-mask);
+    mask-position: left top;
+    mask-repeat: repeat-x;
+    mask-size: calc((100% + 2px) / 14) 100%;
+  }
 }
 
 /* ── 堆叠格(实时/流量/网络/在线到期):每行一个值 ── */

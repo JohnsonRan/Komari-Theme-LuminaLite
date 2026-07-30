@@ -3,8 +3,13 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Flag } from "@/components/ui/Flag";
 import { useAuth } from "@/hooks/useAuth";
-import { useAllNodeMeta, useHomeNodeSummaries, useNodeStoreStatus } from "@/hooks/useNode";
-import type { HomeNodeSummary } from "@/services/wsStore";
+import {
+  useAllNodeMeta,
+  useHomeNodeStructures,
+  useHomeNodeSummaries,
+  useNodeStoreStatus,
+} from "@/hooks/useNode";
+import type { HomeNodeStructure, HomeNodeSummary } from "@/services/wsStore";
 import { useHomepagePingOverview } from "@/hooks/usePingOverview";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -52,6 +57,23 @@ type MiniGridStyle = CSSProperties & { "--mini-card-min-width": string };
 
 // 标准 UUID 不含逗号，可安全拼成稳定签名。
 const UUID_KEY_SEPARATOR = ",";
+
+/** 结构态补齐 live 字段为 0：仅用于 default/name 排序与离线沉底，绝不喂给总览/异常判定。 */
+function structureAsSortable(node: HomeNodeStructure): HomeNodeSummary {
+  return {
+    ...node,
+    trafficUp: 0,
+    trafficDown: 0,
+    netUp: 0,
+    netDown: 0,
+    connectionsTcp: 0,
+    connectionsUdp: 0,
+    cpuPct: 0,
+    ramPct: 0,
+    diskPct: 0,
+    pingLoss: null,
+  };
+}
 
 interface HomeOverview {
   totalNodes: number;
@@ -188,6 +210,68 @@ function HomeBrand({ siteName }: { siteName: string }) {
         </span>
       )}
     </header>
+  );
+}
+
+/** 总览卡独立订 live：父级 NodeGrid 在 default 排序时不必每 2s 跟着网速抖动重渲染。 */
+function HomeOverviewLive({
+  dense,
+  onWarmTraffic,
+  nameByUuid,
+  visibleUuidSet,
+}: {
+  dense: boolean;
+  onWarmTraffic: () => void;
+  nameByUuid: Map<string, string>;
+  visibleUuidSet: Set<string>;
+}) {
+  const nodes = useHomeNodeSummaries(true);
+  const visibleNodes = useMemo(
+    () => nodes.filter((node) => visibleUuidSet.has(node.uuid)),
+    [nodes, visibleUuidSet],
+  );
+  const overview = useMemo<HomeOverview>(() => {
+    let onlineNodes = 0;
+    let offlineNodes = 0;
+    let trafficUp = 0;
+    let trafficDown = 0;
+    let netUp = 0;
+    let netDown = 0;
+    let connectionsTcp = 0;
+    let connectionsUdp = 0;
+    for (const node of visibleNodes) {
+      if (node.online === true) onlineNodes += 1;
+      else if (node.online === false) offlineNodes += 1;
+      trafficUp += node.trafficUp;
+      trafficDown += node.trafficDown;
+      if (node.online === true) {
+        netUp += node.netUp;
+        netDown += node.netDown;
+        connectionsTcp += node.connectionsTcp;
+        connectionsUdp += node.connectionsUdp;
+      }
+    }
+    return {
+      totalNodes: visibleNodes.length,
+      onlineNodes,
+      offlineNodes,
+      trafficUp,
+      trafficDown,
+      netUp,
+      netDown,
+      connectionsTcp,
+      connectionsUdp,
+    };
+  }, [visibleNodes]);
+
+  return (
+    <HomeOverviewCards
+      overview={overview}
+      dense={dense}
+      onWarmTraffic={onWarmTraffic}
+      nodes={visibleNodes}
+      nameByUuid={nameByUuid}
+    />
   );
 }
 
@@ -431,7 +515,8 @@ function RegionTabs({
 
 export function NodeGrid() {
   const queryClient = useQueryClient();
-  const nodes = useHomeNodeSummaries();
+  // 结构态：分组/地区/权重/在线。网速抖动不推这里。
+  const structures = useHomeNodeStructures();
   const allMeta = useAllNodeMeta();
   const { hydrated: storeHydrated, nodeInfoError } = useNodeStoreStatus();
   const { data: me } = useAuth();
@@ -450,17 +535,27 @@ export function NodeGrid() {
   const [selectedRegion, setSelectedRegion] = useState(HOME_ALL_REGION);
   useHomepagePingOverview();
 
+  const attentionEnabled = themeSettings.isReady && themeSettings.enableAttentionSort;
+  // 实时排序 / 异常置顶需要 live 字段；总览拆到 HomeOverviewLive 自己订。
+  const needsLiveOrder =
+    sortField === "speed" || sortField === "traffic" || attentionEnabled;
+  const liveNodes = useHomeNodeSummaries(needsLiveOrder);
+
   // 摘要不含名称，先从完整 meta 解析主题隐藏列表，再统一过滤各类数据。
   const hiddenUuids = useMemo(
     () => collectMatchingNodeUuids(allMeta, themeSettings.hiddenNodes),
     [allMeta, themeSettings.hiddenNodes],
   );
-  const visibleNodes = useMemo(
+  const visibleStructures = useMemo(
     () =>
-      nodes.filter(
+      structures.filter(
         (node) => (me?.logged_in === true || !node.hidden) && !hiddenUuids.has(node.uuid),
       ),
-    [me?.logged_in, nodes, hiddenUuids],
+    [me?.logged_in, structures, hiddenUuids],
+  );
+  const visibleUuidSet = useMemo(
+    () => new Set(visibleStructures.map((node) => node.uuid)),
+    [visibleStructures],
   );
   // 资产统计与卡片使用同一可见性规则，避免泄露隐藏节点信息。
   const visibleMeta = useMemo(
@@ -483,42 +578,6 @@ export function NodeGrid() {
     for (const node of visibleMeta) map.set(node.uuid, node.name?.trim() || node.uuid);
     return map;
   }, [visibleMeta]);
-  const overview = useMemo<HomeOverview>(() => {
-    let onlineNodes = 0;
-    let offlineNodes = 0;
-    let trafficUp = 0;
-    let trafficDown = 0;
-    let netUp = 0;
-    let netDown = 0;
-    let connectionsTcp = 0;
-    let connectionsUdp = 0;
-    for (const node of visibleNodes) {
-      if (node.online === true) onlineNodes += 1;
-      else if (node.online === false) offlineNodes += 1;
-      trafficUp += node.trafficUp;
-      trafficDown += node.trafficDown;
-      // 实时指标（带宽 / 连接数）只统计在线节点：节点关机后后端残留的上下行
-      // 速率与连接数不应再计入实时总量。累计流量是历史值，仍统计全部节点。
-      if (node.online === true) {
-        netUp += node.netUp;
-        netDown += node.netDown;
-        connectionsTcp += node.connectionsTcp;
-        connectionsUdp += node.connectionsUdp;
-      }
-    }
-
-    return {
-      totalNodes: visibleNodes.length,
-      onlineNodes,
-      offlineNodes,
-      trafficUp,
-      trafficDown,
-      netUp,
-      netDown,
-      connectionsTcp,
-      connectionsUdp,
-    };
-  }, [visibleNodes]);
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
   const hasNodes = visibleMeta.length > 0;
 
@@ -533,33 +592,45 @@ export function NodeGrid() {
   const groupOptions = useMemo(
     () =>
       sortHomeGroupOptions(
-        getHomeGroupOptions(visibleNodes),
+        getHomeGroupOptions(visibleStructures),
         themeSettings.isReady ? themeSettings.homeGroupOrder : [],
       ),
-    [visibleNodes, themeSettings.homeGroupOrder, themeSettings.isReady],
+    [visibleStructures, themeSettings.homeGroupOrder, themeSettings.isReady],
   );
-  const groupFilteredNodes = useMemo(
+  const groupFilteredStructures = useMemo(
     () =>
       selectedGroup === HOME_ALL_GROUP
-        ? visibleNodes
-        : visibleNodes.filter((node) => getHomeGroupLabel(node.group) === selectedGroup),
-    [visibleNodes, selectedGroup],
+        ? visibleStructures
+        : visibleStructures.filter((node) => getHomeGroupLabel(node.group) === selectedGroup),
+    [visibleStructures, selectedGroup],
   );
   // 地区选项在分组筛选之后统计,让国旗计数反映当前分组内的分布。
   const regionOptions = useMemo(
-    () => getHomeRegionOptions(groupFilteredNodes),
-    [groupFilteredNodes],
+    () => getHomeRegionOptions(groupFilteredStructures),
+    [groupFilteredStructures],
   );
-  const filteredNodes = useMemo(
+  const filteredStructures = useMemo(
     () =>
       selectedRegion === HOME_ALL_REGION
-        ? groupFilteredNodes
-        : groupFilteredNodes.filter((node) => getDisplayRegionCode(node.region) === selectedRegion),
-    [groupFilteredNodes, selectedRegion],
+        ? groupFilteredStructures
+        : groupFilteredStructures.filter(
+            (node) => getDisplayRegionCode(node.region) === selectedRegion,
+          ),
+    [groupFilteredStructures, selectedRegion],
   );
+
+  // 排序输入：default/name 走结构态；speed/traffic/attention 才拼 live。
+  const sortSourceNodes = useMemo(() => {
+    if (!needsLiveOrder) {
+      return filteredStructures.map(structureAsSortable);
+    }
+    const allowed = new Set(filteredStructures.map((node) => node.uuid));
+    return liveNodes.filter((node) => allowed.has(node.uuid));
+  }, [needsLiveOrder, filteredStructures, liveNodes]);
+
   // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
   const sortedNodes = useHomeNodeOrder({
-    nodes: filteredNodes,
+    nodes: sortSourceNodes,
     field: sortField,
     direction: sortDirection,
     nameByUuid,
@@ -569,7 +640,7 @@ export function NodeGrid() {
     sortedNodes,
     allMeta,
     themeSettings.attentionThresholds,
-    themeSettings.isReady && themeSettings.enableAttentionSort,
+    attentionEnabled,
     attentionClock,
   );
 
@@ -645,7 +716,7 @@ export function NodeGrid() {
   );
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
-  const showHomeSort = sortEnabled && visibleNodes.length > 1;
+  const showHomeSort = sortEnabled && visibleStructures.length > 1;
   // 地区栏:只有一个地区时筛选无意义,>1 才显示。
   const showRegionBar =
     themeSettings.isReady && themeSettings.showRegionBar && regionOptions.length > 1;
@@ -686,18 +757,17 @@ export function NodeGrid() {
     <>
       <HomeBrand siteName={siteName} />
       {showHomeOverview && (
-        <HomeOverviewCards
-          overview={overview}
+        <HomeOverviewLive
           dense={mode === "mini" || mode === "list"}
           onWarmTraffic={warmTrafficPage}
-          nodes={visibleNodes}
           nameByUuid={nameByUuid}
+          visibleUuidSet={visibleUuidSet}
         />
       )}
     </>
   );
 
-  if (visibleNodes.length === 0) {
+  if (visibleStructures.length === 0) {
     return (
       <>
         {homeHeader}

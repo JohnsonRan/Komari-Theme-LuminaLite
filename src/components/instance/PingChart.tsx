@@ -6,6 +6,7 @@ import { usePingRecords, usePingStats } from "@/hooks/useRecords";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
+  EMPTY_CHART_TOOLTIP,
   colorForSeries,
   createTimeAxisFormatter,
   getAxisColors,
@@ -122,20 +123,8 @@ export function PingChart({
     latency: [[]],
     loss: [[]],
   });
-  const [tooltip, setTooltip] = useState<ChartTooltipState>({
-    show: false,
-    left: 0,
-    top: 0,
-    rows: [],
-    time: "",
-  });
-  const [lossTooltip, setLossTooltip] = useState<ChartTooltipState>({
-    show: false,
-    left: 0,
-    top: 0,
-    rows: [],
-    time: "",
-  });
+  const [tooltip, setTooltip] = useState<ChartTooltipState>(EMPTY_CHART_TOOLTIP);
+  const [lossTooltip, setLossTooltip] = useState<ChartTooltipState>(EMPTY_CHART_TOOLTIP);
   const { w: lossW, h: lossH, ref: lossChartSizeRef } = useResponsiveChartSize("strip");
   const isDark = resolvedAppearance === "dark";
   // 刷新按钮递增此值，重置缩放/固定状态。
@@ -287,8 +276,8 @@ export function PingChart({
   const requestedXRange = useMemo(() => historyChartRangeSeconds(data), [data]);
   // 取消固定时同时隐藏两幅图的 tooltip（延迟/丢包共享同一固定状态）。
   const hideAllTooltips = useCallback(() => {
-    setTooltip((prev) => (prev.show ? { ...prev, show: false } : prev));
-    setLossTooltip((prev) => (prev.show ? { ...prev, show: false } : prev));
+    setTooltip((prev) => (prev.show ? { ...prev, show: false, idx: null } : prev));
+    setLossTooltip((prev) => (prev.show ? { ...prev, show: false, idx: null } : prev));
   }, []);
   // 两条图（延迟/丢包）各自注册进同一个 ping-sync 组：光标同步靠 uPlot 内置 sync，
   // 固定/缩放同步靠分组注册表。两图需各自独立的交互实例（各持有自己的 chart
@@ -355,41 +344,46 @@ export function PingChart({
     return [Math.max(0, min - pad), max + pad];
   }, [chart, tasks, visibleTaskIds]);
 
+  const latencyTooltipHooks = useMemo(
+    () =>
+      buildChartTooltipHooks({
+        dataRef: {
+          get current() {
+            return chartRef.current.latency;
+          },
+        },
+        rangeHours: hours,
+        estimatedWidth: 196,
+        setTooltip,
+        isPinned: isGroupPinned,
+        buildRows: (idx) =>
+          visibleTasks
+            .map((task) => {
+              const taskIndex = taskIndexById.get(task.id) ?? 0;
+              const raw = chartRef.current.latency[taskIndex + 1]?.[idx] as number | null | undefined;
+              return {
+                label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
+                raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
+                color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
+              };
+            })
+            .sort((a, b) => {
+              if (a.raw == null) return b.raw == null ? 0 : 1;
+              if (b.raw == null) return -1;
+              return b.raw - a.raw;
+            })
+            .map(({ label, raw, color }) => ({
+              label,
+              value: raw == null ? "—" : `${raw.toFixed(1)} ms`,
+              color,
+            })),
+      }),
+    [hours, isGroupPinned, taskColors, taskIndexById, taskLabels, tasks.length, visibleTasks],
+  );
+
   const baseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
     if (!chart) return null;
     const { grid, text } = getAxisColors(isDark);
-    const tooltipHooks = buildChartTooltipHooks({
-      dataRef: {
-        get current() {
-          return chartRef.current.latency;
-        },
-      },
-      rangeHours: hours,
-      estimatedWidth: 196,
-      setTooltip,
-      isPinned: isGroupPinned,
-      buildRows: (idx) =>
-        visibleTasks
-          .map((task) => {
-            const taskIndex = taskIndexById.get(task.id) ?? 0;
-            const raw = chartRef.current.latency[taskIndex + 1]?.[idx] as number | null | undefined;
-            return {
-              label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-              raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
-              color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
-            };
-          })
-          .sort((a, b) => {
-            if (a.raw == null) return b.raw == null ? 0 : 1;
-            if (b.raw == null) return -1;
-            return b.raw - a.raw;
-          })
-          .map(({ label, raw, color }) => ({
-            label,
-            value: raw == null ? "—" : `${raw.toFixed(1)} ms`,
-            color,
-          })),
-    });
     return {
       padding: [10, 14, 12, 2],
       cursor: {
@@ -441,13 +435,13 @@ export function PingChart({
             u.root.setAttribute("role", "img");
             u.root.setAttribute("aria-label", `Ping 延迟历史图表，共 ${tasks.length} 条线路`);
           },
-          tooltipHooks.onInit,
+          latencyTooltipHooks.onInit,
         ],
-        destroy: [tooltipHooks.onDestroy],
-        setCursor: [tooltipHooks.onSetCursor],
+        destroy: [latencyTooltipHooks.onDestroy],
+        setCursor: [latencyTooltipHooks.onSetCursor],
       },
     };
-  }, [chart, connectNulls, hiddenTasks, hours, isDark, isGroupPinned, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, visibleTasks, yRange]);
+  }, [chart, connectNulls, hiddenTasks, hours, isDark, latencyTooltipHooks, requestedXRange, taskColors, taskLabels, tasks, yRange]);
 
   const options = useMemo<uPlot.Options | null>(
     () => (baseOptions ? { ...baseOptions, width: w, height: h } : null),
@@ -468,41 +462,46 @@ export function PingChart({
     return [0, Math.min(100, Math.max(10, Math.ceil(max * 1.15)))];
   }, [chart, tasks, visibleTaskIds]);
 
+  const lossTooltipHooks = useMemo(
+    () =>
+      buildChartTooltipHooks({
+        dataRef: {
+          get current() {
+            return chartRef.current.loss;
+          },
+        },
+        rangeHours: hours,
+        estimatedWidth: 176,
+        setTooltip: setLossTooltip,
+        isPinned: isGroupPinned,
+        buildRows: (idx) =>
+          visibleTasks
+            .map((task) => {
+              const taskIndex = taskIndexById.get(task.id) ?? 0;
+              const raw = chartRef.current.loss[taskIndex + 1]?.[idx] as number | null | undefined;
+              return {
+                label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
+                raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
+                color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
+              };
+            })
+            .sort((a, b) => {
+              if (a.raw == null) return b.raw == null ? 0 : 1;
+              if (b.raw == null) return -1;
+              return b.raw - a.raw;
+            })
+            .map(({ label, raw, color }) => ({
+              label,
+              value: raw == null ? "—" : `${raw.toFixed(1)}%`,
+              color,
+            })),
+      }),
+    [hours, isGroupPinned, taskColors, taskIndexById, taskLabels, tasks.length, visibleTasks],
+  );
+
   const lossBaseOptions = useMemo<Omit<uPlot.Options, "width" | "height"> | null>(() => {
     if (!chart) return null;
     const { grid, text } = getAxisColors(isDark);
-    const tooltipHooks = buildChartTooltipHooks({
-      dataRef: {
-        get current() {
-          return chartRef.current.loss;
-        },
-      },
-      rangeHours: hours,
-      estimatedWidth: 176,
-      setTooltip: setLossTooltip,
-      isPinned: isGroupPinned,
-      buildRows: (idx) =>
-        visibleTasks
-          .map((task) => {
-            const taskIndex = taskIndexById.get(task.id) ?? 0;
-            const raw = chartRef.current.loss[taskIndex + 1]?.[idx] as number | null | undefined;
-            return {
-              label: taskLabels.get(task.id) ?? `任务 #${task.id}`,
-              raw: typeof raw === "number" && Number.isFinite(raw) ? raw : null,
-              color: taskColors.get(task.id) ?? colorForSeries(taskIndex, tasks.length),
-            };
-          })
-          .sort((a, b) => {
-            if (a.raw == null) return b.raw == null ? 0 : 1;
-            if (b.raw == null) return -1;
-            return b.raw - a.raw;
-          })
-          .map(({ label, raw, color }) => ({
-            label,
-            value: raw == null ? "—" : `${raw.toFixed(1)}%`,
-            color,
-          })),
-    });
     return {
       padding: [6, 14, 8, 2],
       cursor: {
@@ -553,13 +552,13 @@ export function PingChart({
             u.root.setAttribute("role", "img");
             u.root.setAttribute("aria-label", `Ping 丢包率历史图表，共 ${tasks.length} 条线路`);
           },
-          tooltipHooks.onInit,
+          lossTooltipHooks.onInit,
         ],
-        destroy: [tooltipHooks.onDestroy],
-        setCursor: [tooltipHooks.onSetCursor],
+        destroy: [lossTooltipHooks.onDestroy],
+        setCursor: [lossTooltipHooks.onSetCursor],
       },
     };
-  }, [chart, connectNulls, hiddenTasks, hours, isDark, lossYRange, isGroupPinned, requestedXRange, taskColors, taskIndexById, taskLabels, tasks, visibleTasks]);
+  }, [chart, connectNulls, hiddenTasks, hours, isDark, lossTooltipHooks, lossYRange, requestedXRange, taskColors, taskLabels, tasks]);
 
   const lossOptions = useMemo<uPlot.Options | null>(
     () => (lossBaseOptions ? { ...lossBaseOptions, width: lossW, height: lossH } : null),
@@ -768,7 +767,7 @@ export function PingChart({
               resetScales={false}
               onCreate={latencyOnCreate}
             />
-            <ChartTooltip tooltip={tooltip} />
+            <ChartTooltip tooltip={tooltip} bindElement={latencyTooltipHooks.bindElement} />
           </>
         ) : (
           <div className="instance-empty">当前已隐藏全部线路，点击上方按钮可恢复显示</div>
@@ -788,7 +787,7 @@ export function PingChart({
               resetScales={false}
               onCreate={lossOnCreate}
             />
-            <ChartTooltip tooltip={lossTooltip} />
+            <ChartTooltip tooltip={lossTooltip} bindElement={lossTooltipHooks.bindElement} />
           </>
         ) : (
           <div className="instance-empty">当前已隐藏全部线路，点击上方按钮可恢复显示</div>

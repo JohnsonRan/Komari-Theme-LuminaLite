@@ -5,6 +5,7 @@ import { Flag } from "@/components/ui/Flag";
 import { Spinner } from "@/components/ui/Spinner";
 import { useAuth } from "@/hooks/useAuth";
 import { useMinuteClock } from "@/hooks/useClock";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useAllNodeMeta, useHomeNodeSummaries } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
@@ -137,8 +138,13 @@ function SampleChart({ id, samples, config }: { id: string; samples: TodaySeries
   );
 }
 
+// 与 traffic-stats.css 里 .traffic-table-wrap / .traffic-card-list 的断点一致。
+const TRAFFIC_MOBILE_QUERY = "(max-width: 720px)";
+
 export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
   const [expandedUuid, setExpandedUuid] = useState<string | null>(null);
+  // 只挂一种布局：避免桌面表 + 移动卡双 DOM 同时 buildSamples / reconcile。
+  const isMobileLayout = useMediaQuery(TRAFFIC_MOBILE_QUERY);
   const now = useMinuteClock();
   const allNodes = useAllNodeMeta();
   const { data: me } = useAuth();
@@ -298,118 +304,125 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
             <span className="traffic-sample-note">峰值按历史采样计算</span>
           </div>
 
-          <div className="assets-table-wrap traffic-table-wrap">
-            <table className="assets-table traffic-table">
-              <thead>
-                <tr>
-                  <th><span>节点</span></th>
-                  <th data-numeric><span>{config.primaryColumnLabel}</span></th>
-                  <th data-numeric><span>{config.upLabel}峰值</span></th>
-                  <th data-numeric><span>{config.downLabel}峰值</span></th>
-                  <th data-action><span>操作</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sampled.map((detail) => {
-                  const { node } = detail;
-                  const expanded = expandedUuid === node.uuid;
-                  const detailId = `today-detail-${node.uuid}`;
-                  const samples = config.buildSamples(
-                    node.uuid,
-                    query.data?.samplesByUuid ?? {},
-                    query.data?.connectionSamplesByUuid ?? {},
-                  );
-                  return (
-                    <Fragment key={node.uuid}>
-                      <tr>
-                        <td>
-                          <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link" title={node.name}>
-                            <Flag region={node.region} size={12} />
-                            <span>{node.name}</span>
-                          </Link>
-                        </td>
-                        <td data-numeric data-strong>
-                          <span className="traffic-volume-value">
-                            <strong>{config.formatPrimary(detail.primary)}</strong>
-                            {detail.primarySub && <small>{detail.primarySub}</small>}
-                          </span>
-                        </td>
-                        <td data-numeric><PeakCell stat={detail.up} format={config.formatRate} /></td>
-                        <td data-numeric><PeakCell stat={detail.down} format={config.formatRate} /></td>
-                        <td data-action>
-                          <DetailToggle expanded={expanded} controlsId={detailId} onClick={() => setExpandedUuid(expanded ? null : node.uuid)} />
-                        </td>
-                      </tr>
-                      {expanded && (
-                        <tr className="traffic-detail-row">
-                          <td colSpan={5}>
-                            <SampleChart id={detailId} samples={samples} config={config} />
+          {!isMobileLayout ? (
+            <div className="assets-table-wrap traffic-table-wrap is-active">
+              <table className="assets-table traffic-table">
+                <thead>
+                  <tr>
+                    <th><span>节点</span></th>
+                    <th data-numeric><span>{config.primaryColumnLabel}</span></th>
+                    <th data-numeric><span>{config.upLabel}峰值</span></th>
+                    <th data-numeric><span>{config.downLabel}峰值</span></th>
+                    <th data-action><span>操作</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sampled.map((detail) => {
+                    const { node } = detail;
+                    const expanded = expandedUuid === node.uuid;
+                    const detailId = `today-detail-${node.uuid}`;
+                    // 只为展开行构造曲线采样，避免 N 节点全表 buildSamples。
+                    const samples = expanded
+                      ? config.buildSamples(
+                          node.uuid,
+                          query.data?.samplesByUuid ?? {},
+                          query.data?.connectionSamplesByUuid ?? {},
+                        )
+                      : null;
+                    return (
+                      <Fragment key={node.uuid}>
+                        <tr>
+                          <td>
+                            <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link" title={node.name}>
+                              <Flag region={node.region} size={12} />
+                              <span>{node.name}</span>
+                            </Link>
+                          </td>
+                          <td data-numeric data-strong>
+                            <span className="traffic-volume-value">
+                              <strong>{config.formatPrimary(detail.primary)}</strong>
+                              {detail.primarySub && <small>{detail.primarySub}</small>}
+                            </span>
+                          </td>
+                          <td data-numeric><PeakCell stat={detail.up} format={config.formatRate} /></td>
+                          <td data-numeric><PeakCell stat={detail.down} format={config.formatRate} /></td>
+                          <td data-action>
+                            <DetailToggle expanded={expanded} controlsId={detailId} onClick={() => setExpandedUuid(expanded ? null : node.uuid)} />
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-                {empty.length > 0 && (
-                  <tr className="traffic-empty-row">
-                    <td colSpan={5}>
-                      <span className="traffic-empty-note">
-                        {empty.length} 台节点{config.emptyLabel}：{empty.map((d) => d.node.name).join("、")}
-                      </span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="assets-card-list traffic-card-list">
-            {sampled.map((detail) => {
-              const { node } = detail;
-              const expanded = expandedUuid === node.uuid;
-              const detailId = `today-mobile-detail-${node.uuid}`;
-              const samples = config.buildSamples(
-                node.uuid,
-                query.data?.samplesByUuid ?? {},
-                query.data?.connectionSamplesByUuid ?? {},
-              );
-              return (
-                <article className="traffic-node-card" key={node.uuid}>
-                  <header className="traffic-node-card-head">
-                    <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link">
-                      <Flag region={node.region} size={12} />
-                      <span>{node.name}</span>
-                    </Link>
-                    <div className="traffic-node-card-actions">
-                      <strong>{config.formatPrimary(detail.primary)}</strong>
-                      <DetailToggle expanded={expanded} controlsId={detailId} onClick={() => setExpandedUuid(expanded ? null : node.uuid)} />
-                    </div>
-                  </header>
-                  {detail.primarySub && (
-                    <div className="traffic-node-card-directions">
-                      <span>{detail.primarySub}</span>
-                    </div>
+                        {expanded && samples && (
+                          <tr className="traffic-detail-row">
+                            <td colSpan={5}>
+                              <SampleChart id={detailId} samples={samples} config={config} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                  {empty.length > 0 && (
+                    <tr className="traffic-empty-row">
+                      <td colSpan={5}>
+                        <span className="traffic-empty-note">
+                          {empty.length} 台节点{config.emptyLabel}：{empty.map((d) => d.node.name).join("、")}
+                        </span>
+                      </td>
+                    </tr>
                   )}
-                  <dl className="traffic-node-card-peaks">
-                    <div>
-                      <dt>{config.upLabel}峰值</dt>
-                      <dd><PeakCell stat={detail.up} format={config.formatRate} /></dd>
-                    </div>
-                    <div>
-                      <dt>{config.downLabel}峰值</dt>
-                      <dd><PeakCell stat={detail.down} format={config.formatRate} /></dd>
-                    </div>
-                  </dl>
-                  {expanded && <SampleChart id={detailId} samples={samples} config={config} />}
-                </article>
-              );
-            })}
-            {empty.length > 0 && (
-              <div className="traffic-empty-note traffic-empty-note--card">
-                {empty.length} 台节点{config.emptyLabel}：{empty.map((d) => d.node.name).join("、")}
-              </div>
-            )}
-          </div>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="assets-card-list traffic-card-list is-active">
+              {sampled.map((detail) => {
+                const { node } = detail;
+                const expanded = expandedUuid === node.uuid;
+                const detailId = `today-mobile-detail-${node.uuid}`;
+                const samples = expanded
+                  ? config.buildSamples(
+                      node.uuid,
+                      query.data?.samplesByUuid ?? {},
+                      query.data?.connectionSamplesByUuid ?? {},
+                    )
+                  : null;
+                return (
+                  <article className="traffic-node-card" key={node.uuid}>
+                    <header className="traffic-node-card-head">
+                      <Link to={`/instance/${encodeURIComponent(node.uuid)}`} className="assets-node-link">
+                        <Flag region={node.region} size={12} />
+                        <span>{node.name}</span>
+                      </Link>
+                      <div className="traffic-node-card-actions">
+                        <strong>{config.formatPrimary(detail.primary)}</strong>
+                        <DetailToggle expanded={expanded} controlsId={detailId} onClick={() => setExpandedUuid(expanded ? null : node.uuid)} />
+                      </div>
+                    </header>
+                    {detail.primarySub && (
+                      <div className="traffic-node-card-directions">
+                        <span>{detail.primarySub}</span>
+                      </div>
+                    )}
+                    <dl className="traffic-node-card-peaks">
+                      <div>
+                        <dt>{config.upLabel}峰值</dt>
+                        <dd><PeakCell stat={detail.up} format={config.formatRate} /></dd>
+                      </div>
+                      <div>
+                        <dt>{config.downLabel}峰值</dt>
+                        <dd><PeakCell stat={detail.down} format={config.formatRate} /></dd>
+                      </div>
+                    </dl>
+                    {expanded && samples && <SampleChart id={detailId} samples={samples} config={config} />}
+                  </article>
+                );
+              })}
+              {empty.length > 0 && (
+                <div className="traffic-empty-note traffic-empty-note--card">
+                  {empty.length} 台节点{config.emptyLabel}：{empty.map((d) => d.node.name).join("、")}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

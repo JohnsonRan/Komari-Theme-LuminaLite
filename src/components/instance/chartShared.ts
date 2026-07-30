@@ -59,13 +59,26 @@ export function getAxisColors(isDark: boolean): { grid: string; text: string } {
 }
 
 // uPlot 图表 (LoadChart / PingChart) 共享的悬停 tooltip 状态结构。
+// left/top 只在内容切换时写入 React state 做首帧定位；光标移动中的位移走 bindElement
+// 上的 transform，避免每个 rAF 都触发 React 重渲染。
 export interface ChartTooltipState {
   show: boolean;
   left: number;
   top: number;
+  /** 当前数据点索引；同 idx 时只更新位置、不重建 rows。 */
+  idx: number | null;
   rows: Array<{ label: string; value: string; color: string }>;
   time: string;
 }
+
+export const EMPTY_CHART_TOOLTIP: ChartTooltipState = {
+  show: false,
+  left: 0,
+  top: 0,
+  idx: null,
+  rows: [],
+  time: "",
+};
 
 interface TimeRangeOption {
   label: string;
@@ -254,9 +267,21 @@ export function buildChartTooltipHooks({
   onInit: (u: uPlot) => void;
   onDestroy: (u: uPlot) => void;
   onSetCursor: (u: uPlot) => void;
+  /** 把 tooltip DOM 挂进来后，同 idx 下的位移只改 transform，不 setState。 */
+  bindElement: (node: HTMLElement | null) => void;
 } {
   let frame: number | null = null;
   let view: Window | null = null;
+  let tooltipEl: HTMLElement | null = null;
+  let lastIdx: number | null = null;
+  let lastRowCount = 0;
+
+  const applyPosition = (left: number, top: number) => {
+    if (!tooltipEl) return false;
+    tooltipEl.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+    return true;
+  };
+
   const cancelScheduled = () => {
     if (frame != null) view?.cancelAnimationFrame(frame);
     frame = null;
@@ -264,7 +289,11 @@ export function buildChartTooltipHooks({
   const hide = () => {
     if (isPinned?.()) return;
     cancelScheduled();
-    setTooltip((prev) => (prev.show ? { ...prev, show: false } : prev));
+    lastIdx = null;
+    lastRowCount = 0;
+    setTooltip((prev) =>
+      prev.show ? { ...prev, show: false, idx: null } : prev,
+    );
   };
   const update = (u: uPlot) => {
     frame = null;
@@ -283,7 +312,30 @@ export function buildChartTooltipHooks({
     const anchorY =
       u.over.offsetTop +
       (typeof u.cursor.top === "number" ? u.cursor.top : u.over.clientHeight * 0.5);
+
+    // 同一数据点：只挪位置。rows 仍用上一次的数量估高，避免每帧 buildRows。
+    if (idx === lastIdx) {
+      const position = getChartTooltipPosition({
+        containerWidth: bbox.width,
+        containerHeight: bbox.height,
+        anchorX,
+        anchorY,
+        rowCount: lastRowCount,
+        estimatedWidth,
+      });
+      if (!applyPosition(position.left, position.top)) {
+        setTooltip((prev) => {
+          if (!prev.show) return prev;
+          if (prev.left === position.left && prev.top === position.top) return prev;
+          return { ...prev, left: position.left, top: position.top };
+        });
+      }
+      return;
+    }
+
     const rows = buildRows(idx);
+    lastIdx = idx;
+    lastRowCount = rows.length;
     const position = getChartTooltipPosition({
       containerWidth: bbox.width,
       containerHeight: bbox.height,
@@ -292,15 +344,20 @@ export function buildChartTooltipHooks({
       rowCount: rows.length,
       estimatedWidth,
     });
+    applyPosition(position.left, position.top);
     setTooltip({
       show: true,
       left: position.left,
       top: position.top,
+      idx,
       rows,
       time: formatTooltipTime(timestamp, rangeHours),
     });
   };
   return {
+    bindElement: (node) => {
+      tooltipEl = node;
+    },
     onInit: (u) => {
       view = u.root.ownerDocument.defaultView;
       u.root.addEventListener("mouseleave", hide);
@@ -309,6 +366,9 @@ export function buildChartTooltipHooks({
       cancelScheduled();
       u.root.removeEventListener("mouseleave", hide);
       view = null;
+      tooltipEl = null;
+      lastIdx = null;
+      lastRowCount = 0;
     },
     onSetCursor: (u) => {
       if (isPinned?.()) return;

@@ -170,7 +170,6 @@ export const NodeCard = memo(function NodeCard({
           <NodeMetricSection
             node={node}
             loadFraction={loadFraction}
-            redrawKey={redrawKey}
           />
 
           <NodeTrafficSection
@@ -313,11 +312,9 @@ function NodeCardHeader({
 function NodeMetricSection({
   node,
   loadFraction,
-  redrawKey,
 }: {
   node: NodeCardNode;
   loadFraction: number;
-  redrawKey: string;
 }) {
   return (
     <div className="card-metric-section server-metric-grid">
@@ -328,7 +325,6 @@ function NodeMetricSection({
         unit="%"
         detailText={`${node.cpu_cores || 0} 核`}
         fraction={node.cpuPct / 100}
-        redrawKey={redrawKey}
         paint="var(--progress-cpu)"
       />
       <MetricBar
@@ -338,7 +334,6 @@ function NodeMetricSection({
         unit="%"
         detailText={`${formatBytes(node.ramUsed)} / ${formatBytes(node.ramTotal)}`}
         fraction={node.ramPct / 100}
-        redrawKey={redrawKey}
         paint="var(--progress-memory)"
       />
       <MetricBar
@@ -348,7 +343,6 @@ function NodeMetricSection({
         unit="%"
         detailText={`${formatBytes(node.diskUsed)} / ${formatBytes(node.diskTotal)}`}
         fraction={node.diskPct / 100}
-        redrawKey={redrawKey}
         paint="var(--progress-disk)"
       />
       <MetricBar
@@ -356,7 +350,6 @@ function NodeMetricSection({
         label="负载"
         valueText={node.load1.toFixed(2)}
         fraction={loadFraction}
-        redrawKey={redrawKey}
         paint="var(--progress-load)"
       />
     </div>

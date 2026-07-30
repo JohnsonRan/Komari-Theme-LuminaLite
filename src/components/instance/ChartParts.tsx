@@ -1,12 +1,31 @@
+import { useEffect, useRef } from "react";
 import type { ChartTooltipState } from "./chartShared";
 
-export function ChartTooltip({ tooltip }: { tooltip: ChartTooltipState }) {
+export function ChartTooltip({
+  tooltip,
+  bindElement,
+}: {
+  tooltip: ChartTooltipState;
+  /** 与 buildChartTooltipHooks 返回的 bindElement 对接，用于光标位移直写 transform。 */
+  bindElement?: (node: HTMLElement | null) => void;
+}) {
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!bindElement) return;
+    bindElement(nodeRef.current);
+    return () => bindElement(null);
+  }, [bindElement, tooltip.show]);
+
   if (!tooltip.show) return null;
   return (
     <div
+      ref={nodeRef}
       aria-hidden="true"
       className="instance-chart-tooltip"
-      style={{ left: tooltip.left, top: tooltip.top }}
+      style={{
+        transform: `translate3d(${tooltip.left}px, ${tooltip.top}px, 0)`,
+      }}
     >
       <div className="instance-chart-tooltip-time">{tooltip.time}</div>
       {tooltip.rows.map((row) => (

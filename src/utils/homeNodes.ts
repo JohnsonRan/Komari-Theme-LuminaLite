@@ -1,5 +1,8 @@
-import type { HomeNodeSummary } from "@/services/wsStore";
+import type { HomeNodeStructure } from "@/services/wsStore";
 import { getDisplayRegionCode } from "@/utils/geo";
+
+/** 分组/地区只读 group、region；结构态与完整 summary 都能喂进来。 */
+type HomeNodeFacet = Pick<HomeNodeStructure, "group" | "region">;
 
 export const HOME_ALL_GROUP = "__all__";
 export const HOME_ALL_REGION = "__all__";
@@ -35,7 +38,7 @@ function regionRank(code: string): number {
  * 按展示地区代码聚合节点数,按固定地理优先级排序(见 REGION_PRIORITY):中国(大陆优先,含港澳台)
  * → 新加坡 → 日本 → 美国 → 欧洲诸国 → 其余。同一档内(欧洲/其余)再按数量降序、代码升序。
  */
-export function getHomeRegionOptions(nodes: HomeNodeSummary[]): HomeRegionOption[] {
+export function getHomeRegionOptions(nodes: HomeNodeFacet[]): HomeRegionOption[] {
   const counts = new Map<string, number>();
   for (const node of nodes) {
     const code = getDisplayRegionCode(node.region);
@@ -68,7 +71,7 @@ export function dedupeGroupLabels(groups: Iterable<string | null | undefined>): 
   return result;
 }
 
-export function getHomeGroupOptions(nodes: HomeNodeSummary[]) {
+export function getHomeGroupOptions(nodes: HomeNodeFacet[]) {
   return dedupeGroupLabels(nodes.map((node) => node.group));
 }
 

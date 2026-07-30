@@ -234,15 +234,48 @@
   opacity: 0;
 }
 
+/* 18 段 CSS 轨：与 CompactGauge 同一套 mask 分段，无 canvas。 */
 .metric-track {
   height: 8px;
   min-width: 0;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--metric-track-color) 0,
+    var(--metric-track-color) var(--metric-track-fill, 0%),
+    var(--progress-bg) var(--metric-track-fill, 0%),
+    var(--progress-bg) 100%
+  );
+  -webkit-mask: repeating-linear-gradient(
+    to right,
+    #000 0,
+    #000 calc((100% + 2px) / 18 - 2px),
+    transparent calc((100% + 2px) / 18 - 2px),
+    transparent calc((100% + 2px) / 18)
+  );
+  mask: repeating-linear-gradient(
+    to right,
+    #000 0,
+    #000 calc((100% + 2px) / 18 - 2px),
+    transparent calc((100% + 2px) / 18 - 2px),
+    transparent calc((100% + 2px) / 18)
+  );
 }
 
-.metric-track-canvas {
-  display: block;
-  width: 100%;
-  height: 8px;
+/* 旧 WebKit 对 repeating mask 支持不稳：用 SVG 圆角矩形 tile 兜底。 */
+@supports not (mask: repeating-linear-gradient(to right, #000 0, #000 1px)) {
+  .metric-track {
+    --metric-segment-mask: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27 preserveAspectRatio=%27none%27%3E%3Crect width=%2784%27 height=%27100%27 rx=%2716%27 ry=%2724%27 fill=%27black%27/%3E%3C/svg%3E");
+    -webkit-mask-image: var(--metric-segment-mask);
+    -webkit-mask-position: left top;
+    -webkit-mask-repeat: repeat-x;
+    -webkit-mask-size: calc((100% + 2px) / 18) 100%;
+    mask-image: var(--metric-segment-mask);
+    mask-position: left top;
+    mask-repeat: repeat-x;
+    mask-size: calc((100% + 2px) / 18) 100%;
+  }
 }
 
 /* 大卡分区使用一套连续节奏，避免每个数据块都变成小卡片。 */

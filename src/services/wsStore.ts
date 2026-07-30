@@ -25,13 +25,17 @@ export interface StoreStatusSnapshot {
   nodeInfoError: boolean;
 }
 
-export interface HomeNodeSummary {
+/** 结构态：分组/地区/权重/在线。不跟网速/CPU 每 2s 抖动，专供首页筛序与卡片 UUID 列表。 */
+export interface HomeNodeStructure {
   uuid: string;
   group: string;
   region: string;
   hidden: boolean;
   weight: number;
   online: boolean | null;
+}
+
+export interface HomeNodeSummary extends HomeNodeStructure {
   trafficUp: number;
   trafficDown: number;
   netUp: number;
@@ -480,11 +484,14 @@ let state: State = emptyState();
 const visibleNodeListeners = new Set<Listener>();
 const allNodesListeners = new Set<Listener>();
 const homeNodeSummaryListeners = new Set<Listener>();
+const homeNodeStructureListeners = new Set<Listener>();
 const storeStatusListeners = new Set<Listener>();
 const nodeMetaListeners = new Map<string, Set<Listener>>();
 const nodeMetricsListeners = new Map<string, Set<Listener>>();
 const trafficTrendListeners = new Map<string, Set<Listener>>();
 let storeVersion = 0;
+/** 仅 meta/order/hidden/online 变化时递增；网速/CPU 抖动不碰。 */
+let structureVersion = 0;
 let visibleNodeUuidsSnapshot: string[] = [];
 let visibleNodeUuidsSnapshotVersion = -1;
 let visibleNodeUuidsWithHiddenSnapshot: string[] = [];
@@ -493,6 +500,8 @@ let allNodeMetaSnapshot: NodeInfo[] = [];
 let allNodeMetaSnapshotVersion = -1;
 let homeNodeSummariesSnapshot: HomeNodeSummary[] = [];
 let homeNodeSummariesSnapshotVersion = -1;
+let homeNodeStructuresSnapshot: HomeNodeStructure[] = [];
+let homeNodeStructuresSnapshotVersion = -1;
 let storeStatusSnapshot: StoreStatusSnapshot = {
   failureStreak: 0,
   hydrated: false,
@@ -510,6 +519,17 @@ interface CommitTouches {
   nodeList?: boolean;
   allNodes?: boolean;
   storeStatus?: boolean;
+  /**
+   * 首页结构态（分组/地区/权重/在线）。
+   * 未显式传入时：nodeList / allNodes / meta 变化视为结构变化。
+   * online 翻转须由调用方显式传 true（metrics 抖动默认不触发）。
+   */
+  homeStructure?: boolean;
+  /**
+   * 首页实时汇总（网速/CPU/流量等）。
+   * 未显式传入时：任意 metrics 变化，或结构变化，都通知 live 订阅者。
+   */
+  homeLive?: boolean;
 }
 
 function emitListeners(listeners: Iterable<Listener>) {
@@ -535,15 +555,20 @@ function commit(next: State, touches: CommitTouches = {}) {
   state = next;
   // 派生快照以 storeVersion 作缓存键。
   storeVersion += 1;
-  // 空集合也是 truthy，需检查内容才能避免误广播。
-  const homeTouched =
-    Boolean(touches.nodeList || touches.allNodes) ||
-    hasAny(touches.meta) ||
-    hasAny(touches.metrics);
 
+  const structureTouched =
+    touches.homeStructure ??
+    (Boolean(touches.nodeList || touches.allNodes) || hasAny(touches.meta));
+  const liveTouched =
+    touches.homeLive ?? (hasAny(touches.metrics) || structureTouched);
+
+  if (structureTouched) {
+    structureVersion += 1;
+    emitListeners(homeNodeStructureListeners);
+  }
   if (touches.nodeList) emitListeners(visibleNodeListeners);
   if (touches.allNodes) emitListeners(allNodesListeners);
-  if (homeTouched) emitListeners(homeNodeSummaryListeners);
+  if (liveTouched) emitListeners(homeNodeSummaryListeners);
   if (touches.storeStatus) emitListeners(storeStatusListeners);
   if (touches.meta) {
     emitMappedListeners(nodeMetaListeners, touches.meta);
@@ -575,6 +600,7 @@ function applyWsLivePayload(payload: unknown) {
 
   const touchedMetrics = new Set<string>();
   const touchedTrafficTrends = new Set<string>();
+  let onlineChanged = false;
   let nextMetricsByUuid = state.metricsByUuid;
   let nextTrafficTrends = state.trafficTrends;
 
@@ -602,6 +628,7 @@ function applyWsLivePayload(payload: unknown) {
       resolvedOnline === merged.online ? merged : { ...merged, online: resolvedOnline };
 
     if (!shallowEqualMetrics(prev, metricsToUse)) {
+      if (prev.online !== metricsToUse.online) onlineChanged = true;
       if (nextMetricsByUuid === state.metricsByUuid) {
         nextMetricsByUuid = { ...state.metricsByUuid };
       }
@@ -657,6 +684,7 @@ function applyWsLivePayload(payload: unknown) {
     const online = prev.updatedAt > 0 && !isStale && onlineSet.has(uuid);
     if (prev.online === online) continue;
 
+    onlineChanged = true;
     if (nextMetricsByUuid === state.metricsByUuid) {
       nextMetricsByUuid = { ...state.metricsByUuid };
     }
@@ -687,6 +715,9 @@ function applyWsLivePayload(payload: unknown) {
       {
         metrics: touchedMetrics,
         trafficTrends: touchedTrafficTrends,
+        // 网速/CPU 抖动只推 live；online 翻转才推结构态（离线沉底 / 卡片序）。
+        homeLive: touchedMetrics.size > 0,
+        homeStructure: onlineChanged,
       },
     );
   }
@@ -1072,6 +1103,10 @@ export function subscribeHomeNodeSummaries(listener: Listener): () => void {
   return subscribeSet(homeNodeSummaryListeners, listener);
 }
 
+export function subscribeHomeNodeStructures(listener: Listener): () => void {
+  return subscribeSet(homeNodeStructureListeners, listener);
+}
+
 export function subscribeStoreStatus(listener: Listener): () => void {
   return subscribeSet(storeStatusListeners, listener);
 }
@@ -1189,6 +1224,55 @@ export function getAllNodeMetaSnapshot(): NodeInfo[] {
   }
   allNodeMetaSnapshotVersion = storeVersion;
   return allNodeMetaSnapshot;
+}
+
+export function getHomeNodeStructuresSnapshot(): HomeNodeStructure[] {
+  if (homeNodeStructuresSnapshotVersion === structureVersion) {
+    return homeNodeStructuresSnapshot;
+  }
+
+  const prevByUuid = new Map<string, HomeNodeStructure>();
+  for (const item of homeNodeStructuresSnapshot) {
+    prevByUuid.set(item.uuid, item);
+  }
+
+  let anyChanged = state.order.length !== homeNodeStructuresSnapshot.length;
+  const next: HomeNodeStructure[] = [];
+
+  for (const uuid of state.order) {
+    const meta = state.metaByUuid[uuid];
+    if (!meta) continue;
+    const metrics = state.metricsByUuid[uuid];
+    const prev = prevByUuid.get(uuid);
+    const group = String(meta.group || "").trim();
+    const region = String(meta.region || "").trim();
+    const hidden = meta.hidden;
+    const weight = meta.weight;
+    const online = metrics?.online ?? null;
+
+    if (
+      prev &&
+      prev.group === group &&
+      prev.region === region &&
+      prev.hidden === hidden &&
+      prev.weight === weight &&
+      prev.online === online
+    ) {
+      next.push(prev);
+    } else {
+      anyChanged = true;
+      next.push({ uuid, group, region, hidden, weight, online });
+    }
+  }
+
+  if (!anyChanged) {
+    homeNodeStructuresSnapshotVersion = structureVersion;
+    return homeNodeStructuresSnapshot;
+  }
+
+  homeNodeStructuresSnapshot = next;
+  homeNodeStructuresSnapshotVersion = structureVersion;
+  return homeNodeStructuresSnapshot;
 }
 
 export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {

@@ -1,8 +1,5 @@
-import { useCallback, type ReactNode } from "react";
-import { CanvasStrip, fillRoundedRect, safeCanvasColor } from "./CanvasStrip";
+import type { CSSProperties, ReactNode } from "react";
 import { clamp01 } from "./nodeCardShared";
-
-const METRIC_SEGMENT_COUNT = 18;
 
 interface MetricBarProps {
   icon: ReactNode;
@@ -11,10 +8,18 @@ interface MetricBarProps {
   unit?: string;
   detailText?: string;
   fraction: number; // 0..1
-  redrawKey?: string;
   paint: string; // 填充色 (CSS color)
 }
 
+type MetricTrackStyle = CSSProperties & {
+  "--metric-track-color": string;
+  "--metric-track-fill": string;
+};
+
+/**
+ * 大卡指标条：CSS 分段轨代替 canvas。
+ * 视觉对齐小卡 CompactGauge（18 段 + hard-stop 填充），避免每卡再挂 4 块 canvas。
+ */
 export function MetricBar({
   icon,
   label,
@@ -22,43 +27,12 @@ export function MetricBar({
   unit,
   detailText,
   fraction,
-  redrawKey,
   paint,
 }: MetricBarProps) {
-  const activeSegments = clamp01(fraction) * METRIC_SEGMENT_COUNT;
-
-  // 除非填充比例或配色真正变化,否则跨渲染保持稳定,这样 CanvasStrip 的重绘 effect
-  // 不会在父组件每个 metrics tick 都触发。
-  const draw = useCallback(
-    (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-      const inactiveColor = safeCanvasColor("var(--progress-bg)");
-      const gap = 2;
-      const segmentWidth = Math.max(
-        1,
-        (width - gap * (METRIC_SEGMENT_COUNT - 1)) / METRIC_SEGMENT_COUNT,
-      );
-      const activePaint = safeCanvasColor(paint);
-
-      for (let index = 0; index < METRIC_SEGMENT_COUNT; index += 1) {
-        const x = index * (segmentWidth + gap);
-        const fillLevel = Math.max(0, Math.min(1, activeSegments - index));
-        const isActive = fillLevel > 0;
-
-        ctx.globalAlpha = 0.58;
-        ctx.fillStyle = inactiveColor;
-        fillRoundedRect(ctx, x, 0, segmentWidth, height, 2);
-
-        if (isActive) {
-          ctx.globalAlpha = 0.42 + fillLevel * 0.56;
-          ctx.fillStyle = activePaint;
-          fillRoundedRect(ctx, x, 0, segmentWidth, height, 2);
-        }
-      }
-
-      ctx.globalAlpha = 1;
-    },
-    [activeSegments, paint],
-  );
+  const style: MetricTrackStyle = {
+    "--metric-track-color": paint,
+    "--metric-track-fill": `${clamp01(fraction) * 100}%`,
+  };
 
   return (
     <div className="metric-item">
@@ -81,14 +55,7 @@ export function MetricBar({
       >
         {detailText ?? "\u00A0"}
       </div>
-      <div className="metric-track">
-        <CanvasStrip
-          className="metric-track-canvas"
-          height={8}
-          redrawKey={redrawKey}
-          draw={draw}
-        />
-      </div>
+      <div className="metric-track" style={style} aria-hidden />
     </div>
   );
 }

@@ -402,6 +402,17 @@
   display: none;
 }
 
+/* React 侧按断点只挂一种布局时，用 is-active 强制可见，不再依赖 media 反转。 */
+.traffic-card-list.is-active {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.traffic-table-wrap.is-active {
+  display: block;
+}
+
 .traffic-node-card {
   display: flex;
   min-width: 0;

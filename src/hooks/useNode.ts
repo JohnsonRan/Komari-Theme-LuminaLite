@@ -2,11 +2,13 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   retainStore,
   getAllNodeMetaSnapshot,
+  getHomeNodeStructuresSnapshot,
   getHomeNodeSummariesSnapshot,
   getNodeMetaSnapshot,
   getNodeMetricsSnapshot,
   getNodeTrafficTrendSnapshot,
   getVisibleNodeUuidsSnapshot,
+  subscribeHomeNodeStructures,
   subscribeHomeNodeSummaries,
   subscribeAllNodes,
   subscribeStoreStatus,
@@ -15,6 +17,7 @@ import {
   subscribeToNodeMetrics,
   subscribeToNodeTrafficTrend,
   getStoreStatusSnapshot,
+  type HomeNodeStructure,
   type HomeNodeSummary,
 } from "@/services/wsStore";
 import type { NodeInfo, NodeMetrics, TrafficTrendSample } from "@/types/komari";
@@ -108,13 +111,34 @@ export function useAllNodeMeta(): NodeInfo[] {
   );
 }
 
-export function useHomeNodeSummaries(): HomeNodeSummary[] {
+const EMPTY_HOME_SUMMARIES: HomeNodeSummary[] = [];
+
+/** 结构态：分组/地区/权重/在线。网速/CPU 抖动不触发重渲染。 */
+export function useHomeNodeStructures(): HomeNodeStructure[] {
   useEnsured();
   return useSyncExternalStore(
-    subscribeHomeNodeSummaries,
-    getHomeNodeSummariesSnapshot,
-    getHomeNodeSummariesSnapshot,
+    subscribeHomeNodeStructures,
+    getHomeNodeStructuresSnapshot,
+    getHomeNodeStructuresSnapshot,
   );
+}
+
+/**
+ * 实时汇总：网速/CPU/流量等每 WS tick 可能变。
+ * enabled=false 时不订阅，避免首页父级在仅需结构序时被 live 拖着重渲染。
+ */
+export function useHomeNodeSummaries(enabled = true): HomeNodeSummary[] {
+  useEnsured(enabled);
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      enabled ? subscribeHomeNodeSummaries(listener) : noopUnsubscribe,
+    [enabled],
+  );
+  const getSnapshot = useCallback(
+    () => (enabled ? getHomeNodeSummariesSnapshot() : EMPTY_HOME_SUMMARIES),
+    [enabled],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 const EMPTY_STORE_STATUS = {

@@ -6,6 +6,7 @@ import { ChartTooltip } from "@/components/instance/ChartParts";
 import {
   buildChartTooltipHooks,
   createTimeAxisFormatter,
+  EMPTY_CHART_TOOLTIP,
   getAxisColors,
   useResponsiveChartSize,
   type ChartTooltipState,
@@ -51,13 +52,7 @@ export function TodaySeriesChart({
   }, [samples]);
   const dataRef = useRef<uPlot.AlignedData>(data);
   dataRef.current = data;
-  const [tooltip, setTooltip] = useState<ChartTooltipState>({
-    show: false,
-    left: 0,
-    top: 0,
-    rows: [],
-    time: "",
-  });
+  const [tooltip, setTooltip] = useState<ChartTooltipState>(EMPTY_CHART_TOOLTIP);
   const tooltipHooks = useMemo(
     () =>
       buildChartTooltipHooks({
@@ -125,7 +120,7 @@ export function TodaySeriesChart({
       </div>
       <div ref={chartSizeRef} className="traffic-rate-chart-canvas">
         <UplotReact options={options} data={data} />
-        <ChartTooltip tooltip={tooltip} />
+        <ChartTooltip tooltip={tooltip} bindElement={tooltipHooks.bindElement} />
       </div>
     </div>
   );
