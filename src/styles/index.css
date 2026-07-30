@@ -13,10 +13,10 @@
 
 @theme {
   --font-sans:
-    "Geist Variable", "MiSans-VF", -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    system-ui, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    "MiSans-VF", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
-  --font-numeric: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-numeric: var(--font-sans);
 }
 
 :root {

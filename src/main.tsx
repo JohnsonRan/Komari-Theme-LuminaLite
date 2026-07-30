@@ -1,7 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "subsetted-fonts/MiSans-VF/MiSans-VF.css";
-import "./styles/geist-latin.css";
 import "./styles/index.css";
 import { App } from "./App";
 
