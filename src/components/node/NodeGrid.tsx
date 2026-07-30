@@ -518,7 +518,13 @@ export function NodeGrid() {
   // 结构态：分组/地区/权重/在线。网速抖动不推这里。
   const structures = useHomeNodeStructures();
   const allMeta = useAllNodeMeta();
-  const { hydrated: storeHydrated, nodeInfoError } = useNodeStoreStatus();
+  const {
+    hydrated: storeHydrated,
+    nodeInfoError,
+    failureStreak,
+  } = useNodeStoreStatus();
+  // 与悬浮控件一致：连续失败 ≥2 视为整站实时通道异常，不是单节点离线。
+  const showSiteSyncBanner = failureStreak >= 2;
   const { data: me } = useAuth();
   const { data: publicConfig } = usePublicConfig();
   const siteName = publicConfig?.sitename?.trim() || "节点概览";
@@ -743,11 +749,14 @@ export function NodeGrid() {
     if (!nodeInfoError) return null;
     return (
       <div
-        className="flex h-[40vh] flex-col items-center justify-center gap-2 text-[var(--text-tertiary)]"
-        aria-live="polite"
+        className="home-empty-state"
+        role="alert"
+        aria-live="assertive"
       >
-        <span className="text-[14px]">节点数据暂时无法加载</span>
-        <span className="text-[12px]">正在等待后端自动重试</span>
+        <span className="home-empty-state-title">无法读取节点列表</span>
+        <span className="home-empty-state-desc">
+          这是整站配置同步失败，不是某一台机器离线。正在自动重试后端接口。
+        </span>
       </div>
     );
   }
@@ -756,6 +765,12 @@ export function NodeGrid() {
   const homeHeader = (
     <>
       <HomeBrand siteName={siteName} />
+      {showSiteSyncBanner && (
+        <div className="home-sync-banner" role="status" aria-live="polite">
+          <strong>整站实时通道异常</strong>
+          <span>当前展示最近缓存；卡片标红/降饱和仍表示单节点离线，两者含义不同。</span>
+        </div>
+      )}
       {showHomeOverview && (
         <HomeOverviewLive
           dense={mode === "mini" || mode === "list"}
@@ -771,9 +786,11 @@ export function NodeGrid() {
     return (
       <>
         {homeHeader}
-        <div className="flex h-[40vh] flex-col items-center justify-center gap-2 text-[var(--text-tertiary)]">
-          <span className="text-[15px]">尚未连接到任何节点</span>
-          <span className="text-[12px]">等待后端推送或前往管理后台添加</span>
+        <div className="home-empty-state" role="status" aria-live="polite">
+          <span className="home-empty-state-title">尚未连接到任何节点</span>
+          <span className="home-empty-state-desc">
+            后端尚未登记可展示的机器。若你刚添加节点，请稍候推送；管理员也可前往后台检查。
+          </span>
         </div>
       </>
     );

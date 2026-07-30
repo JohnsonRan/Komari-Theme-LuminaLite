@@ -358,12 +358,19 @@ function CompactNodeHeader({
   node,
   osName,
   systemInfo,
+  isOffline,
+  lastSeen,
 }: {
   node: CompactNode;
   osName: string;
   systemInfo: string;
+  isOffline: boolean;
+  lastSeen: string | null;
 }) {
-  const detailLabels = nodeDetailLinkLabels(node.name, osName);
+  const detailLabels = nodeDetailLinkLabels(node.name, osName, {
+    offline: isOffline,
+    lastSeen,
+  });
   return (
     <header className="compact-node-header">
       <div className="compact-node-title-wrap">
@@ -373,6 +380,7 @@ function CompactNodeHeader({
             to={`/instance/${encodeURIComponent(node.uuid)}`}
             className="compact-node-title"
             title={node.name}
+            aria-label={`${node.name}${isOffline ? "，离线" : ""}`}
           >
             {node.name}
           </Link>
@@ -805,7 +813,13 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       className={clsx("compact-node-card", isOffline && "is-offline")}
       {...attentionAttrs(attention)}
     >
-      <CompactNodeHeader node={node} osName={osName} systemInfo={systemInfo} />
+      <CompactNodeHeader
+        node={node}
+        osName={osName}
+        systemInfo={systemInfo}
+        isOffline={isOffline}
+        lastSeen={model.lastSeen}
+      />
       <AttentionReasons attention={attention} />
       <CompactNodeChips subtitle={subtitle} tags={footerTags} ipv4={node.ipv4} ipv6={node.ipv6} />
       <CompactNodeVitals node={node} loadFraction={loadFraction} />

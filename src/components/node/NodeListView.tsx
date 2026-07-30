@@ -158,10 +158,21 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   } = model;
   const pingIndex = Math.min(activePingIndex, pingSeries.length - 1);
   const ping = pingSeries[pingIndex].ping;
-  const detailLabels = nodeDetailLinkLabels(node.name, osName);
+  const detailLabels = nodeDetailLinkLabels(node.name, osName, {
+    offline: isOffline,
+    lastSeen: model.lastSeen,
+  });
   // 未命中关注时保留原本的「查看详情」提示 —— 只有真的需要关注才占用 title。
   const attentionProps = attentionAttrs(attention);
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
+  const statusLabel =
+    node.online === true
+      ? "在线"
+      : node.online === false
+        ? model.lastSeen
+          ? `离线，最后在线 ${model.lastSeen}`
+          : "离线"
+        : "状态未知";
   const rowLabel = [
     node.name,
     `系统 ${formatOsLabel(osName, node.os)}`,
@@ -173,7 +184,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     `下行 ${downRate.value}${downRate.unit}`,
     `流量使用 ${usedPct}`,
     `网络延迟 ${ping.lastValue == null ? "无样本" : `${Math.round(ping.lastValue)} 毫秒`}`,
-    node.online === true ? "在线" : node.online === false ? "离线" : "状态未知",
+    statusLabel,
     `运行 ${uptime.value}${uptime.unit}`,
     `到期 ${expire.value}${expire.unit}`,
     "查看详情",

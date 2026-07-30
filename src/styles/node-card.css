@@ -703,10 +703,29 @@
   background: var(--hover-bg);
 }
 
+.ping-task-tab:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--status-info) 70%, transparent);
+  outline-offset: 2px;
+}
+
 .ping-task-tab.is-active {
   border-color: var(--border-strong);
   background: color-mix(in srgb, var(--hover-bg) 76%, transparent);
   color: var(--text-secondary);
+}
+
+/* 触控设备加大命中区，避免多任务标签挤在一起时误点。 */
+@media (pointer: coarse), (max-width: 720px) {
+  .ping-task-tab {
+    min-height: 32px;
+    padding: 5px 8px 7px;
+    touch-action: manipulation;
+  }
+
+  .ping-task-tabs[data-size="small"] .ping-task-tab {
+    min-height: 30px;
+    padding: 4px 7px 6px;
+  }
 }
 
 .ping-task-tab-label {

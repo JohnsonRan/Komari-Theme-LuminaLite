@@ -135,10 +135,24 @@ export function FloatingControls({
           <button
             type="button"
             className="control-button floating-controls-trigger grid h-9 w-9 place-items-center"
-            aria-label={collapsed ? "展开快捷按钮" : "收起快捷按钮"}
+            aria-label={
+              showSyncWarning
+                ? collapsed
+                  ? "展开快捷按钮，整站实时通道异常"
+                  : "收起快捷按钮，整站实时通道异常"
+                : collapsed
+                  ? "展开快捷按钮"
+                  : "收起快捷按钮"
+            }
             aria-expanded={!collapsed}
             onClick={toggleControls}
-            title={collapsed ? "展开快捷按钮" : "收起快捷按钮"}
+            title={
+              showSyncWarning
+                ? "整站实时通道异常，当前为缓存数据"
+                : collapsed
+                  ? "展开快捷按钮"
+                  : "收起快捷按钮"
+            }
           >
             <ToggleIcon size={16} />
             {showSyncWarning && collapsed && (
@@ -147,9 +161,13 @@ export function FloatingControls({
           </button>
         </div>
         {showSyncWarning && !collapsed && (
-          <div className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-[var(--status-offline)] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)] backdrop-blur">
-            <AlertTriangle size={12} />
-            <span>实时状态同步异常，当前展示的是最近缓存</span>
+          <div
+            role="status"
+            aria-live="polite"
+            className="floating-controls-sync-warning pointer-events-none flex items-center gap-2 rounded-full border border-[color-mix(in_srgb,var(--status-offline)_32%,transparent)] bg-[color-mix(in_srgb,var(--surface-a)_90%,transparent)] px-3 py-1 text-[11px] font-medium text-[var(--status-offline)] shadow-[0_10px_25px_-18px_rgba(0,0,0,0.8)]"
+          >
+            <AlertTriangle size={12} aria-hidden />
+            <span>整站实时通道异常，显示最近缓存（非单节点离线）</span>
           </div>
         )}
       </div>

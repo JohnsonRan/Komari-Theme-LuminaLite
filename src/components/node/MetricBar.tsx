@@ -29,16 +29,19 @@ export function MetricBar({
   fraction,
   paint,
 }: MetricBarProps) {
+  const clamped = clamp01(fraction);
   const style: MetricTrackStyle = {
     "--metric-track-color": paint,
-    "--metric-track-fill": `${clamp01(fraction) * 100}%`,
+    "--metric-track-fill": `${clamped * 100}%`,
   };
+  const valueLabel = `${valueText}${unit ?? ""}`;
+  const meterLabel = detailText ? `${label} ${valueLabel}，${detailText}` : `${label} ${valueLabel}`;
 
   return (
     <div className="metric-item">
       <div className="flex justify-between items-center gap-3 min-w-0">
         <div className="flex items-center gap-1.5 text-[var(--text-secondary)] flex-shrink-0">
-          <span>{icon}</span>
+          <span aria-hidden>{icon}</span>
           <span className="text-[11px] font-medium tracking-[0.02em]">{label}</span>
         </div>
         <div className="tabular text-[13px] text-[var(--text-primary)] whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-right">
@@ -52,10 +55,19 @@ export function MetricBar({
         className="metric-detail"
         title={detailText}
         data-empty={detailText ? "false" : "true"}
+        aria-hidden={detailText ? undefined : true}
       >
         {detailText ?? "\u00A0"}
       </div>
-      <div className="metric-track" style={style} aria-hidden />
+      <div
+        className="metric-track"
+        style={style}
+        role="meter"
+        aria-label={meterLabel}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(clamped * 100)}
+      />
     </div>
   );
 }

@@ -163,7 +163,14 @@ export const NodeCard = memo(function NodeCard({
       {...attentionAttrs(attention)}
     >
       <div className="server-card-content">
-        <NodeCardHeader node={node} subtitle={subtitle} systemInfo={systemInfo} osName={osName} />
+        <NodeCardHeader
+          node={node}
+          subtitle={subtitle}
+          systemInfo={systemInfo}
+          osName={osName}
+          isOffline={isOffline}
+          lastSeen={model.lastSeen}
+        />
         <AttentionReasons attention={attention} />
 
         <div className="server-card-stack">
@@ -261,13 +268,20 @@ function NodeCardHeader({
   subtitle,
   systemInfo,
   osName,
+  isOffline,
+  lastSeen,
 }: {
   node: NodeCardNode;
   subtitle: string;
   systemInfo: string;
   osName: string;
+  isOffline: boolean;
+  lastSeen: string | null;
 }) {
-  const detailLabels = nodeDetailLinkLabels(node.name, osName);
+  const detailLabels = nodeDetailLinkLabels(node.name, osName, {
+    offline: isOffline,
+    lastSeen,
+  });
   return (
     <header className="server-card-header">
       <div className="server-card-title-block">
@@ -277,6 +291,7 @@ function NodeCardHeader({
             to={`/instance/${encodeURIComponent(node.uuid)}`}
             className="server-card-title-link"
             title={node.name}
+            aria-label={`${node.name}${isOffline ? "，离线" : ""}`}
           >
             {node.name}
           </Link>

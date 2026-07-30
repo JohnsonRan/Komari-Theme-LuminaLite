@@ -772,6 +772,9 @@ export function ThemeManage() {
             checked={draft.enableBackgroundImage}
             onChange={(value) => patch("enableBackgroundImage", value)}
           />
+          <p className="theme-bg-hint text-[11.5px] leading-relaxed text-[var(--text-tertiary)]">
+            建议使用 WebP / JPEG，单图 ≤ 200KB、宽边 ≤ 1920px；移动端尽量单独配竖图或更小文件，避免固定全屏层解码拖慢弱网设备。
+          </p>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex min-w-0 flex-col gap-2">
               <span className="text-[12px] font-medium text-[var(--text-secondary)]">

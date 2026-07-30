@@ -56,10 +56,20 @@ export function formatOsLabel(osName: string, rawOs?: string | null): string {
 }
 
 /** 节点卡片头部"查看实例详情"链接的 title 和 aria-label。 */
-export function nodeDetailLinkLabels(name: string, osName: string) {
+export function nodeDetailLinkLabels(
+  name: string,
+  osName: string,
+  options?: { offline?: boolean; lastSeen?: string | null },
+) {
+  const status =
+    options?.offline === true
+      ? options.lastSeen
+        ? `离线，最后在线 ${options.lastSeen}`
+        : "离线"
+      : "在线";
   return {
     title: `${osName} · 查看详情`,
-    ariaLabel: `查看 ${name} 详情，系统 ${osName}`,
+    ariaLabel: `查看 ${name} 详情，${status}，系统 ${osName}`,
   };
 }
 

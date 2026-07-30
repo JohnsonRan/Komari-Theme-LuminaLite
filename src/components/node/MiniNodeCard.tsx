@@ -41,13 +41,31 @@ const HEALTH_BAR_COUNT = 24;
 type MiniNode = NodeInfo & NodeMetrics;
 type MiniTag = { label: string; color: string };
 
-function MiniHeader({ node, osName }: { node: MiniNode; osName: string }) {
-  const detailLabels = nodeDetailLinkLabels(node.name, osName);
+function MiniHeader({
+  node,
+  osName,
+  isOffline,
+  lastSeen,
+}: {
+  node: MiniNode;
+  osName: string;
+  isOffline: boolean;
+  lastSeen: string | null;
+}) {
+  const detailLabels = nodeDetailLinkLabels(node.name, osName, {
+    offline: isOffline,
+    lastSeen,
+  });
   const detailHref = `/instance/${encodeURIComponent(node.uuid)}`;
   return (
     <header className="mini-node-header">
       <Flag region={node.region} size={14} />
-      <Link to={detailHref} className="mini-node-title" title={node.name}>
+      <Link
+        to={detailHref}
+        className="mini-node-title"
+        title={node.name}
+        aria-label={`${node.name}${isOffline ? "，离线" : ""}`}
+      >
         {node.name}
       </Link>
       <Link
@@ -469,7 +487,12 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
       data-appearance={resolvedAppearance}
       {...attentionAttrs(attention)}
     >
-      <MiniHeader node={node} osName={osName} />
+      <MiniHeader
+        node={node}
+        osName={osName}
+        isOffline={isOffline}
+        lastSeen={model.lastSeen}
+      />
       <AttentionReasons attention={attention} />
       <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
       <MiniVitals node={node} loadFraction={loadFraction} />

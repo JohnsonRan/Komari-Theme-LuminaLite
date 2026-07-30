@@ -44,12 +44,16 @@ export const PingTaskTabs = memo(function PingTaskTabs({
         const hasLoss = loss != null && Number.isFinite(loss) && loss >= LOSS_TEXT_THRESHOLD;
         const lossText =
           loss == null || !Number.isFinite(loss) || loss < 0 ? "无数据" : `${loss.toFixed(1)}%`;
+        const summary = `${entry.label}，延迟 ${
+          lastValue != null ? `${valueText} 毫秒` : "无样本"
+        }，丢包 ${lossText}`;
         return (
           <button
             key={entry.taskId ?? index}
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={summary}
             className={clsx("ping-task-tab", active && "is-active")}
             style={
               {

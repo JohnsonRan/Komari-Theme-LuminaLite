@@ -587,6 +587,12 @@ const ChartCard = memo(function ChartCard({
     [enhancedOptions, w, h],
   );
 
+  // 读屏：标题 + 当前值构成完整摘要；canvas 图本身只有 role=img。
+  const chartSummary =
+    typeof value === "string" || typeof value === "number"
+      ? `${title}，当前 ${value}`
+      : title;
+
   return (
     <div
       className={clsx(
@@ -595,6 +601,7 @@ const ChartCard = memo(function ChartCard({
         zoomed && "is-zoomed",
       )}
       style={{ "--chart-accent": colors[0] } as CSSProperties}
+      aria-label={chartSummary}
     >
       <header className="instance-chart-card-head">
         <div className="instance-panel-subhead">
