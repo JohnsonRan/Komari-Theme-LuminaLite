@@ -24,6 +24,32 @@ export function VisitorInfoPill() {
     return () => window.clearTimeout(handle);
   }, [data]);
 
+  // 移动端 / 触屏:底部常驻悬浮条会压盖节点卡底部的延迟/丢包等指标。8 秒自动收起
+  // 之前,只要用户开始滚动浏览就提前收起,避免遮挡内容。宽屏桌面不受影响。
+  useEffect(() => {
+    if (!data) return;
+    const mobile =
+      window.matchMedia?.("(pointer: coarse)").matches ||
+      window.matchMedia?.("(max-width: 768px)").matches;
+    if (!mobile) return;
+    const DISMISS_SCROLL = 24;
+    if (window.scrollY > DISMISS_SCROLL) {
+      setDismissed(true);
+      return;
+    }
+    let done = false;
+    const onScroll = () => {
+      if (done) return;
+      if (window.scrollY > DISMISS_SCROLL) {
+        done = true;
+        setDismissed(true);
+        window.removeEventListener("scroll", onScroll);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [data]);
+
   if (!data || dismissed) return null;
 
   const parts = [data.country, data.org].filter(Boolean);
