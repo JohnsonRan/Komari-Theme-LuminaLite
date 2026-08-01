@@ -33,12 +33,12 @@ describe("a11y and mobile experience contracts", () => {
     expect(compactCss).toContain(".compact-node-health-bar:focus-visible");
   });
 
-  it("FloatingControls enforces at least 44px touch target on mobile viewports", () => {
+  it("FloatingControls uses a proportionate 40px touch target on mobile viewports", () => {
     expect(surfaceCss).toMatch(/@media \(pointer: coarse\), \(max-width: 768px\)/);
-    expect(surfaceCss).toContain("width: 44px;");
-    expect(surfaceCss).toContain("height: 44px;");
-    expect(surfaceCss).toContain("min-width: 44px;");
-    expect(surfaceCss).toContain("flex-basis: 44px;");
+    expect(surfaceCss).toContain("width: 40px;");
+    expect(surfaceCss).toContain("height: 40px;");
+    expect(surfaceCss).toContain("min-width: 40px;");
+    expect(surfaceCss).toContain("flex-basis: 40px;");
     expect(surfaceCss).not.toContain(".floating-controls-actions .control-button::before");
   });
 

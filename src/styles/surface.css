@@ -224,10 +224,10 @@ body::after {
 @media (pointer: coarse), (max-width: 768px) {
   .floating-controls-actions .control-button,
   .floating-controls-trigger {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    flex-basis: 44px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    flex-basis: 40px;
     touch-action: manipulation;
   }
 }

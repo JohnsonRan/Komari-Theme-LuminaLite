@@ -1090,7 +1090,7 @@
 }
 
 /* 首页顶部为快捷设置按钮保留控制区：36px 按钮留 28px（上下各约 6px）。
-   iOS 的状态栏安全区由 app-main 统一叠加。触屏/窄屏的 44px 按钮留白见下方覆盖规则。 */
+   iOS 的状态栏安全区由 app-main 统一叠加。触屏/窄屏的 40px 按钮留白见下方覆盖规则。 */
 .home-dashboard {
   padding-top: 28px;
 }
@@ -1203,21 +1203,21 @@
   }
 }
 
-/* 触屏 / 窄屏把快捷按钮放大到 44px 触控目标（见 surface.css 的同条 media），
-   按钮底部 top(-14)+44=+30 会探进概览卡 2px。同步抬高顶部留白到 36px，
+/* 触屏 / 窄屏把快捷按钮放大到 40px 触控目标（见 surface.css 的同条 media），
+   按钮底部 top(-14)+40=+26 会探进概览卡 2px。同步抬高顶部留白到 32px，
    让按钮与概览卡之间保持 6px 间距，与桌面 36px 按钮的留白一致。
    必须写在 1024px 规则之后，以覆盖那里的 24px。 */
 @media (pointer: coarse), (max-width: 768px) {
   .home-dashboard {
-    padding-top: 36px;
+    padding-top: 32px;
   }
 }
 
-/* 触屏宽屏沿用桌面 top:-18，按钮底部 -18+44=+26，留白补到 32 保持 6px 间距。
-   写在最末以同时覆盖 1024px 的 24px 与上一条的 36px。 */
+/* 触屏宽屏沿用桌面 top:-18，按钮底部 -18+40=+22，留白补到 28 保持 6px 间距。
+   写在最末以同时覆盖 1024px 的 24px 与上一条的 32px。 */
 @media (min-width: 1024px) and (pointer: coarse) {
   .home-dashboard {
-    padding-top: 32px;
+    padding-top: 28px;
   }
 }
 
