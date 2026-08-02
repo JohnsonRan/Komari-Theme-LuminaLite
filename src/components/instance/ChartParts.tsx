@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { MorphIcon, iconData } from "@/components/ui/icons";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import type { ChartTooltipState } from "./chartShared";
 
 export function ChartTooltip({
@@ -36,7 +38,7 @@ export function ChartTooltip({
             style={{ background: row.color }}
           />
           <span>{row.label}</span>
-          <strong>{row.value}</strong>
+          <strong><AnimatedValue text={row.value} /></strong>
         </div>
       ))}
     </div>
@@ -63,6 +65,11 @@ export function SwitchToggle({
       aria-pressed={active}
       title={title}
     >
+      <MorphIcon
+        icon={active ? iconData.Check : iconData.X}
+        size={13}
+        spring="snappy"
+      />
       <span className="instance-switch-copy">{label}</span>
       <span className="instance-switch-track" aria-hidden>
         <span className="instance-switch-thumb" />

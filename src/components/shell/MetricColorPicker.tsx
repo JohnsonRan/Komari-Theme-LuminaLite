@@ -9,7 +9,7 @@ import {
   ArrowUp,
   ArrowDown,
   RotateCcw,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { usePreferences } from "@/hooks/usePreferences";
 import {
   DEFAULT_DARK_DEPTH,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { Flag } from "@/components/ui/Flag";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -318,7 +319,7 @@ function HomeOverviewCards({
         <span className="overview-card-label">在线节点</span>
         <div className="overview-card-main">
           <p className="overview-card-value">
-            {overview.onlineNodes}
+            <AnimatedValue text={String(overview.onlineNodes)} />
             <span className="overview-card-unit">/ {overview.totalNodes}</span>
           </p>
         </div>
@@ -358,7 +359,7 @@ function HomeOverviewCards({
             className="overview-card-value"
             style={{ color: speedRateColor(rate.unit) }}
           >
-            {rate.value}
+            <AnimatedValue text={rate.value} />
             <span className="overview-card-unit">{rate.unit}</span>
           </p>
         </div>
@@ -392,7 +393,7 @@ function HomeOverviewCards({
         </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
-            {trafficValue}
+            <AnimatedValue text={trafficValue} />
             <span className="overview-card-unit">{trafficUnit}</span>
           </p>
         </div>
@@ -426,7 +427,7 @@ function HomeOverviewCards({
         </div>
         <div className="overview-card-main">
           <p className="overview-card-value">
-            {connectionsTotal.toLocaleString()}
+            <AnimatedValue text={connectionsTotal.toLocaleString()} />
           </p>
         </div>
         <div className="overview-card-footer">

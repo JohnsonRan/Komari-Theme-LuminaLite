@@ -1,12 +1,14 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Lock } from "lucide-react";
+import { Lock, LogIn, RefreshCw } from "@/components/ui/icons";
 import { VisitorInfoPill } from "@/components/shell/VisitorInfoPill";
 import { BackgroundLayer } from "./BackgroundLayer";
 import { Spinner } from "@/components/ui/Spinner";
+import { MotionSettingsProvider } from "@/components/ui/MotionSettings";
 import { useAppearance } from "@/hooks/useAppearance";
 import { useAuth } from "@/hooks/useAuth";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useSiteMetadata } from "@/hooks/useSiteMetadata";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useMetricColorsSync } from "@/hooks/useMetricColors";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
@@ -16,6 +18,7 @@ export function AppShell() {
   useSiteMetadata();
   useMetricColorsSync();
   useVisitorTracking();
+  const themeSettings = useThemeSettings();
   const { pathname, search } = useLocation();
   const publicConfig = usePublicConfig();
   const auth = useAuth();
@@ -46,6 +49,10 @@ export function AppShell() {
     <div className="relative flex min-h-screen flex-col">
       <BackgroundLayer />
       <main className="app-main flex-1 px-3 pb-8 sm:px-5 md:px-6 lg:px-8">
+        <MotionSettingsProvider
+          iconAnimations={themeSettings.enableIconAnimations}
+          dataAnimations={themeSettings.enableDataAnimations}
+        >
         <div className="mx-auto w-full max-w-[1720px]">
           {isCheckingShell ? (
             <div className="flex min-h-[60vh] items-center justify-center">
@@ -59,6 +66,7 @@ export function AppShell() {
             <Outlet />
           )}
         </div>
+        </MotionSettingsProvider>
       </main>
       {/* 私有站点未通过校验、或壳层还在校验时不显示 —— 那时页面上还没有任何站点内容。 */}
       {!isCheckingShell && !accessError && !isPrivateVisitor && <VisitorInfoPill />}
@@ -75,7 +83,8 @@ function AccessError({ onRetry }: { onRetry: () => void }) {
         </div>
         <p className="text-[13px] text-[var(--text-secondary)]">请检查网络后重试。</p>
       </div>
-      <button type="button" onClick={onRetry} className="control-button px-4 py-2 text-[13px] font-medium">
+      <button type="button" onClick={onRetry} className="control-button inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium">
+        <RefreshCw size={14} aria-hidden />
         重试
       </button>
     </div>
@@ -98,8 +107,9 @@ function PrivateSiteGate() {
         href="/admin"
         target="_blank"
         rel="noopener noreferrer"
-        className="control-button px-4 py-2 text-[13px] font-medium"
+        className="control-button inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium"
       >
+        <LogIn size={14} aria-hidden />
         前往登录
       </a>
     </div>

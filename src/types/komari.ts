@@ -169,6 +169,8 @@ export interface ThemeSettings {
   desktopNodeViewMode?: "large" | "compact" | "mini" | "list";
   mobileNodeViewMode?: "large" | "compact" | "mini" | "list";
   enableAdminButton?: boolean;
+  enableIconAnimations?: boolean;
+  enableDataAnimations?: boolean;
   showPingChart?: boolean;
   homepagePingBindings?: Record<string, string[]>;
   fakePingForUnbound?: boolean;

@@ -11,7 +11,7 @@ import {
 } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
-import { ArrowDown, ArrowUp, CircuitBoard, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Thermometer, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, CircuitBoard, Cpu, Gauge, HardDrive, MemoryStick, Network, RefreshCw, Thermometer, Workflow } from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { useLoadRecords } from "@/hooks/useRecords";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
@@ -916,7 +916,15 @@ export function LoadChart({
             disabled={isFetching}
             aria-busy={isFetching}
           >
-            <RefreshCw size={14} aria-hidden />
+            <RefreshCw
+              size={14}
+              className={
+                isFetching && themeSettings.enableIconAnimations
+                  ? "animate-spin motion-reduce:animate-none"
+                  : undefined
+              }
+              aria-hidden
+            />
             {isFetching ? "刷新中" : "刷新"}
           </button>
         </div>

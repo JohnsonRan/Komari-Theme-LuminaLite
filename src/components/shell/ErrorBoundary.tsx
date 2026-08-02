@@ -1,6 +1,7 @@
 import { Component, useEffect, type CSSProperties, type ErrorInfo, type ReactNode } from "react";
 import { isRouteErrorResponse, useRouteError } from "react-router-dom";
 import { readViewModeHint, useViewMode } from "@/hooks/useViewMode";
+import { Copy, House, RefreshCw } from "@/components/ui/icons";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -95,15 +96,18 @@ function ErrorFallback({
               className="theme-error-button"
               onClick={() => void copyDiagnostics(diagnostics)}
             >
+              <Copy size={14} aria-hidden />
               复制诊断信息
             </button>
           </details>
         )}
         <div className="theme-error-actions">
           <button type="button" className="theme-error-button is-primary" onClick={reloadPage}>
+            <RefreshCw size={14} aria-hidden />
             刷新
           </button>
           <a href="/" className="theme-error-button">
+            <House size={14} aria-hidden />
             返回首页
           </a>
         </div>

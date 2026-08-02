@@ -68,6 +68,14 @@ describe("normalizeThemeSettings", () => {
     expect(normalizeThemeSettings({ showConnections: true }).showConnections).toBe(true);
   });
 
+  it("defaults both animation systems to on unless explicitly disabled", () => {
+    const defaults = normalizeThemeSettings({});
+    expect(defaults.enableIconAnimations).toBe(true);
+    expect(defaults.enableDataAnimations).toBe(true);
+    expect(normalizeThemeSettings({ enableIconAnimations: false }).enableIconAnimations).toBe(false);
+    expect(normalizeThemeSettings({ enableDataAnimations: false }).enableDataAnimations).toBe(false);
+  });
+
   it("parses hiddenNodes from a delimited string and dedupes", () => {
     expect(normalizeThemeSettings({}).hiddenNodes).toEqual([]);
     expect(

@@ -10,10 +10,11 @@ import {
   HardDrive,
   MemoryStick,
   Unplug,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { IpStackBadges } from "./IpStackBadges";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { NodeHistoryStrip } from "./NodeHistoryStrip";
@@ -151,7 +152,7 @@ function MiniMetricBar({
           {label}
         </span>
         <span className="mini-metric-value tabular" title={`${label} ${fullValue}`}>
-          <strong>{valueText}</strong>
+          <strong><AnimatedValue text={valueText} /></strong>
           {unit && <small>{unit}</small>}
         </span>
       </div>
@@ -226,7 +227,7 @@ function MiniFlowRow({
     >
       <span className="mini-node-flow-arrow">{icon}</span>
       <strong className="tabular">
-        {value}
+        <AnimatedValue text={value} />
         {unit && <small>{unit}</small>}
       </strong>
     </span>
@@ -385,7 +386,7 @@ const MiniHealth = memo(function MiniHealth({
             >
               {ping.lastValue != null ? (
                 <>
-                  {Math.round(ping.lastValue)}
+                  <AnimatedValue text={String(Math.round(ping.lastValue))} />
                   <small>ms</small>
                 </>
               ) : (
@@ -404,7 +405,7 @@ const MiniHealth = memo(function MiniHealth({
             <strong className="mini-node-health-value tabular" style={{ color: lossColor }}>
               {ping.loss != null ? (
                 <>
-                  {ping.loss.toFixed(1)}
+                  <AnimatedValue text={ping.loss.toFixed(1)} />
                   <small>%</small>
                 </>
               ) : (

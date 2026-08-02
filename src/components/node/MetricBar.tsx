@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { clamp01 } from "./nodeCardShared";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 
 interface MetricBarProps {
   icon: ReactNode;
@@ -45,7 +46,7 @@ export function MetricBar({
           <span className="text-[11px] font-medium tracking-[0.02em]">{label}</span>
         </div>
         <div className="tabular text-[13px] text-[var(--text-primary)] whitespace-nowrap overflow-hidden text-ellipsis max-w-full text-right">
-          <span className="font-semibold">{valueText}</span>
+          <span className="font-semibold"><AnimatedValue text={valueText} /></span>
           {unit && (
             <span className="ml-[1px] text-[11px] text-[var(--text-tertiary)]">{unit}</span>
           )}

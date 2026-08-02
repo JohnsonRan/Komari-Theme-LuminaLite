@@ -14,7 +14,7 @@ import {
   MemoryStick,
   Network,
   Unplug,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
@@ -44,6 +44,7 @@ import { PingTaskTabs } from "./PingTaskTabs";
 import { NodeHistoryStrip } from "./NodeHistoryStrip";
 import { attentionAttrs } from "@/utils/nodeAttention";
 import { AttentionReasons } from "./AttentionReasons";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { CanvasStrip, safeCanvasColor } from "./CanvasStrip";
 import type {
   NodeInfo,
@@ -96,7 +97,7 @@ function CompactGauge({
           {icon}
           <span>{label}</span>
         </span>
-        <strong className="tabular">{value}</strong>
+        <strong className="tabular"><AnimatedValue text={value} /></strong>
       </div>
       <div className="compact-node-gauge-track" aria-hidden />
     </div>
@@ -200,7 +201,7 @@ function CompactInfoRow({
         {label && <span>{label}</span>}
       </span>
       <strong className="compact-node-info-row-value tabular">
-        {value}
+        <AnimatedValue text={value} />
         {unit && <small>{unit}</small>}
       </strong>
     </span>
@@ -640,7 +641,7 @@ function CompactTrafficBar({
         <span className="compact-node-traffic-uptime">
           {uptimeLabel || "\u00A0"}
         </span>
-        <span className="compact-node-traffic-value">{traffic.detail}</span>
+        <span className="compact-node-traffic-value"><AnimatedValue text={traffic.detail} /></span>
       </div>
     </div>
   );

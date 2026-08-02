@@ -1,9 +1,10 @@
 import { memo, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, CircleDollarSign } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleDollarSign } from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { formatBytes } from "@/utils/format";
@@ -52,7 +53,7 @@ function ListGauge({
   return (
     <div className="node-list-gauge">
       <span className="node-list-gauge-value tabular">
-        {value}
+        <AnimatedValue text={value} />
         {unit && <small>{unit}</small>}
       </span>
       <span className="node-list-gauge-track" style={style} aria-hidden />
@@ -76,7 +77,7 @@ function StackLine({
     <span className="node-list-line" style={color ? { color } : undefined}>
       {icon && <span className="node-list-line-icon">{icon}</span>}
       <span className="node-list-line-value tabular">
-        {value}
+        <AnimatedValue text={value} />
         {unit && <small>{unit}</small>}
       </span>
     </span>
@@ -109,7 +110,7 @@ function ListLatency({
       {/* 多任务时标签行已经把三个延迟都读出来了,再重复一遍当前值只会撑高行高。 */}
       {pingSeries.length === 1 && (
         <span className="node-list-latency-value tabular" style={{ color: latencyColor }}>
-          {latency != null ? Math.round(latency) : "—"}
+          <AnimatedValue text={latency != null ? String(Math.round(latency)) : "—"} />
           {latency != null && <small>ms</small>}
         </span>
       )}

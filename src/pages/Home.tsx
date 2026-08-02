@@ -1,15 +1,13 @@
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { NodeGrid } from "@/components/node/NodeGrid";
 import { FloatingControls } from "@/components/shell/FloatingControls";
 import { Spinner } from "@/components/ui/Spinner";
+import { ThemeManage } from "@/pages/ThemeManage";
+import { House, RefreshCw } from "@/components/ui/icons";
 import { useAuth } from "@/hooks/useAuth";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-
-const ThemeManage = lazy(() =>
-  import("@/pages/ThemeManage").then((module) => ({ default: module.ThemeManage })),
-);
 
 function HomeDashboard() {
   const [controlsExpanded, setControlsExpanded] = useState(false);
@@ -40,17 +38,7 @@ export function Home() {
 
   if (isThemeManageView) {
     if (me?.logged_in) {
-      return (
-        <Suspense
-          fallback={
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <Spinner size={24} />
-            </div>
-          }
-        >
-          <ThemeManage />
-        </Suspense>
-      );
+      return <ThemeManage />;
     }
 
     if (authPending || (!me && authFetching)) {
@@ -80,9 +68,11 @@ export function Home() {
               }}
               className="control-button px-4 py-2 text-[13px] font-medium"
             >
+              <RefreshCw size={14} aria-hidden />
               重试
             </button>
-            <Link to="/" className="control-button px-4 py-2 text-[13px] font-medium">
+            <Link to="/" className="control-button inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium">
+              <House size={14} aria-hidden />
               返回首页
             </Link>
           </div>

@@ -33,6 +33,8 @@ export interface ResolvedThemeSettings {
   desktopNodeViewMode: NodeViewMode;
   mobileNodeViewMode: NodeViewMode;
   enableAdminButton: boolean;
+  enableIconAnimations: boolean;
+  enableDataAnimations: boolean;
   showPingChart: boolean;
   homepagePingBindings: HomepagePingTaskBindings;
   fakePingForUnbound: boolean;
@@ -68,6 +70,8 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   desktopNodeViewMode: "large",
   mobileNodeViewMode: "compact",
   enableAdminButton: true,
+  enableIconAnimations: true,
+  enableDataAnimations: true,
   showPingChart: true,
   homepagePingBindings: {},
   fakePingForUnbound: false,
@@ -178,6 +182,8 @@ export function normalizeThemeSettings(
       DEFAULT_THEME_SETTINGS.mobileNodeViewMode,
     ),
     enableAdminButton: enabledUnlessFalse(settings?.enableAdminButton),
+    enableIconAnimations: enabledUnlessFalse(settings?.enableIconAnimations),
+    enableDataAnimations: enabledUnlessFalse(settings?.enableDataAnimations),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
     homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
     // 默认关闭(需手动开启):给访客展示的是模拟数据,必须由站长显式决定。

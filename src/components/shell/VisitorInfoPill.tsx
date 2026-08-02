@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Globe, X } from "lucide-react";
+import { Globe, X } from "@/components/ui/icons";
 import { Flag } from "@/components/ui/Flag";
 import { useVisitorInfo } from "@/hooks/useVisitorInfo";
 import { shortenIp } from "@/utils/visitorInfo";

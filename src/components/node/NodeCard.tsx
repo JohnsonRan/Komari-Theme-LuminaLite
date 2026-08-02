@@ -16,7 +16,7 @@ import {
   Database,
   Network,
   History,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -51,6 +51,7 @@ import {
 import { formatReportedPercent } from "@/utils/nodeHistory";
 import { attentionAttrs } from "@/utils/nodeAttention";
 import { AttentionReasons } from "./AttentionReasons";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { clsx } from "clsx";
 import type { NodeInfo, NodeMetrics, PingOverviewBucket, PingOverviewItem, TrafficTrendSample } from "@/types/komari";
 import type { ByteRateDisplay } from "@/utils/format";
@@ -812,7 +813,7 @@ function TrafficStat({
           <span style={{ color: speedColor }}>{direction}</span>
         </div>
         <span className="traffic-stat-value tabular" style={{ color: speedColor }}>
-          {rate.value}
+          <AnimatedValue text={rate.value} />
           <span className="traffic-stat-unit">{rate.unit}</span>
         </span>
       </div>
@@ -838,7 +839,7 @@ function TrafficStat({
           <GlobeArrow direction={totalLabel} color={color} />
           <span>{totalLabel}</span>
         </div>
-        <span className="tabular">{total}</span>
+        <span className="tabular"><AnimatedValue text={total} /></span>
       </div>
     </div>
   );
@@ -954,7 +955,7 @@ function FooterStat({
         <span>{label}</span>
       </div>
       <span className="server-card-meta-value tabular" style={{ color }}>
-        {value}
+        <AnimatedValue text={value} />
         {unit && <span className="server-card-meta-unit">{unit}</span>}
       </span>
     </div>

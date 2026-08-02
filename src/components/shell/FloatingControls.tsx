@@ -1,7 +1,18 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, Grid3x3, LayoutGrid, List, Monitor, Rows3, Settings, SlidersHorizontal, Sun, Moon } from "lucide-react";
+import {
+  AlertTriangle,
+  Grid3x3,
+  LayoutGrid,
+  List,
+  Rows3,
+  Settings,
+  SlidersHorizontal,
+  MorphIcon,
+  iconData,
+} from "@/components/ui/icons";
 import { Link } from "react-router-dom";
 import { usePreferences } from "@/hooks/usePreferences";
+import { MotionSettingsProvider } from "@/components/ui/MotionSettings";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
@@ -18,11 +29,13 @@ const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: str
   list: { icon: List, label: "列表视图" },
 };
 
-const APPEARANCE_OPTIONS = [
-  { value: "light", icon: Sun, label: "浅色" },
-  { value: "system", icon: Monitor, label: "跟随系统" },
-  { value: "dark", icon: Moon, label: "深色" },
-] as const;
+const APPEARANCE_CYCLE = ["light", "system", "dark"] as const;
+
+const APPEARANCE_META = {
+  light: { icon: iconData.Sun, label: "浅色" },
+  system: { icon: iconData.Monitor, label: "跟随系统" },
+  dark: { icon: iconData.Moon, label: "深色" },
+} as const;
 
 export function FloatingControls({
   onExpandedChange,
@@ -42,8 +55,18 @@ export function FloatingControls({
   const showThemeManage = loggedIn;
   const showSyncWarning = failureStreak >= 2;
   const hiddenTabIndex = collapsed ? -1 : undefined;
-  const ToggleIcon = collapsed ? ChevronLeft : ChevronRight;
-  const ViewIcon = VIEW_MODE_META[nextMode].icon;
+  const appearanceIndex = APPEARANCE_CYCLE.indexOf(appearance);
+  const nextAppearance = APPEARANCE_CYCLE[(appearanceIndex + 1) % APPEARANCE_CYCLE.length];
+  const appearanceMeta = APPEARANCE_META[appearance];
+  const viewIconData = iconData[
+    nextMode === "large"
+      ? "LayoutGrid"
+      : nextMode === "compact"
+        ? "Rows3"
+        : nextMode === "mini"
+          ? "Grid3x3"
+          : "List"
+  ];
   // 只要不在最宽松的大卡默认态,就视为"已切换"，按钮保持高亮。
   const isReducedView = mode !== "large";
   useEffect(() => {
@@ -58,6 +81,10 @@ export function FloatingControls({
   };
 
   return (
+    <MotionSettingsProvider
+      iconAnimations={themeSettings.enableIconAnimations}
+      dataAnimations={themeSettings.enableDataAnimations}
+    >
     <div
       className={clsx(
         "floating-controls",
@@ -70,29 +97,19 @@ export function FloatingControls({
           <div className="floating-controls-actions" aria-hidden={collapsed}>
             {settingsReady && (
               <>
-                <div
-                  className="control-group floating-controls-appearance"
-                  role="group"
-                  aria-label="外观选择"
-                >
-                  {APPEARANCE_OPTIONS.map(({ value, icon: Icon, label }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setAppearance(value)}
-                      aria-label={label}
-                      aria-pressed={appearance === value}
-                      title={label}
-                      tabIndex={hiddenTabIndex}
-                      className={clsx(
-                        "control-button grid h-9 w-9 place-items-center",
-                        appearance === value && "control-toggle is-active",
-                      )}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  ))}
-                </div>
+                  <button
+                    type="button"
+                    onClick={() => setAppearance(nextAppearance)}
+                    aria-label={`当前${appearanceMeta.label}，切换到${APPEARANCE_META[nextAppearance].label}`}
+                    title={`外观：${appearanceMeta.label}；点击切换到${APPEARANCE_META[nextAppearance].label}`}
+                    tabIndex={hiddenTabIndex}
+                    className={clsx(
+                      "control-button grid h-9 w-9 place-items-center",
+                      appearance !== "system" && "control-toggle is-active",
+                    )}
+                  >
+                    <MorphIcon icon={appearanceMeta.icon} size={16} spring="snappy" />
+                  </button>
                 <button
                   type="button"
                   onClick={toggleMode}
@@ -105,7 +122,7 @@ export function FloatingControls({
                     isReducedView && "control-toggle is-active",
                   )}
                 >
-                  <ViewIcon size={16} />
+                  <MorphIcon icon={viewIconData} size={16} spring="bouncy" />
                 </button>
               </>
             )}
@@ -123,7 +140,9 @@ export function FloatingControls({
             {showAdmin && (
               <a
                 href="/admin"
-                aria-label={me?.logged_in ? "管理" : "后台登录"}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={me?.logged_in ? "在新标签页打开管理" : "在新标签页打开后台登录"}
                 title={me?.logged_in ? "管理" : "后台登录"}
                 tabIndex={hiddenTabIndex}
                 className="control-button grid h-9 w-9 place-items-center"
@@ -154,7 +173,11 @@ export function FloatingControls({
                   : "收起快捷按钮"
             }
           >
-            <ToggleIcon size={16} />
+            <MorphIcon
+              icon={collapsed ? iconData.ChevronLeft : iconData.ChevronRight}
+              size={16}
+              spring="snappy"
+            />
             {showSyncWarning && collapsed && (
               <span className="floating-controls-warning-dot" aria-hidden />
             )}
@@ -172,5 +195,6 @@ export function FloatingControls({
         )}
       </div>
     </div>
+    </MotionSettingsProvider>
   );
 }

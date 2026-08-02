@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ArrowUpNarrowWide } from "lucide-react";
+import { MorphIcon, iconData } from "@/components/ui/icons";
 import {
   HOME_SORT_FIELDS,
   HOME_SORT_FIELD_LABELS,
@@ -10,10 +10,12 @@ import type { HomeSortControlState } from "@/hooks/useHomeSort";
 
 // 单个图标同时表达排序与方向。
 function SortIcon({ direction, size = 14 }: { direction: HomeSortDirection; size?: number }) {
-  return direction === "asc" ? (
-    <ArrowUpNarrowWide size={size} aria-hidden />
-  ) : (
-    <ArrowDownWideNarrow size={size} aria-hidden />
+  return (
+    <MorphIcon
+      icon={direction === "asc" ? iconData.ArrowUpNarrowWide : iconData.ArrowDownWideNarrow}
+      size={size}
+      spring="snappy"
+    />
   );
 }
 

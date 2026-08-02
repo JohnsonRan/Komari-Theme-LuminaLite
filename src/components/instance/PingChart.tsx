@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import UplotReact from "uplot-react";
 import type uPlot from "uplot";
-import { Eye, EyeOff, RefreshCw } from "lucide-react";
+import { MorphIcon, RefreshCw, iconData } from "@/components/ui/icons";
 import { usePingRecords, usePingStats } from "@/hooks/useRecords";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { InstancePanel, InstanceChartLoading } from "./InstancePanel";
 import {
   buildChartTooltipHooks,
@@ -638,6 +639,7 @@ export function PingChart({
     });
   };
 
+  const themeSettings = useThemeSettings();
   const toggleAll = () => {
     setHiddenTasks((prev) => (prev.size === 0 ? new Set(tasks.map((task) => task.id)) : new Set()));
   };
@@ -699,7 +701,11 @@ export function PingChart({
           title="关闭：如实显示中断/丢包断点；开启：跨过所有空缺连成完整曲线（更好看，但看不出掉线）。注：偶尔漏一两次采样的小空缺始终自动桥接，不受此开关影响。"
         />
         <button type="button" className="instance-toggle-button" onClick={toggleAll}>
-          {hiddenTasks.size === 0 ? <EyeOff size={14} aria-hidden /> : <Eye size={14} aria-hidden />}
+          <MorphIcon
+            icon={hiddenTasks.size === 0 ? iconData.EyeOff : iconData.Eye}
+            size={14}
+            spring="snappy"
+          />
           {hiddenTasks.size === 0 ? "隐藏全部" : "显示全部"}
         </button>
         <button
@@ -709,7 +715,15 @@ export function PingChart({
           disabled={isFetching}
           aria-busy={isFetching}
         >
-          <RefreshCw size={14} aria-hidden />
+          <RefreshCw
+            size={14}
+            className={
+              isFetching && themeSettings.enableIconAnimations
+                ? "animate-spin motion-reduce:animate-none"
+                : undefined
+            }
+            aria-hidden
+          />
           {isFetching ? "刷新中" : isError ? "刷新失败，重试" : "刷新"}
         </button>
       </div>

@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, MorphIcon, iconData } from "@/components/ui/icons";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllNodeMeta, useHomeNodeSummaries } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -130,7 +130,11 @@ export function InstanceSwitcher({ currentUuid }: { currentUuid: string }) {
           }
         }}
       >
-        {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
+        <MorphIcon
+          icon={open ? iconData.ChevronUp : iconData.ChevronDown}
+          size={14}
+          spring="snappy"
+        />
       </button>
       {open && (
         <div

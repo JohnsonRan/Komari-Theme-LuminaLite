@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { House } from "@/components/ui/icons";
 
 export function NotFound() {
   return (
@@ -9,8 +10,9 @@ export function NotFound() {
       <p className="text-[var(--text-secondary)]">页面未找到</p>
       <Link
         to="/"
-        className="control-button px-5 py-2 text-[13px] font-medium"
+        className="control-button inline-flex items-center gap-2 px-5 py-2 text-[13px] font-medium"
       >
+        <House size={14} aria-hidden />
         返回首页
       </Link>
     </div>

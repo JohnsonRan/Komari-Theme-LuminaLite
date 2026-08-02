@@ -6,6 +6,7 @@ import { formatByteRateLabel, formatBytes, formatTrafficRateLabel, formatUptimeD
 import { Flag } from "@/components/ui/Flag";
 import { IpStackBadges } from "@/components/node/IpStackBadges";
 import { InstancePanel } from "./InstancePanel";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 
 // Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
@@ -74,7 +75,7 @@ export function InstanceDetails({
           </span>
           <div className="instance-bento-uptime">
             <span className="instance-bento-uptime-value">
-              {uptime.unit ? `${uptime.value} ${uptime.unit}` : uptime.value}
+              <AnimatedValue text={uptime.unit ? `${uptime.value} ${uptime.unit}` : uptime.value} />
             </span>
             <span className="instance-bento-uptime-label">运行时长</span>
           </div>
@@ -97,13 +98,15 @@ export function InstanceDetails({
               label="内存"
               value={`${formatBytes(metrics.ramUsed)} / ${formatBytes(metrics.ramTotal)}`}
               primary
+              animated
             />
             <SpecItem
               label="磁盘"
               value={`${formatBytes(metrics.diskUsed)} / ${formatBytes(metrics.diskTotal)}`}
               primary
+              animated
             />
-            <SpecItem label="Swap" value={swapLine} primary />
+            <SpecItem label="Swap" value={swapLine} primary animated />
             {hasGpu && <SpecItem label="显卡" value={meta.gpu_name} wide />}
           </div>
         </section>
@@ -124,18 +127,22 @@ export function InstanceDetails({
             <SpecItem
               label="实时网络"
               value={`↑ ${formatNetRate(metrics.netUp)} · ↓ ${formatNetRate(metrics.netDown)}`}
+              animated
             />
             <SpecItem
               label="总流量"
               value={`↑ ${formatBytes(metrics.trafficUp)} · ↓ ${formatBytes(metrics.trafficDown)}`}
+              animated
             />
             <SpecItem
               label="连接"
               value={`TCP ${metrics.connectionsTcp} · UDP ${metrics.connectionsUdp}`}
+              animated
             />
             <SpecItem
               label="负载 / 进程"
               value={`${metrics.load1.toFixed(2)} / ${metrics.load5.toFixed(2)} · ${metrics.process}`}
+              animated
             />
           </div>
         </section>
@@ -149,17 +156,21 @@ function SpecItem({
   value,
   wide,
   primary,
+  animated,
 }: {
   label: string;
   value: string;
   wide?: boolean;
   // primary：硬件卡内放大，作为全信息区视觉落点，与其余次要信息拉开层级。
   primary?: boolean;
+  animated?: boolean;
 }) {
   return (
     <div className={clsx("instance-spec-item", wide && "is-wide", primary && "is-primary")}>
       <span className="instance-spec-label">{label}</span>
-      <span className="instance-spec-value">{value}</span>
+      <span className="instance-spec-value">
+        {animated ? <AnimatedValue text={value} /> : value}
+      </span>
     </div>
   );
 }

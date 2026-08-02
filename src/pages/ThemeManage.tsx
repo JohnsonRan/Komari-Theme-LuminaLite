@@ -10,13 +10,15 @@ import {
   LayoutTemplate,
   LayoutGrid,
   ListFilter,
+  MorphIcon,
+  iconData,
   Palette,
   RefreshCw,
   Rows3,
   Save,
   Search,
   Wallpaper,
-} from "lucide-react";
+} from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { InstancePanel } from "@/components/instance/InstancePanel";
 import { MetricColorPicker } from "@/components/shell/MetricColorPicker";
@@ -192,6 +194,8 @@ function applyAvailableClientAssignments(
 // 刻意不标注返回类型:让推断给出全字段必填的具体类型,ThemeDraft 才能安全地 Omit/扩展。
 function pickManagedThemeSettings(settings: ResolvedThemeSettings) {
   return {
+    enableIconAnimations: settings.enableIconAnimations,
+    enableDataAnimations: settings.enableDataAnimations,
     defaultAppearance: settings.defaultAppearance,
     desktopNodeViewMode: settings.desktopNodeViewMode,
     mobileNodeViewMode: settings.mobileNodeViewMode,
@@ -442,7 +446,7 @@ export function ThemeManage() {
       await saveThemeSettings(config.theme, nextSettings);
       await queryClient.invalidateQueries({ queryKey: ["public"] });
       if (editVersionRef.current === submittedEditVersion) {
-        setMessage("主题设置已保存");
+        window.location.reload();
       }
     } catch (saveError) {
       if (
@@ -472,38 +476,38 @@ export function ThemeManage() {
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  // 滚动时高亮当前所在分区的导航 chip。用 IntersectionObserver 监听各分区,
-  // 取最靠近视口顶部的可见分区作为当前项。依赖 configLoading/config:加载期间
-  // 分区尚未渲染,需等它们进入 DOM 后再建立观察。
+  // 滚动时直接按各分区标题相对吸顶栏的位置计算当前项。相比 IntersectionObserver，
+  // 这不会因分区高度、rootMargin 或快速程序化滚动而出现标签与实际位置错位。
   const [activeSection, setActiveSection] = useState<string>(THEME_SECTIONS[0].id);
   useEffect(() => {
     if (configLoading || !config) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // 触底时强制高亮最后一个分区:末分区(详情页)较矮,顶边到不了观察带,
-        // 仅靠相交状态无法被选中。
-        const scroller = document.scrollingElement;
-        if (
-          scroller &&
-          scroller.scrollHeight - scroller.scrollTop - window.innerHeight < 4
-        ) {
-          setActiveSection(THEME_SECTIONS[THEME_SECTIONS.length - 1].id);
-          return;
-        }
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
-        if (visible.length > 0) {
-          setActiveSection(visible[0].target.id.replace("theme-section-", ""));
-        }
-      },
-      { rootMargin: "-72px 0px -55% 0px", threshold: 0 },
-    );
-    for (const section of THEME_SECTIONS) {
-      const element = document.getElementById(`theme-section-${section.id}`);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
+    let frame = 0;
+    const updateActiveSection = () => {
+      frame = 0;
+      const anchor = 92;
+      let current: string = THEME_SECTIONS[0].id;
+      for (const section of THEME_SECTIONS) {
+        const element = document.getElementById(`theme-section-${section.id}`);
+        if (element && element.getBoundingClientRect().top <= anchor) current = section.id;
+        else break;
+      }
+      const scroller = document.scrollingElement;
+      if (scroller && scroller.scrollHeight - scroller.scrollTop - window.innerHeight < 4) {
+        current = THEME_SECTIONS[THEME_SECTIONS.length - 1].id;
+      }
+      setActiveSection(current);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(updateActiveSection);
+    };
+    updateActiveSection();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [configLoading, config]);
 
   if (configLoading) {
@@ -681,7 +685,7 @@ export function ThemeManage() {
         aside={<LayoutTemplate size={16} />}
       >
         <div className="instance-segmented is-scrollable">
-          {APPEARANCE_OPTIONS.map(({ value, label, icon: Icon }) => (
+          {APPEARANCE_OPTIONS.map(({ value, label, icon }) => (
             <button
               key={value}
               type="button"
@@ -690,10 +694,28 @@ export function ThemeManage() {
               onClick={() => patch("defaultAppearance", value)}
               className="inline-flex items-center justify-center gap-2"
             >
-              <Icon size={14} />
+              <MorphIcon
+                icon={draft.defaultAppearance === value ? iconData.Check : icon}
+                size={14}
+                spring="snappy"
+              />
               <span>{label}</span>
             </button>
           ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <ToggleField
+            title="界面图标动效"
+            description="启用视图切换、展开收起、显示隐藏与刷新图标的变形和旋转效果。"
+            checked={draft.enableIconAnimations}
+            onChange={(value) => patch("enableIconAnimations", value)}
+          />
+          <ToggleField
+            title="数据变化动效"
+            description="使用继承主题字体的碎片聚合动画展示首页与节点中的实时数字变化。"
+            checked={draft.enableDataAnimations}
+            onChange={(value) => patch("enableDataAnimations", value)}
+          />
         </div>
       </InstancePanel>
 
@@ -715,7 +737,7 @@ export function ThemeManage() {
               </div>
             </div>
             <div className="instance-segmented is-scrollable">
-              {NODE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
+              {NODE_VIEW_MODE_OPTIONS.map(({ value, label, icon }) => (
                 <button
                   key={value}
                   type="button"
@@ -724,7 +746,11 @@ export function ThemeManage() {
                   onClick={() => patch("desktopNodeViewMode", value)}
                   className="inline-flex items-center justify-center gap-2"
                 >
-                  <Icon size={14} />
+                  <MorphIcon
+                    icon={draft.desktopNodeViewMode === value ? iconData.Check : icon}
+                    size={14}
+                    spring="snappy"
+                  />
                   <span>{label}</span>
                 </button>
               ))}
@@ -740,7 +766,7 @@ export function ThemeManage() {
               </div>
             </div>
             <div className="instance-segmented is-scrollable">
-              {MOBILE_VIEW_MODE_OPTIONS.map(({ value, label, icon: Icon }) => (
+              {MOBILE_VIEW_MODE_OPTIONS.map(({ value, label, icon }) => (
                 <button
                   key={value}
                   type="button"
@@ -749,7 +775,11 @@ export function ThemeManage() {
                   onClick={() => patch("mobileNodeViewMode", value)}
                   className="inline-flex items-center justify-center gap-2"
                 >
-                  <Icon size={14} />
+                  <MorphIcon
+                    icon={draft.mobileNodeViewMode === value ? iconData.Check : icon}
+                    size={14}
+                    spring="snappy"
+                  />
                   <span>{label}</span>
                 </button>
               ))}

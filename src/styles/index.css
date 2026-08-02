@@ -1,3 +1,96 @@
+.native-roll-value {
+  display: inline-flex;
+  align-items: baseline;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  white-space: nowrap;
+}
+
+.native-roll-value-change {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  vertical-align: baseline;
+}
+
+.native-roll-value-measure {
+  display: inline-block;
+  visibility: hidden;
+  font: inherit;
+}
+
+.native-roll-value-old,
+.native-roll-value-new {
+  position: absolute;
+  inset: 0 auto auto 0;
+  max-width: 100%;
+  overflow: hidden;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  white-space: nowrap;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.native-roll-value[data-direction="up"] .native-roll-value-old {
+  animation: native-roll-old-up 360ms cubic-bezier(0.22, 0.72, 0.22, 1) both;
+}
+
+.native-roll-value[data-direction="up"] .native-roll-value-new {
+  animation: native-roll-new-up 360ms cubic-bezier(0.22, 0.72, 0.22, 1) both;
+}
+
+.native-roll-value[data-direction="down"] .native-roll-value-old {
+  animation: native-roll-old-down 360ms cubic-bezier(0.22, 0.72, 0.22, 1) both;
+}
+
+.native-roll-value[data-direction="down"] .native-roll-value-new {
+  animation: native-roll-new-down 360ms cubic-bezier(0.22, 0.72, 0.22, 1) both;
+}
+
+@keyframes native-roll-old-up {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-0.42em); }
+}
+
+@keyframes native-roll-new-up {
+  from { opacity: 0; transform: translateY(0.42em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes native-roll-old-down {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(0.42em); }
+}
+
+@keyframes native-roll-new-down {
+  from { opacity: 0; transform: translateY(-0.42em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+:root[data-icon-animations="false"] svg {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-roll-value-old {
+    display: none;
+  }
+
+  .native-roll-value-new {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @import "tailwindcss";
 @import "./tokens.css";
 @import "./surface.css";

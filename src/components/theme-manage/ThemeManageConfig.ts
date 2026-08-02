@@ -1,26 +1,18 @@
-import {
-  Grid3x3,
-  LayoutGrid,
-  List,
-  Moon,
-  Rows3,
-  Sun,
-  SunMoon,
-} from "lucide-react";
+import { iconData } from "@/components/ui/icons";
 import type { BackgroundPosition, BackgroundSize } from "@/utils/background";
 import type { ResolvedThemeSettings } from "@/utils/themeSettings";
 
 export const APPEARANCE_OPTIONS = [
-  { value: "light", label: "浅色", icon: Sun },
-  { value: "system", label: "跟随系统", icon: SunMoon },
-  { value: "dark", label: "深色", icon: Moon },
+  { value: "light", label: "浅色", icon: iconData.Sun },
+  { value: "system", label: "跟随系统", icon: iconData.SunMoon },
+  { value: "dark", label: "深色", icon: iconData.Moon },
 ] as const;
 
 export const NODE_VIEW_MODE_OPTIONS = [
-  { value: "large", label: "大卡片", icon: LayoutGrid },
-  { value: "compact", label: "小卡片", icon: Rows3 },
-  { value: "mini", label: "迷你卡片", icon: Grid3x3 },
-  { value: "list", label: "列表", icon: List },
+  { value: "large", label: "大卡片", icon: iconData.LayoutGrid },
+  { value: "compact", label: "小卡片", icon: iconData.Rows3 },
+  { value: "mini", label: "迷你卡片", icon: iconData.Grid3x3 },
+  { value: "list", label: "列表", icon: iconData.List },
 ] as const;
 
 export const MOBILE_VIEW_MODE_OPTIONS = NODE_VIEW_MODE_OPTIONS.filter(

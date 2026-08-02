@@ -1,8 +1,9 @@
 import { Fragment, Suspense, lazy, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, RefreshCw } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, RefreshCw } from "@/components/ui/icons";
 import { Flag } from "@/components/ui/Flag";
 import { Spinner } from "@/components/ui/Spinner";
+import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { useAuth } from "@/hooks/useAuth";
 import { useMinuteClock } from "@/hooks/useClock";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -85,7 +86,7 @@ function formatPeakTime(timeMs: number | null, value: number) {
 function PeakCell({ stat, format }: { stat: DirectionStat; format: (v: number) => string }) {
   return (
     <span className="traffic-peak-value">
-      <strong>{format(stat.peak)}</strong>
+      <strong><AnimatedValue text={format(stat.peak)} /></strong>
       <small>{formatPeakTime(stat.peakAt, stat.peak)}</small>
     </span>
   );
@@ -111,7 +112,7 @@ function SampleChart({ id, samples, config }: { id: string; samples: TodaySeries
     <section id={id} className="traffic-detail-panel" aria-label="本日明细曲线">
       <header className="traffic-detail-head">
         <strong>本日{config.upLabel}/{config.downLabel}</strong>
-        <span>{samples.length} 个采样</span>
+        <span><AnimatedValue text={String(samples.length)} /> 个采样</span>
       </header>
       {samples.length === 0 ? (
         <div className="traffic-detail-empty">本日暂无采样</div>
@@ -204,11 +205,11 @@ export function TodayMetricPage({ config }: { config: TodayMetricConfig }) {
     <>
       <span>
         <ArrowUp size={13} aria-hidden />
-        {config.formatRate(totals.peakUp?.up.peak ?? 0)}
+        <AnimatedValue text={config.formatRate(totals.peakUp?.up.peak ?? 0)} />
       </span>
       <span>
         <ArrowDown size={13} aria-hidden />
-        {config.formatRate(totals.peakDown?.down.peak ?? 0)}
+        <AnimatedValue text={config.formatRate(totals.peakDown?.down.peak ?? 0)} />
       </span>
     </>
   );
