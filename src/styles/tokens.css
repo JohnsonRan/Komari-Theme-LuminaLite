@@ -220,3 +220,27 @@
 [data-tag=""] {
   --tag-bg: var(--tag-gray-bg);
   --tag-fg: var(--tag-gray-fg);}
+
+/* 动效刻度(统一动效基础设施,primitives 见 motion.css):时长/曲线/位移/上限全部从这里取值,
+   新增动效不要再写死 150ms/260ms 这类散值。JS/WAAPI 侧的同值常量在 utils/motion.ts,
+   改动时必须两边同步(motion 相关测试会校验对齐)。 */
+:root {
+  --motion-duration-instant: 80ms;
+  --motion-duration-fast: 140ms;
+  --motion-duration-normal: 220ms;
+  --motion-duration-slow: 320ms;
+  --motion-flash-duration: 600ms;
+
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* 与 AnimatedValue 数值滚动同一条曲线(index.css 的 native-roll keyframes 写死了它)。 */
+  --motion-ease-emphasized: cubic-bezier(0.22, 0.72, 0.22, 1);
+
+  --motion-distance-tooltip: 2px;
+  --motion-distance-menu: 4px;
+  --motion-distance-overlay: 10px;
+
+  /* FLIP 重排的卡片数上限,超量直接跳转不播动画;与 utils/motion.ts 的 MOTION_COUNT_FLIP_MAX 同值。 */
+  --motion-count-flip-max: 24;
+}

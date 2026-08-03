@@ -705,13 +705,13 @@ export function ThemeManage() {
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <ToggleField
-            title="界面图标动效"
-            description="启用视图切换、展开收起、显示隐藏与刷新图标的变形和旋转效果。"
+            title="界面动效"
+            description="图标变形、卡片重排、浮层进入与按压反馈等界面过渡效果；系统「减少动态效果」开启时自动停用。"
             checked={draft.enableIconAnimations}
             onChange={(value) => patch("enableIconAnimations", value)}
           />
           <ToggleField
-            title="数据变化动效"
+            title="数据动效"
             description="使用继承主题字体的碎片聚合动画展示首页与节点中的实时数字变化。"
             checked={draft.enableDataAnimations}
             onChange={(value) => patch("enableDataAnimations", value)}

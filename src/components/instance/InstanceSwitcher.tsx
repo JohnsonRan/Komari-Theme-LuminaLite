@@ -139,7 +139,7 @@ export function InstanceSwitcher({ currentUuid }: { currentUuid: string }) {
       {open && (
         <div
           id={listId}
-          className="instance-switcher-panel"
+          className="instance-switcher-panel motion-overlay-enter"
           role="listbox"
           aria-label="服务器"
           ref={listRef}

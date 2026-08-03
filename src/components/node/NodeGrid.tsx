@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
@@ -34,6 +34,7 @@ import {
 import { getDisplayRegionCode } from "@/utils/geo";
 import { useHomeSort } from "@/hooks/useHomeSort";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
+import { useLayoutTransition } from "@/hooks/useLayoutTransition";
 import { AttentionProvider, useNodeAttention } from "@/hooks/useNodeAttention";
 import { useHourlyClock } from "@/hooks/useClock";
 import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
@@ -709,7 +710,7 @@ export function NodeGrid() {
       mode === "list"
         ? null
         : orderedUuids.map((uuid) => (
-            <div key={uuid} className="min-w-0">
+            <div key={uuid} className="min-w-0" data-flip-id={uuid}>
               {mode === "mini" ? (
                 <MiniNodeCard uuid={uuid} />
               ) : mode === "compact" ? (
@@ -745,6 +746,11 @@ export function NodeGrid() {
   const controlsStyle = borrowControlsGrid
     ? { gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, 340px), 1fr))` }
     : gridStyle;
+
+  // FLIP 重排:排序/筛选/卡片视图切换时,留下来的卡片滑到新位置;
+  // 进出场与挂载/卸载(列表档互换)不播。
+  const gridRef = useRef<HTMLDivElement>(null);
+  useLayoutTransition(gridRef, orderedUuids, mode);
 
   if (!themeSettings.isReady || !storeHydrated) {
     if (!nodeInfoError) return null;
@@ -824,7 +830,7 @@ export function NodeGrid() {
       {isList ? (
         <NodeListView uuids={orderedUuids} />
       ) : (
-        <div className={gridWrapClassName} style={gridStyle}>
+        <div ref={gridRef} className={gridWrapClassName} style={gridStyle}>
           {cards}
         </div>
       )}

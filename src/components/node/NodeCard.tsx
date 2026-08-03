@@ -18,6 +18,7 @@ import {
   History,
 } from "@/components/ui/icons";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import { useNodeStatusFlash } from "@/hooks/useNodeStatusFlash";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
@@ -73,6 +74,11 @@ export const NodeCard = memo(function NodeCard({
   const [hoveredLossIndex, setHoveredLossIndex] = useState<number | null>(null);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
+  // 骨架分支之前调用(hook 数量恒定):数据未就位时传 null,不会播闪烁。
+  const statusFlash = useNodeStatusFlash(
+    model.node ? model.node.online : null,
+    model.attention,
+  );
 
   if (!model.node) {
     return (
@@ -159,8 +165,11 @@ export const NodeCard = memo(function NodeCard({
   const lossHoverColor = hoveredLossBucket ? lossHeatColor(hoveredLossBucket.loss) : null;
 
   return (
+    // content-enter 只挂 article:骨架换成真实内容时 article 首次挂载,淡入一次;
+    // 之后实时刷新不重建 article,不会重播。
     <article
-      className={clsx("server-card", isOffline && "is-offline")}
+      className={clsx("server-card content-enter", isOffline && "is-offline", statusFlash.className)}
+      onAnimationEnd={statusFlash.onAnimationEnd}
       {...attentionAttrs(attention)}
     >
       <div className="server-card-content">
@@ -579,7 +588,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
               <div className="server-health-placeholder">未配置首页 Ping</div>
             )}
             {latencyHoverTime && hoveredLatencyBucket && (
-              <div className="server-health-tooltip">
+              <div className="server-health-tooltip motion-overlay-enter">
                 <div className="instance-chart-tooltip-time">{latencyHoverTime}</div>
                 <div className="instance-chart-tooltip-row">
                   <span className="instance-chart-tooltip-dot" style={{ background: latencyHoverColor }} />
@@ -620,7 +629,7 @@ const NodeHealthSection = memo(function NodeHealthSection({
               <div className="server-health-placeholder">未配置首页 Ping</div>
             )}
             {lossHoverTime && hoveredLossBucket && (
-              <div className="server-health-tooltip">
+              <div className="server-health-tooltip motion-overlay-enter">
                 <div className="instance-chart-tooltip-time">{lossHoverTime}</div>
                 <div className="instance-chart-tooltip-row">
                   <span className="instance-chart-tooltip-dot" style={{ background: lossHoverColor ?? lossColor }} />

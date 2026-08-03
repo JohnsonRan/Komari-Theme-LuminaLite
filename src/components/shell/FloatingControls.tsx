@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/icons";
 import { Link } from "react-router-dom";
 import { usePreferences } from "@/hooks/usePreferences";
-import { MotionSettingsProvider } from "@/components/ui/MotionSettings";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useAuth } from "@/hooks/useAuth";
@@ -81,10 +80,6 @@ export function FloatingControls({
   };
 
   return (
-    <MotionSettingsProvider
-      iconAnimations={themeSettings.enableIconAnimations}
-      dataAnimations={themeSettings.enableDataAnimations}
-    >
     <div
       className={clsx(
         "floating-controls",
@@ -195,6 +190,5 @@ export function FloatingControls({
         )}
       </div>
     </div>
-    </MotionSettingsProvider>
   );
 }

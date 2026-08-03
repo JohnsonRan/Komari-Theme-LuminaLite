@@ -53,19 +53,25 @@ export function AppShell() {
           iconAnimations={themeSettings.enableIconAnimations}
           dataAnimations={themeSettings.enableDataAnimations}
         >
-        <div className="mx-auto w-full max-w-[1720px]">
-          {isCheckingShell ? (
-            <div className="flex min-h-[60vh] items-center justify-center">
-              <Spinner size={24} />
-            </div>
-          ) : accessError ? (
-            <AccessError onRetry={() => void publicConfig.refetch()} />
-          ) : isPrivateVisitor ? (
-            <PrivateSiteGate />
-          ) : (
-            <Outlet />
-          )}
-        </div>
+          <div className="mx-auto w-full max-w-[1720px]">
+            {isCheckingShell ? (
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <Spinner size={24} />
+              </div>
+            ) : (
+              // key 只由真实导航的 pathname/search 构成；权限/请求状态变化只替换内部内容，
+              // 不会额外重挂 route wrapper，也不会把一次导航的进入动效重复播放。
+              <div key={`${pathname}${search}`} className="route-content-enter">
+                {accessError ? (
+                  <AccessError onRetry={() => void publicConfig.refetch()} />
+                ) : isPrivateVisitor ? (
+                  <PrivateSiteGate />
+                ) : (
+                  <Outlet />
+                )}
+              </div>
+            )}
+          </div>
         </MotionSettingsProvider>
       </main>
       {/* 私有站点未通过校验、或壳层还在校验时不显示 —— 那时页面上还没有任何站点内容。 */}

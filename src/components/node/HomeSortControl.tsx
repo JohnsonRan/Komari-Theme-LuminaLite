@@ -117,7 +117,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
       {open && (
         <div
           id={panelId}
-          className="home-sort-panel"
+          className="home-sort-panel motion-overlay-enter"
           role="menu"
           aria-label="排序方式"
           aria-orientation="vertical"

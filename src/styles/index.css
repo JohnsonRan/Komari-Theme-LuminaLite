@@ -93,6 +93,7 @@
 
 @import "tailwindcss";
 @import "./tokens.css";
+@import "./motion.css";
 @import "./surface.css";
 @import "./skeleton.css";
 @import "./home.css";

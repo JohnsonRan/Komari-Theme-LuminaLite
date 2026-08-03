@@ -199,7 +199,7 @@
   transition:
     color 160ms ease,
     opacity 160ms ease,
-    transform 160ms ease;
+    transform var(--motion-duration-instant) var(--motion-ease-standard);
 }
 
 /* 四张概览卡里只有这一张带入口图标，不给悬停反馈就会被当成装饰。
@@ -213,10 +213,6 @@
 .overview-card-action:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--text-secondary) 54%, transparent);
   outline-offset: 2px;
-}
-
-.overview-card-action:active {
-  transform: scale(0.94);
 }
 
 /* 续费提醒复用资产入口，不另占首页内容流。平时只露一个轻量角标，弹层覆盖展开，
@@ -627,7 +623,7 @@
   background: color-mix(in srgb, var(--surface-elev) 98%, black 2%);
   box-shadow: 0 14px 34px -18px rgba(0, 0, 0, 0.8);
   padding: 8px 8px 7px;
-  animation: overview-tooltip-in 150ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: overview-tooltip-in var(--motion-duration-fast) var(--motion-ease-enter);
 }
 
 .overview-card-tooltip::before {
@@ -644,7 +640,7 @@
 @keyframes overview-tooltip-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(4px) scale(0.96);
+    transform: translateX(-50%) translateY(var(--motion-distance-menu)) scale(0.96);
   }
   to {
     opacity: 1;
@@ -716,7 +712,7 @@
     color-mix(in srgb, var(--metric-accent) 17%, transparent)
   );
   transform-origin: left center;
-  animation: overview-tooltip-share-in 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  animation: overview-tooltip-share-in var(--motion-duration-normal) var(--motion-ease-enter);
 }
 
 .overview-card-tooltip-name {

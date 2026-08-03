@@ -21,6 +21,7 @@ import { NodeHistoryStrip } from "./NodeHistoryStrip";
 import { attentionAttrs } from "@/utils/nodeAttention";
 import { AttentionReasons } from "./AttentionReasons";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import { useNodeStatusFlash } from "@/hooks/useNodeStatusFlash";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
@@ -428,6 +429,11 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
   const model = useNodeCardModel(uuid, HEALTH_BAR_COUNT);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
+  // 骨架分支之前调用(hook 数量恒定):数据未就位时传 null,不会播闪烁。
+  const statusFlash = useNodeStatusFlash(
+    model.node ? model.node.online : null,
+    model.attention,
+  );
 
   if (!model.node) {
     return (
@@ -483,8 +489,11 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
   const { ping, buckets: pingBuckets, latencyColor, lossColor } = pingSeries[pingIndex];
 
   return (
+    // content-enter 只挂 article:骨架换成真实内容时 article 首次挂载,淡入一次;
+    // 之后实时刷新不重建 article,不会重播。
     <article
-      className={clsx("mini-node-card", isOffline && "is-offline")}
+      className={clsx("mini-node-card content-enter", isOffline && "is-offline", statusFlash.className)}
+      onAnimationEnd={statusFlash.onAnimationEnd}
       data-appearance={resolvedAppearance}
       {...attentionAttrs(attention)}
     >

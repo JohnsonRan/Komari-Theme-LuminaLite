@@ -1,0 +1,167 @@
+/* LuminaLite 统一动效基础设施:可复用的进入/按压/状态反馈 primitives。
+   时长/曲线/位移统一取自 tokens.css 的 --motion-* 刻度,这里不再写死数值。
+
+   门控模型(两层,语义互不重叠):
+   - 「界面动效」开关(enableIconAnimations):MotionSettings.tsx 在 <html> 上写
+     data-icon-animations="false" 时,本文件带门控的 primitives 全部关停;
+     未关闭时属性为 "true"(或不写),:not() 门控保持放行。
+   - prefers-reduced-motion:系统降级优先级最高,无视开关直接关停(含默认开着的
+     content-enter),加载/状态语义靠 opacity 与静态样式保留。 */
+
+/* ---- 通用浮层进入(tooltip/popover/菜单,退出阶段用 motion-exit 曲线反向播放) ---- */
+@keyframes motion-overlay-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-menu)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---- 骨架 → 内容接力:短淡入 + 轻微上移,逐卡/逐页独立触发 ---- */
+@keyframes motion-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-distance-tooltip));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- 节点状态一次性反馈：在 ::before 上淡出，不占用卡片本体的 animation，
+   因而不会覆盖首次 content-enter。禁止循环呼吸。 ---- */
+@keyframes motion-flash-online {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes motion-flash-offline {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes motion-flash-attention {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+:root:not([data-icon-animations="false"]) {
+  /* 按压反馈：仅覆盖已核实没有布局 transform 的按钮/chip/tab；禁用按钮不缩放。 */
+  :is(
+    .motion-pressable,
+    .control-button:not(:disabled),
+    .theme-error-button:not(:disabled),
+    .overview-card-action,
+    .home-sort-trigger,
+    .home-sort-item,
+    .home-group-tabs button,
+    .home-region-chip,
+    .ping-task-tab,
+    .theme-manage-nav-chip,
+    .instance-ping-task,
+    .instance-segmented button,
+    .instance-toggle-button:not(:disabled),
+    .instance-switcher-trigger,
+    .instance-switcher-item,
+    .instance-sidebar-item,
+    .instance-page-back
+  ):active {
+    transform: scale(0.97);
+  }
+
+  /* 通用浮层进入。自带定位 transform 的 tooltip(overview/health 等)仍用各自 keyframes,
+     本类面向没有既有动画的浮层(下拉、popover)。 */
+  .motion-overlay-enter {
+    animation: motion-overlay-in var(--motion-duration-fast) var(--motion-ease-enter) both;
+  }
+
+  /* 骨架 → 内容不等待数据，挂载即播；路由进入更短，避免导航显得迟滞。 */
+  .content-enter {
+    animation: motion-content-enter var(--motion-duration-normal) var(--motion-ease-enter) both;
+  }
+  .route-content-enter {
+    animation: motion-content-enter var(--motion-duration-fast) var(--motion-ease-enter) both;
+  }
+
+  /* 一次性状态闪烁：伪元素使用 inset 描边，卡片 overflow:hidden 时也清晰可见。 */
+  :is(.status-flash-online, .status-flash-offline, .status-flash-attention) {
+    position: relative;
+  }
+  :is(.status-flash-online, .status-flash-offline, .status-flash-attention)::before {
+    content: "";
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .status-flash-online::before {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--status-online) 68%, transparent);
+    animation: motion-flash-online var(--motion-flash-duration) var(--motion-ease-standard);
+  }
+  .status-flash-offline::before {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--status-offline) 62%, transparent);
+    animation: motion-flash-offline var(--motion-flash-duration) var(--motion-ease-standard);
+  }
+  .status-flash-attention::before {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--status-warning) 62%, transparent);
+    animation: motion-flash-attention var(--motion-flash-duration) var(--motion-ease-standard);
+  }
+}
+
+/* 既有自定义浮层/展开过渡不使用 primitive 类，也必须服从同一个界面动效开关。 */
+:root[data-icon-animations="false"] {
+  .overview-card-tooltip,
+  .overview-card-tooltip-track::before,
+  .compact-node-health-tooltip {
+    animation: none !important;
+  }
+
+  .floating-controls-actions,
+  .instance-chart-tooltip {
+    transition: none !important;
+  }
+}
+
+/* 系统级降级:无视开关,所有 motion primitives 立即呈现终态。 */
+@media (prefers-reduced-motion: reduce) {
+  :is(
+    .motion-pressable,
+    .control-button,
+    .theme-error-button,
+    .overview-card-action,
+    .home-sort-trigger,
+    .home-sort-item,
+    .home-group-tabs button,
+    .home-region-chip,
+    .ping-task-tab,
+    .theme-manage-nav-chip,
+    .instance-ping-task,
+    .instance-segmented button,
+    .instance-toggle-button,
+    .instance-switcher-trigger,
+    .instance-switcher-item,
+    .instance-sidebar-item,
+    .instance-page-back
+  ):active {
+    transform: none !important;
+  }
+  .motion-overlay-enter,
+  .content-enter,
+  .route-content-enter,
+  .status-flash-online::before,
+  .status-flash-offline::before,
+  .status-flash-attention::before,
+  .overview-card-tooltip,
+  .overview-card-tooltip-track::before,
+  .compact-node-health-tooltip {
+    animation: none !important;
+  }
+
+  .floating-controls-actions,
+  .instance-chart-tooltip {
+    transition: none !important;
+  }
+}

@@ -19,6 +19,7 @@ import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import { useNodeStatusFlash } from "@/hooks/useNodeStatusFlash";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatBytes } from "@/utils/format";
@@ -729,6 +730,11 @@ export const CompactNodeCard = memo(function CompactNodeCard({
   const redrawKey = useCanvasRedrawKey();
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
+  // 骨架分支之前调用(hook 数量恒定):数据未就位时传 null,不会播闪烁。
+  const statusFlash = useNodeStatusFlash(
+    model.node ? model.node.online : null,
+    model.attention,
+  );
 
   if (!model.node) {
     return (
@@ -810,8 +816,11 @@ export const CompactNodeCard = memo(function CompactNodeCard({
       : "";
 
   return (
+    // content-enter 只挂 article:骨架换成真实内容时 article 首次挂载,淡入一次;
+    // 之后实时刷新不重建 article,不会重播。
     <article
-      className={clsx("compact-node-card", isOffline && "is-offline")}
+      className={clsx("compact-node-card content-enter", isOffline && "is-offline", statusFlash.className)}
+      onAnimationEnd={statusFlash.onAnimationEnd}
       {...attentionAttrs(attention)}
     >
       <CompactNodeHeader

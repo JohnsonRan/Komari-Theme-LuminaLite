@@ -68,12 +68,33 @@ describe("normalizeThemeSettings", () => {
     expect(normalizeThemeSettings({ showConnections: true }).showConnections).toBe(true);
   });
 
-  it("defaults both animation systems to on unless explicitly disabled", () => {
+  it("defaults both animation systems to on and keeps legacy/mixed values orthogonal", () => {
     const defaults = normalizeThemeSettings({});
     expect(defaults.enableIconAnimations).toBe(true);
     expect(defaults.enableDataAnimations).toBe(true);
-    expect(normalizeThemeSettings({ enableIconAnimations: false }).enableIconAnimations).toBe(false);
-    expect(normalizeThemeSettings({ enableDataAnimations: false }).enableDataAnimations).toBe(false);
+
+    const interfaceOff = normalizeThemeSettings({ enableIconAnimations: false });
+    expect(interfaceOff.enableIconAnimations).toBe(false);
+    expect(interfaceOff.enableDataAnimations).toBe(true);
+
+    const dataOff = normalizeThemeSettings({ enableDataAnimations: false });
+    expect(dataOff.enableIconAnimations).toBe(true);
+    expect(dataOff.enableDataAnimations).toBe(false);
+
+    const bothOff = normalizeThemeSettings({
+      enableIconAnimations: false,
+      enableDataAnimations: false,
+    });
+    expect(bothOff.enableIconAnimations).toBe(false);
+    expect(bothOff.enableDataAnimations).toBe(false);
+
+    // 兼容旧存储：只有显式 boolean false 才关闭，缺失或旧字符串不会误伤另一开关。
+    const legacy = normalizeThemeSettings({
+      enableIconAnimations: "false",
+      enableDataAnimations: 0,
+    } as never);
+    expect(legacy.enableIconAnimations).toBe(true);
+    expect(legacy.enableDataAnimations).toBe(true);
   });
 
   it("parses hiddenNodes from a delimited string and dedupes", () => {

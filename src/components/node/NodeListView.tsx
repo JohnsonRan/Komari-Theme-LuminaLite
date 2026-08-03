@@ -1,4 +1,4 @@
-import { memo, useState, type CSSProperties } from "react";
+import { memo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { ArrowDown, ArrowUp, CircleDollarSign } from "@/components/ui/icons";
 import { clsx } from "clsx";
@@ -6,6 +6,8 @@ import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
 import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import { useLayoutTransition } from "@/hooks/useLayoutTransition";
+import { useNodeStatusFlash } from "@/hooks/useNodeStatusFlash";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
 import { formatBytes } from "@/utils/format";
 import { speedRateColor } from "@/utils/metricTone";
@@ -124,6 +126,11 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   const model = useNodeCardModel(uuid, LIST_PING_BUCKETS);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
   const [activePingIndex, setActivePingIndex] = useState(0);
+  // 必须在骨架分支之前调用(hook 数量恒定):骨架期传 null 状态,不产生闪烁。
+  const statusFlash = useNodeStatusFlash(
+    model.node ? model.node.online : null,
+    model.attention,
+  );
 
   if (!model.node) {
     return (
@@ -194,7 +201,10 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   return (
     <Link
       to={`/instance/${encodeURIComponent(uuid)}`}
-      className={clsx("node-list-row", isOffline && "is-offline")}
+      data-flip-id={uuid}
+      // content-enter:骨架行换成真实行时 Link 首次挂载,淡入一次;实时刷新不重建。
+      className={clsx("node-list-row content-enter", isOffline && "is-offline", statusFlash.className)}
+      onAnimationEnd={statusFlash.onAnimationEnd}
       {...attentionProps}
       title={attentionProps.title ?? detailLabels.title}
       aria-label={rowLabel}
@@ -303,9 +313,13 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
 });
 
 export function NodeListView({ uuids }: { uuids: string[] }) {
+  // 列表档复用同一个 FLIP hook:行高一致、变换同为 translate,表头没有
+  // data-flip-id 不参与追踪。
+  const listRef = useRef<HTMLDivElement>(null);
+  useLayoutTransition(listRef, uuids);
   return (
     <div className="node-list-scroll">
-      <div className="node-list">
+      <div className="node-list" ref={listRef}>
         <div className="node-list-row node-list-head" aria-hidden>
           <div className="node-list-cell node-list-node">节点</div>
           <div className="node-list-cell col-os">系统</div>
