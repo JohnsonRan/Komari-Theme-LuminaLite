@@ -1514,6 +1514,34 @@ body::after {
   word-break: break-word;
 }
 
+/* 动态指标只滚动数值 token；单位、方向与分隔符保持静态，并为数值预留稳定宽度。 */
+.metric-value-template,
+.metric-value-group,
+.instance-network-rates {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.metric-value-token {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: pre;
+}
+
+.metric-value-token.is-animated {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.instance-network-rates {
+  gap: 0.3em;
+}
+
+.instance-network-separator {
+  color: var(--text-tertiary);
+}
+
 /* 硬件卡是唯一放大的一组，作为信息区视觉落点。 */
 .instance-spec-item.is-primary .instance-spec-value {
   color: var(--text-primary);
@@ -2007,6 +2035,10 @@ body::after {
 
   .instance-bento-network .instance-bento-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .instance-network-rates {
+    gap: 0.15em;
   }
 
   .instance-ping-toolbar {

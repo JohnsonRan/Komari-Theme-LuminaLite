@@ -10,7 +10,7 @@ export const LONG_TERM_EXPIRE_DAYS = 36500;
 type ExpireTone = "ok" | "warn" | "critical" | "long" | "none";
 type TrafficRateUnit = "bps" | "Kbps" | "Mbps" | "Gbps" | "Tbps";
 
-interface TrafficRateDisplay {
+export interface TrafficRateDisplay {
   value: string;
   unit: TrafficRateUnit;
 }
@@ -53,7 +53,7 @@ function formatRateValue(value: number): string {
   return trimFixed(value, 2);
 }
 
-function formatTrafficRate(bytesPerSec: number | undefined | null): TrafficRateDisplay {
+export function formatTrafficRate(bytesPerSec: number | undefined | null): TrafficRateDisplay {
   if (!bytesPerSec || !Number.isFinite(bytesPerSec) || bytesPerSec <= 0) {
     return {
       value: "0",

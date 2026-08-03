@@ -76,6 +76,8 @@ function canAnimate(node: Element | null) {
   return !reducedMotionQuery.matches;
 }
 
+const ROLL_ANIMATION_FALLBACK_MS = 420;
+
 /** A direction-aware, interruption-friendly rolling transition for changed text only. */
 export const AnimatedValue = memo(function AnimatedValue({
   text,
@@ -122,7 +124,7 @@ export const AnimatedValue = memo(function AnimatedValue({
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
       setTransition(null);
-    }, 380);
+    }, ROLL_ANIMATION_FALLBACK_MS);
   }, [dataAnimations, text]);
 
   useEffect(
@@ -132,14 +134,25 @@ export const AnimatedValue = memo(function AnimatedValue({
     [],
   );
 
+  const hostClassName = `native-roll-value${className ? ` ${className}` : ""}`;
+
   if (!dataAnimations || !transition) {
-    return <span ref={hostRef} className={className}>{text}</span>;
+    return <span ref={hostRef} className={hostClassName}>{text}</span>;
   }
+
+  const finishTransition = () => {
+    const revision = transition.revision;
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setTransition((current) => current?.revision === revision ? null : current);
+  };
 
   return (
     <span
       ref={hostRef}
-      className={`native-roll-value${className ? ` ${className}` : ""}`}
+      className={hostClassName}
       aria-label={ariaLabel ?? text}
       data-direction={transition.direction > 0 ? "up" : "down"}
     >
@@ -149,7 +162,11 @@ export const AnimatedValue = memo(function AnimatedValue({
         <span key={`old-${transition.revision}`} className="native-roll-value-old">
           {transition.previous || "\u00A0"}
         </span>
-        <span key={`new-${transition.revision}`} className="native-roll-value-new">
+        <span
+          key={`new-${transition.revision}`}
+          className="native-roll-value-new"
+          onAnimationEnd={finishTransition}
+        >
           {transition.next || "\u00A0"}
         </span>
       </span>

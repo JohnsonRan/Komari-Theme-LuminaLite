@@ -1,12 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { clsx } from "clsx";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import { formatByteRateLabel, formatBytes, formatTrafficRateLabel, formatUptimeDays } from "@/utils/format";
+import { formatByteRate, formatBytes, formatTrafficRate, formatUptimeDays } from "@/utils/format";
 import { Flag } from "@/components/ui/Flag";
 import { IpStackBadges } from "@/components/node/IpStackBadges";
 import { InstancePanel } from "./InstancePanel";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
+import { MetricGroup, MetricValue } from "@/components/ui/MetricValue";
 
 // Intl.DateTimeFormat 构造开销大，复用一个实例，别每次 metrics 更新都重建
 const TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
@@ -42,15 +43,20 @@ export function InstanceDetails({
   // 单位族内自适应：mbs 按字节（B/s · KB/s · MB/s），mbps 按比特（Kbps · Mbps · Gbps）。
   const formatNetRate = (bytesPerSec: number) =>
     networkUnit === "mbps"
-      ? formatTrafficRateLabel(bytesPerSec)
-      : formatByteRateLabel(bytesPerSec);
+      ? formatTrafficRate(bytesPerSec)
+      : formatByteRate(bytesPerSec);
+
+  const netUp = formatNetRate(metrics.netUp);
+  const netDown = formatNetRate(metrics.netDown);
+  const ramUsed = splitDisplay(formatBytes(metrics.ramUsed));
+  const ramTotal = splitDisplay(formatBytes(metrics.ramTotal));
+  const diskUsed = splitDisplay(formatBytes(metrics.diskUsed));
+  const diskTotal = splitDisplay(formatBytes(metrics.diskTotal));
+  const trafficUp = splitDisplay(formatBytes(metrics.trafficUp));
+  const trafficDown = splitDisplay(formatBytes(metrics.trafficDown));
 
   // 只呈现身份与累计量，不放百分比/进度条——占比交给下方负载图表，避免重复。
   const cpuLine = `${meta.cpu_name || "—"}${meta.cpu_cores > 0 ? ` ×${meta.cpu_cores}` : ""}`;
-  const swapLine =
-    metrics.swapTotal > 0
-      ? `${formatBytes(metrics.swapUsed)} / ${formatBytes(metrics.swapTotal)}`
-      : "无";
   const hasGpu = Boolean(meta.gpu_name && meta.gpu_name !== "None");
 
   return (
@@ -75,7 +81,8 @@ export function InstanceDetails({
           </span>
           <div className="instance-bento-uptime">
             <span className="instance-bento-uptime-value">
-              <AnimatedValue text={uptime.unit ? `${uptime.value} ${uptime.unit}` : uptime.value} />
+              <AnimatedValue text={uptime.value} />
+              {uptime.unit && <span className="instance-bento-uptime-unit"> {uptime.unit}</span>}
             </span>
             <span className="instance-bento-uptime-label">运行时长</span>
           </div>
@@ -96,17 +103,26 @@ export function InstanceDetails({
             <SpecItem label="CPU" value={cpuLine} primary />
             <SpecItem
               label="内存"
-              value={`${formatBytes(metrics.ramUsed)} / ${formatBytes(metrics.ramTotal)}`}
+              value={<CapacityPair used={ramUsed} total={ramTotal} />}
               primary
-              animated
             />
             <SpecItem
               label="磁盘"
-              value={`${formatBytes(metrics.diskUsed)} / ${formatBytes(metrics.diskTotal)}`}
+              value={<CapacityPair used={diskUsed} total={diskTotal} />}
               primary
-              animated
             />
-            <SpecItem label="Swap" value={swapLine} primary animated />
+            <SpecItem
+              label="Swap"
+              value={
+                metrics.swapTotal > 0
+                  ? <CapacityPair
+                      used={splitDisplay(formatBytes(metrics.swapUsed))}
+                      total={splitDisplay(formatBytes(metrics.swapTotal))}
+                    />
+                  : "无"
+              }
+              primary
+            />
             {hasGpu && <SpecItem label="显卡" value={meta.gpu_name} wide />}
           </div>
         </section>
@@ -126,23 +142,55 @@ export function InstanceDetails({
           <div className="instance-bento-grid">
             <SpecItem
               label="实时网络"
-              value={`↑ ${formatNetRate(metrics.netUp)} · ↓ ${formatNetRate(metrics.netDown)}`}
-              animated
+              value={
+                <span className="instance-network-rates">
+                  <NetworkRate direction="↑" value={netUp.value} unit={netUp.unit} />
+                  <span className="instance-network-separator" aria-hidden>·</span>
+                  <NetworkRate direction="↓" value={netDown.value} unit={netDown.unit} />
+                </span>
+              }
             />
             <SpecItem
               label="总流量"
-              value={`↑ ${formatBytes(metrics.trafficUp)} · ↓ ${formatBytes(metrics.trafficDown)}`}
-              animated
+              value={
+                <MetricValue
+                  tokens={[
+                    { text: "↑ " },
+                    { text: trafficUp.value, animated: true },
+                    { text: ` ${trafficUp.unit}` },
+                    { text: " · ↓ " },
+                    { text: trafficDown.value, animated: true },
+                    { text: ` ${trafficDown.unit}` },
+                  ]}
+                />
+              }
             />
             <SpecItem
               label="连接"
-              value={`TCP ${metrics.connectionsTcp} · UDP ${metrics.connectionsUdp}`}
-              animated
+              value={
+                <MetricValue
+                  tokens={[
+                    { text: "TCP " },
+                    { text: String(metrics.connectionsTcp), animated: true },
+                    { text: " · UDP " },
+                    { text: String(metrics.connectionsUdp), animated: true },
+                  ]}
+                />
+              }
             />
             <SpecItem
               label="负载 / 进程"
-              value={`${metrics.load1.toFixed(2)} / ${metrics.load5.toFixed(2)} · ${metrics.process}`}
-              animated
+              value={
+                <MetricValue
+                  tokens={[
+                    { text: metrics.load1.toFixed(2), animated: true },
+                    { text: " / " },
+                    { text: metrics.load5.toFixed(2), animated: true },
+                    { text: " · " },
+                    { text: String(metrics.process), animated: true },
+                  ]}
+                />
+              }
             />
           </div>
         </section>
@@ -151,26 +199,67 @@ export function InstanceDetails({
   );
 }
 
+type DisplayPart = { value: string; unit: string };
+
+function splitDisplay(label: string): DisplayPart {
+  const separator = label.indexOf(" ");
+  return separator < 0
+    ? { value: label, unit: "" }
+    : { value: label.slice(0, separator), unit: label.slice(separator + 1) };
+}
+
+function CapacityPair({ used, total }: { used: DisplayPart; total: DisplayPart }) {
+  return (
+    <MetricValue
+      tokens={[
+        { text: used.value, animated: true },
+        { text: used.unit ? ` ${used.unit}` : "" },
+        { text: " / " },
+        { text: total.value, animated: true },
+        { text: total.unit ? ` ${total.unit}` : "" },
+      ]}
+    />
+  );
+}
+
+function NetworkRate({
+  direction,
+  value,
+  unit,
+}: {
+  direction: "↑" | "↓";
+  value: string;
+  unit: string;
+}) {
+  return (
+    <MetricGroup>
+      <MetricValue
+        tokens={[
+          { text: `${direction} ` },
+          { text: value, animated: true },
+          { text: ` ${unit}` },
+        ]}
+      />
+    </MetricGroup>
+  );
+}
+
 function SpecItem({
   label,
   value,
   wide,
   primary,
-  animated,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   wide?: boolean;
   // primary：硬件卡内放大，作为全信息区视觉落点，与其余次要信息拉开层级。
   primary?: boolean;
-  animated?: boolean;
 }) {
   return (
     <div className={clsx("instance-spec-item", wide && "is-wide", primary && "is-primary")}>
       <span className="instance-spec-label">{label}</span>
-      <span className="instance-spec-value">
-        {animated ? <AnimatedValue text={value} /> : value}
-      </span>
+      <span className="instance-spec-value">{value}</span>
     </div>
   );
 }
