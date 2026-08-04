@@ -26,6 +26,7 @@ export function useNodeStatusFlash(
   const reducedMotion = usePrefersReducedMotion();
   const { iconAnimations } = useMotionSettings();
   const [flashKind, setFlashKind] = useState<NodeStatusFlashKind | null>(null);
+  const restartFrameRef = useRef<number | null>(null);
   const previousRef = useRef<NodeStatusSnapshot | null>(null);
   const tone = online === null ? null : online ? "online" : "offline";
 
@@ -36,6 +37,10 @@ export function useNodeStatusFlash(
     previousRef.current = next;
 
     if (!iconAnimations || reducedMotion) {
+      if (restartFrameRef.current !== null) {
+        window.cancelAnimationFrame(restartFrameRef.current);
+        restartFrameRef.current = null;
+      }
       setFlashKind(null);
       return;
     }
@@ -47,7 +52,25 @@ export function useNodeStatusFlash(
       previous.attention,
       next.attention,
     );
-    if (kind) setFlashKind(kind);
+    if (!kind) return;
+
+    // 同一种状态在上一轮闪烁结束前再次发生时，单纯 set 相同字符串不会让 CSS
+    // animation 重播。先摘类，下一帧再挂回，确保每个真实状态事件都有独立反馈。
+    if (restartFrameRef.current !== null) {
+      window.cancelAnimationFrame(restartFrameRef.current);
+    }
+    setFlashKind(null);
+    restartFrameRef.current = window.requestAnimationFrame(() => {
+      restartFrameRef.current = null;
+      setFlashKind(kind);
+    });
+
+    return () => {
+      if (restartFrameRef.current !== null) {
+        window.cancelAnimationFrame(restartFrameRef.current);
+        restartFrameRef.current = null;
+      }
+    };
   }, [tone, attention.level, iconAnimations, reducedMotion]);
 
   const onAnimationEnd = useCallback((event: AnimationEvent<HTMLElement>) => {

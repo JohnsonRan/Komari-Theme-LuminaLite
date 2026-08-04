@@ -15,6 +15,7 @@ const homeCss = readSource("../../styles/home.css");
 const compactCardCss = readSource("../../styles/compact-node-card.css");
 const nodeCardSource = readSource("../../components/node/NodeCard.tsx");
 const appShellSource = readSource("../../components/shell/AppShell.tsx");
+const instanceSource = readSource("../../pages/Instance.tsx");
 const animatedValueSource = readSource("../../components/ui/AnimatedValue.tsx");
 const layoutTransitionSource = readSource("../../hooks/useLayoutTransition.ts");
 const statusFlashHookSource = readSource("../../hooks/useNodeStatusFlash.ts");
@@ -70,12 +71,26 @@ describe("motion tokens stay aligned with the JS constants", () => {
       ".motion-overlay-enter",
       ".content-enter",
       ".route-content-enter",
+      ".instance-node-enter",
+      ".instance-chart-view:not([hidden])",
       ".status-flash-online",
       ".status-flash-offline",
       ".status-flash-attention",
     ]) {
       expect(motionCss).toContain(primitive);
     }
+  });
+
+  it("replays detail split and chart-pane transitions on every switch", () => {
+    expect(instanceSource).toContain(
+      'clsx("instance-page-main", splitLayout && "instance-node-enter")',
+    );
+    expect(motionCss).toContain(
+      "motion-instance-node-enter var(--motion-duration-normal) var(--motion-ease-enter)",
+    );
+    expect(motionCss).toContain(
+      ".instance-chart-view:not([hidden]) {\n    animation: motion-content-enter",
+    );
   });
 
   it("also gates custom tooltips and the floating control expansion", () => {
@@ -85,6 +100,11 @@ describe("motion tokens stay aligned with the JS constants", () => {
       ".compact-node-health-tooltip",
       ".floating-controls-actions",
       ".instance-chart-tooltip",
+      ".skeleton-block",
+      ".renewal-reminder-dot",
+      ".instance-uplot-wrap .uplot",
+      ".traffic-rate-chart-canvas .uplot",
+      ".visitor-pill",
     ]) {
       expect(motionCss).toContain(selector);
     }
@@ -116,6 +136,12 @@ describe("motion tokens stay aligned with the JS constants", () => {
     expect(surfaceCss).toContain(
       "max-width var(--motion-duration-normal) var(--motion-ease-enter)",
     );
+  });
+
+  it("restarts repeated same-kind status flashes instead of reusing a stale CSS class", () => {
+    expect(statusFlashHookSource).toContain("setFlashKind(null)");
+    expect(statusFlashHookSource).toContain("window.requestAnimationFrame");
+    expect(statusFlashHookSource).toContain("window.cancelAnimationFrame");
   });
 
   it("uses the shared pressable gate instead of private control/overview active transforms", () => {
@@ -193,10 +219,18 @@ describe("node motion wiring contracts", () => {
     "../../components/node/MiniNodeCard.tsx",
   ].map((path) => readFileSync(new URL(path, import.meta.url), "utf8"));
 
-  it("grid and list both wire the FLIP hook with stable data-flip-id", () => {
-    expect(nodeGridSource).toContain("useLayoutTransition(gridRef, orderedUuids, mode)");
+  it("grid and list both wire FLIP plus repeatable group-switch motion", () => {
+    expect(nodeGridSource).toContain(
+      "useLayoutTransition(gridRef, orderedUuids, mode, contentRevision)",
+    );
     expect(nodeGridSource).toContain("data-flip-id={uuid}");
-    expect(nodeListSource).toContain("useLayoutTransition(listRef, uuids)");
+    expect(nodeGridSource).toContain(
+      "`${selectedGroup}${UUID_KEY_SEPARATOR}${selectedRegion}`",
+    );
+    expect(nodeGridSource).toContain("contentRevision={contentRevision}");
+    expect(nodeListSource).toContain(
+      "useLayoutTransition(listRef, uuids, undefined, contentRevision)",
+    );
     expect(nodeListSource).toContain("data-flip-id={uuid}");
   });
 

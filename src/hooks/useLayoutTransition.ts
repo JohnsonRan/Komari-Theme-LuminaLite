@@ -54,6 +54,34 @@ export function createFlipKeyframes(dx: number, dy: number): Keyframe[] {
   ];
 }
 
+export interface ContentSwitchTransitionGate {
+  hasHost: boolean;
+  hasPreviousRevision: boolean;
+  revisionChanged: boolean;
+  iconAnimations: boolean;
+  reducedMotion: boolean;
+  documentHidden: boolean;
+}
+
+/** 分组等内容集合整体替换时的门控；与只处理“留下元素”的 FLIP 相互补充。 */
+export function shouldRunContentSwitchTransition(
+  gate: ContentSwitchTransitionGate,
+): boolean {
+  return (
+    gate.hasHost &&
+    gate.hasPreviousRevision &&
+    gate.revisionChanged &&
+    gate.iconAnimations &&
+    !gate.reducedMotion &&
+    !gate.documentHidden
+  );
+}
+
+/** 集合完全不重叠时仍给容器一个轻量进入反馈，不与子元素 FLIP 的 transform 冲突。 */
+export function createContentSwitchKeyframes(): Keyframe[] {
+  return [{ opacity: 0.35 }, { opacity: 1 }];
+}
+
 interface TrackedItem {
   element: HTMLElement;
   left: number;
@@ -89,6 +117,7 @@ export function useLayoutTransition(
   hostRef: { current: HTMLElement | null },
   sequence: readonly string[],
   revision?: unknown,
+  contentRevision?: unknown,
 ): void {
   const reducedMotion = usePrefersReducedMotion();
   const { iconAnimations } = useMotionSettings();
@@ -96,6 +125,7 @@ export function useLayoutTransition(
   const trackedRef = useRef<TrackedItem[]>(EMPTY_TRACKED);
   // 上一轮的触发签名:顺序 + revision(视图模式)。两者都不变才算「没有重排」。
   const triggerRef = useRef<{ order: readonly string[]; revision: unknown } | null>(null);
+  const contentTriggerRef = useRef<{ revision: unknown } | null>(null);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -176,4 +206,32 @@ export function useLayoutTransition(
   // reducedMotion 进依赖:切换系统降级时会多跑一次,但触发签名未变 → 短路,
   // 实际零操作(在途动画则因 cleanup 取消,正是要的降级行为)。
   }, [hostRef, sequence, revision, iconAnimations, reducedMotion]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const previousTrigger = contentTriggerRef.current;
+    contentTriggerRef.current = { revision: contentRevision };
+
+    if (
+      !shouldRunContentSwitchTransition({
+        hasHost: host !== null,
+        hasPreviousRevision: previousTrigger !== null,
+        revisionChanged:
+          previousTrigger !== null && previousTrigger.revision !== contentRevision,
+        iconAnimations,
+        reducedMotion,
+        documentHidden: typeof document !== "undefined" && document.hidden,
+      }) ||
+      !host ||
+      typeof host.animate !== "function"
+    ) {
+      return;
+    }
+
+    const animation = host.animate(createContentSwitchKeyframes(), {
+      duration: MOTION_DURATION.normal,
+      easing: MOTION_EASE.enter,
+    });
+    return () => animation.cancel();
+  }, [hostRef, contentRevision, iconAnimations, reducedMotion]);
 }

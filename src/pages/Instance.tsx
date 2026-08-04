@@ -182,7 +182,7 @@ export function Instance() {
   return (
     <div className={clsx("instance-page", splitLayout && "is-split")}>
       {splitLayout && <InstanceSidebar currentUuid={uuid} />}
-      <div className="instance-page-main">
+      <div className={clsx("instance-page-main", splitLayout && "instance-node-enter")}>
       {/* 吸顶栏：返回 + 节点标题 + 快速切换始终悬浮，滚动查看图表时不丢失上下文。
           桌面分栏模式下切换器由 CSS 隐藏（侧栏已提供切换）。 */}
       <div className="instance-page-sticky-bar">

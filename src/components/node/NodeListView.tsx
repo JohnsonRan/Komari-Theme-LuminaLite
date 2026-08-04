@@ -312,11 +312,17 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
   );
 });
 
-export function NodeListView({ uuids }: { uuids: string[] }) {
+export function NodeListView({
+  uuids,
+  contentRevision,
+}: {
+  uuids: string[];
+  contentRevision: unknown;
+}) {
   // 列表档复用同一个 FLIP hook:行高一致、变换同为 translate,表头没有
   // data-flip-id 不参与追踪。
   const listRef = useRef<HTMLDivElement>(null);
-  useLayoutTransition(listRef, uuids);
+  useLayoutTransition(listRef, uuids, undefined, contentRevision);
   return (
     <div className="node-list-scroll">
       <div className="node-list" ref={listRef}>

@@ -32,6 +32,18 @@
   }
 }
 
+/* ---- 详情页桌面分栏：左栏保持定位，右侧节点内容从切换方向轻量进入。 ---- */
+@keyframes motion-instance-node-enter {
+  from {
+    opacity: 0.28;
+    transform: translateX(var(--motion-distance-tooltip));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ---- 节点状态一次性反馈：在 ::before 上淡出，不占用卡片本体的 animation，
    因而不会覆盖首次 content-enter。禁止循环呼吸。 ---- */
 @keyframes motion-flash-online {
@@ -84,6 +96,12 @@
   .route-content-enter {
     animation: motion-content-enter var(--motion-duration-fast) var(--motion-ease-enter) both;
   }
+  .instance-node-enter {
+    animation: motion-instance-node-enter var(--motion-duration-normal) var(--motion-ease-enter) both;
+  }
+  .instance-chart-view:not([hidden]) {
+    animation: motion-content-enter var(--motion-duration-normal) var(--motion-ease-enter) both;
+  }
 
   /* 一次性状态闪烁：伪元素使用 inset 描边，卡片 overflow:hidden 时也清晰可见。 */
   :is(.status-flash-online, .status-flash-offline, .status-flash-attention) {
@@ -115,7 +133,13 @@
 :root[data-icon-animations="false"] {
   .overview-card-tooltip,
   .overview-card-tooltip-track::before,
-  .compact-node-health-tooltip {
+  .compact-node-health-tooltip,
+  .skeleton-block,
+  .renewal-reminder-dot,
+  .renewal-reminder-dot::after,
+  .instance-uplot-wrap .uplot,
+  .traffic-rate-chart-canvas .uplot,
+  .visitor-pill {
     animation: none !important;
   }
 
@@ -151,6 +175,8 @@
   .motion-overlay-enter,
   .content-enter,
   .route-content-enter,
+  .instance-node-enter,
+  .instance-chart-view:not([hidden]),
   .status-flash-online::before,
   .status-flash-offline::before,
   .status-flash-attention::before,

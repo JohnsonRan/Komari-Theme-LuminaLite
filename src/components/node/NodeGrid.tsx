@@ -722,6 +722,7 @@ export function NodeGrid() {
           )),
     [orderedUuids, mode],
   );
+  const contentRevision = `${selectedGroup}${UUID_KEY_SEPARATOR}${selectedRegion}`;
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
   const showHomeSort = sortEnabled && visibleStructures.length > 1;
@@ -748,9 +749,9 @@ export function NodeGrid() {
     : gridStyle;
 
   // FLIP 重排:排序/筛选/卡片视图切换时,留下来的卡片滑到新位置;
-  // 进出场与挂载/卸载(列表档互换)不播。
+  // 分组集合完全替换、没有共同卡片可做 FLIP 时,contentRevision 负责整体淡入反馈。
   const gridRef = useRef<HTMLDivElement>(null);
-  useLayoutTransition(gridRef, orderedUuids, mode);
+  useLayoutTransition(gridRef, orderedUuids, mode, contentRevision);
 
   if (!themeSettings.isReady || !storeHydrated) {
     if (!nodeInfoError) return null;
@@ -828,7 +829,7 @@ export function NodeGrid() {
         />
       )}
       {isList ? (
-        <NodeListView uuids={orderedUuids} />
+        <NodeListView uuids={orderedUuids} contentRevision={contentRevision} />
       ) : (
         <div ref={gridRef} className={gridWrapClassName} style={gridStyle}>
           {cards}

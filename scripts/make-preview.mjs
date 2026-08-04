@@ -15,11 +15,12 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
-const shotsDir = resolve(root, "dist", "preview-frames");
+const shotsDir = resolve(root, ".pi", "preview-frames");
 mkdirSync(shotsDir, { recursive: true });
 
 // 优先用系统 Playwright 缓存里的 Chromium；找不到再尝试可执行文件。
 const CANDIDATES = [
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Users/JohnsonRan/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe",
   "C:/Users/JohnsonRan/AppData/Local/ms-playwright/chromium-1223/chrome-win64/chrome.exe",
 ];
@@ -56,7 +57,7 @@ async function screenshotFrames(browser) {
     });
     const page = await ctx.newPage();
     try {
-      await page.goto(f.url, { waitUntil: "networkidle", timeout: 30000 });
+      await page.goto(f.url, { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForTimeout(2600);
       const file = resolve(shotsDir, `${f.key}.png`);
       await page.screenshot({ path: file });
@@ -167,7 +168,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
+try {
+  await main();
+} catch (err) {
   console.error(err);
   process.exit(1);
-});
+}

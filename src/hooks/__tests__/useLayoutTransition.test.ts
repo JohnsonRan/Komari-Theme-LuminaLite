@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  createContentSwitchKeyframes,
   createFlipKeyframes,
   sameOrder,
+  shouldRunContentSwitchTransition,
   shouldRunLayoutTransition,
+  type ContentSwitchTransitionGate,
   type LayoutTransitionGate,
 } from "@/hooks/useLayoutTransition";
 import { MOTION_COUNT_FLIP_MAX } from "@/utils/motion";
@@ -18,6 +21,36 @@ describe("sameOrder", () => {
     expect(sameOrder(["a"], ["a", "b"])).toBe(false);
     expect(sameOrder(["a", "b"], ["a"])).toBe(false);
   });
+});
+
+describe("content switch transition", () => {
+  const enabled: ContentSwitchTransitionGate = {
+    hasHost: true,
+    hasPreviousRevision: true,
+    revisionChanged: true,
+    iconAnimations: true,
+    reducedMotion: false,
+    documentHidden: false,
+  };
+
+  it("runs on every enabled revision change, including disjoint group switches", () => {
+    expect(shouldRunContentSwitchTransition(enabled)).toBe(true);
+    expect(createContentSwitchKeyframes()).toEqual([{ opacity: 0.35 }, { opacity: 1 }]);
+  });
+
+  it.each([
+    ["首次渲染", { hasPreviousRevision: false }],
+    ["分组未变化", { revisionChanged: false }],
+    ["host 未挂载", { hasHost: false }],
+    ["界面动效关闭", { iconAnimations: false }],
+    ["系统 reduced-motion", { reducedMotion: true }],
+    ["后台标签页", { documentHidden: true }],
+  ] satisfies Array<[string, Partial<ContentSwitchTransitionGate>]>)(
+    "skips %s",
+    (_label, override) => {
+      expect(shouldRunContentSwitchTransition({ ...enabled, ...override })).toBe(false);
+    },
+  );
 });
 
 describe("layout transition gates", () => {
