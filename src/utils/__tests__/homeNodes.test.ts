@@ -42,10 +42,11 @@ describe("home node helpers", () => {
 });
 
 describe("home group ordering", () => {
-  it("normalizeHomeGroupOrder trims, drops empties, dedupes, and rejects non-arrays", () => {
+  it("normalizeHomeGroupOrder trims, drops empties, dedupes arrays and delimited text", () => {
     expect(normalizeHomeGroupOrder([" A ", "B", "A", "", null, "B"])).toEqual(["A", "B"]);
-    expect(normalizeHomeGroupOrder("nope")).toEqual([]);
+    expect(normalizeHomeGroupOrder("JP, US\nHK；JP")).toEqual(["JP", "US", "HK"]);
     expect(normalizeHomeGroupOrder(undefined)).toEqual([]);
+    expect(normalizeHomeGroupOrder(42)).toEqual([]);
   });
 
   it("returns the original order when no custom order is set", () => {

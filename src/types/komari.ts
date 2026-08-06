@@ -172,19 +172,24 @@ export interface ThemeSettings {
   enableIconAnimations?: boolean;
   enableDataAnimations?: boolean;
   showPingChart?: boolean;
+  /** 旧对象形态；官方 managed 表单改存 homepagePingBindingsJson。 */
   homepagePingBindings?: Record<string, string[]>;
+  /** 官方 managed richtext：旧对象存在时优先，首次官方全量保存移除旧键后读取此 JSON 字符串。 */
+  homepagePingBindingsJson?: string;
   fakePingForUnbound?: boolean;
   showHomeOverview?: boolean;
   showGroupTabs?: boolean;
   showRegionBar?: boolean;
   showCardGroup?: boolean;
-  homeGroupOrder?: string[];
+  /** 旧数组或官方 richtext 分隔文本。 */
+  homeGroupOrder?: string[] | string;
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic";
   homeSortDirection?: "asc" | "desc";
   enableAttentionSort?: boolean;
   showNodeHistory?: boolean;
   showVisitorInfo?: boolean;
+  /** 旧嵌套对象；官方 managed 改存扁平 attention* 数字键。 */
   attentionThresholds?: {
     cpuPct?: number;
     memoryPct?: number;
@@ -193,6 +198,12 @@ export interface ThemeSettings {
     trafficRemainPct?: number;
     expireDays?: number;
   };
+  attentionCpuPct?: number;
+  attentionMemoryPct?: number;
+  attentionDiskPct?: number;
+  attentionLossPct?: number;
+  attentionTrafficRemainPct?: number;
+  attentionExpireDays?: number;
   compactShowTrafficTotal?: boolean;
   compactShowBilling?: boolean;
   compactShowUptime?: boolean;
@@ -201,12 +212,42 @@ export interface ThemeSettings {
   // 存储类型：旧配置可能存了已废弃的 "auto"，由 normalizeThemeSettings 归一化到 mbs。
   detailNetworkUnit?: "auto" | "mbs" | "mbps";
   detailSplitLayout?: boolean;
-  hiddenNodes?: string[];
+  /** 旧数组或官方 richtext 分隔文本。 */
+  hiddenNodes?: string[] | string;
   enableBackgroundImage?: boolean;
   backgroundImage?: string;
   backgroundImageMobile?: string;
   backgroundAlignment?: string;
   surfaceOpacity?: number;
+  /** 旧嵌套对象；官方 managed 改存扁平 metricColor* 字符串键。 */
+  metricColors?: Partial<
+    Record<
+      | "cpu"
+      | "memory"
+      | "disk"
+      | "load"
+      | "swap"
+      | "speedIdle"
+      | "speedLow"
+      | "speedHigh"
+      | "speedMax"
+      | "trafficUp"
+      | "trafficDown",
+      string
+    >
+  >;
+  metricColorCpu?: string;
+  metricColorMemory?: string;
+  metricColorDisk?: string;
+  metricColorLoad?: string;
+  metricColorSwap?: string;
+  metricColorSpeedIdle?: string;
+  metricColorSpeedLow?: string;
+  metricColorSpeedHigh?: string;
+  metricColorSpeedMax?: string;
+  metricColorTrafficUp?: string;
+  metricColorTrafficDown?: string;
+  darkDepth?: number;
 }
 
 export const PublicConfigSchema = z

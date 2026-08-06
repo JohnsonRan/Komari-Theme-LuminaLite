@@ -75,9 +75,15 @@ export function getHomeGroupOptions(nodes: HomeNodeFacet[]) {
   return dedupeGroupLabels(nodes.map((node) => node.group));
 }
 
-/** 规范化存下来的 group 排序:trim、去空、去重(首次出现的优先)。 */
+/** 规范化存下来的 group 排序:trim、去空、去重(首次出现的优先)。支持数组或分隔文本。 */
 export function normalizeHomeGroupOrder(value: unknown): string[] {
-  return Array.isArray(value) ? dedupeGroupLabels(value as Array<string | null | undefined>) : [];
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[\n,，;；]+/)
+      : null;
+  if (!rawValues) return [];
+  return dedupeGroupLabels(rawValues as Array<string | null | undefined>);
 }
 
 /**

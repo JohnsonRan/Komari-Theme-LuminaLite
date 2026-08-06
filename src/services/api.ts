@@ -4,14 +4,12 @@ import {
   MeSchema,
   NodeInfoSchema,
   PublicConfigSchema,
-  AdminClientSchema,
   LoadRecordSchema,
   PingRecordSchema,
   PingTaskSchema,
   type Me,
   type NodeInfo,
   type PublicConfig,
-  type AdminClient,
   type LoadRecordsResponse,
   type PingRecordsResponse,
   type PingTask,
@@ -656,10 +654,6 @@ export async function getNodes(options?: ApiCallOptions): Promise<NodeInfo[]> {
   }
 }
 
-export async function getAdminClients(options?: ApiCallOptions): Promise<AdminClient[]> {
-  return (await apiGet("/api/admin/client/list", z.array(AdminClientSchema), options)) as AdminClient[];
-}
-
 export async function getLoadRecords(
   uuid: string,
   hours = 6,
@@ -847,43 +841,6 @@ export async function getPingMetricStats(
   return normalizePingMetricStats(
     payload as z.output<typeof PingMetricStatsResponseSchema>,
   );
-}
-
-export async function getAdminPingTasks(options?: ApiCallOptions): Promise<PingTask[]> {
-  // 后端注册为 GET /api/admin/ping/（group + "/"）；不带尾斜杠会多一次 301 重定向。
-  return (await apiGet("/api/admin/ping/", z.array(PingTaskSchema), options)) as PingTask[];
-}
-
-export async function saveThemeSettings(
-  theme: string,
-  settings: Record<string, unknown>,
-): Promise<void> {
-  const resp = await fetchWithTimeout(
-    `/api/admin/theme/settings?theme=${encodeURIComponent(theme)}`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(settings),
-    },
-    DEFAULT_API_TIMEOUT_MS,
-  );
-
-  if (!resp.ok) {
-    let message = `Request /api/admin/theme/settings failed: ${resp.status}`;
-    try {
-      const json = (await resp.json()) as { message?: string };
-      if (json?.message) {
-        message = json.message;
-      }
-    } catch {
-      // body 不是 JSON 时保留兜底错误信息。
-    }
-    throw new ApiRequestError(message, resp.status, "/api/admin/theme/settings");
-  }
 }
 
 // 首页 24 小时历史。只查一个指标：cpu.usage 既是趋势要画的曲线，也是「探针有没有上报」

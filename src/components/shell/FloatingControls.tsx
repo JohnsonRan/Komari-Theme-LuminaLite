@@ -6,11 +6,9 @@ import {
   List,
   Rows3,
   Settings,
-  SlidersHorizontal,
   MorphIcon,
   iconData,
 } from "@/components/ui/icons";
-import { Link } from "react-router-dom";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useNodeStoreStatus } from "@/hooks/useNode";
@@ -19,8 +17,7 @@ import { useThemeSettings } from "@/hooks/useThemeSettings";
 import type { NodeViewMode } from "@/utils/themeSettings";
 import { clsx } from "clsx";
 
-// 悬浮球切换按钮展示"下一档"的图标/文案(点击后会切到的视图),而不是当前视图——
-// 与 ThemeManage 里 NODE_VIEW_MODE_OPTIONS 的图标语义保持一致。
+// 悬浮球切换按钮展示"下一档"的图标/文案(点击后会切到的视图),而不是当前视图。
 const VIEW_MODE_META: Record<NodeViewMode, { icon: typeof LayoutGrid; label: string }> = {
   large: { icon: LayoutGrid, label: "大视图" },
   compact: { icon: Rows3, label: "小视图" },
@@ -49,9 +46,6 @@ export function FloatingControls({
   const [collapsed, setCollapsed] = useState(true);
   const settingsReady = themeSettings.isReady;
   const showAdmin = settingsReady && themeSettings.enableAdminButton;
-  // 主题管理入口仅对登录管理员开放（配色已移至主题设置页内）。
-  const loggedIn = Boolean(me?.logged_in);
-  const showThemeManage = loggedIn;
   const showSyncWarning = failureStreak >= 2;
   const hiddenTabIndex = collapsed ? -1 : undefined;
   const appearanceIndex = APPEARANCE_CYCLE.indexOf(appearance);
@@ -120,17 +114,6 @@ export function FloatingControls({
                   <MorphIcon icon={viewIconData} size={16} spring="bouncy" />
                 </button>
               </>
-            )}
-            {showThemeManage && (
-              <Link
-                to="/?view=theme-manage"
-                aria-label="主题设置"
-                title="主题设置"
-                tabIndex={hiddenTabIndex}
-                className="control-button grid h-9 w-9 place-items-center"
-              >
-                <SlidersHorizontal size={16} />
-              </Link>
             )}
             {showAdmin && (
               <a

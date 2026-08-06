@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 
-const FALLBACK_TITLE = "Komari-Theme-LuminaLite";
-const FALLBACK_DESCRIPTION = "A Komari monitor theme.";
+function readMeta(selector: string) {
+  return document.querySelector<HTMLMetaElement>(selector)?.content.trim() || "";
+}
 
 function updateMeta(selector: string, attr: "content", value: string) {
   const element = document.querySelector<HTMLMetaElement>(selector);
@@ -15,14 +16,17 @@ export function useSiteMetadata() {
   const { data: config } = usePublicConfig();
 
   useEffect(() => {
-    const siteName = config?.sitename?.trim() || FALLBACK_TITLE;
-    const description = config?.description?.trim() || FALLBACK_DESCRIPTION;
+    const siteName = config?.sitename?.trim() || document.title.trim();
+    const description =
+      config?.description?.trim() || readMeta('meta[name="description"]');
 
-    document.title = siteName;
-    updateMeta('meta[property="og:title"]', "content", siteName);
-    updateMeta('meta[name="twitter:title"]', "content", siteName);
-    updateMeta('meta[name="description"]', "content", description);
-    updateMeta('meta[property="og:description"]', "content", description);
-    updateMeta('meta[name="twitter:description"]', "content", description);
+    if (siteName) {
+      updateMeta('meta[property="og:title"]', "content", siteName);
+      updateMeta('meta[name="twitter:title"]', "content", siteName);
+    }
+    if (description) {
+      updateMeta('meta[property="og:description"]', "content", description);
+      updateMeta('meta[name="twitter:description"]', "content", description);
+    }
   }, [config?.sitename, config?.description]);
 }

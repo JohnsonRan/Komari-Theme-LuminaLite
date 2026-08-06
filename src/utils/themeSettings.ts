@@ -168,6 +168,67 @@ function normalizeHomeSortDefault(
   };
 }
 
+function hasOwn(settings: object | null | undefined, key: string): boolean {
+  return Boolean(settings) && Object.prototype.hasOwnProperty.call(settings, key);
+}
+
+/**
+ * 官方 managed 表单用 homepagePingBindingsJson（richtext JSON 字符串）整体替换对象键。
+ * Komari 会把 manifest 默认值合并进公开配置，因此升级后新键即使尚未保存也会存在。
+ * 旧对象键存在时必须优先，直到首次官方全量保存自然移除它；之后再读取新字符串键。
+ */
+export function resolveHomepagePingBindings(
+  settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
+): HomepagePingTaskBindings {
+  const legacy = settings?.homepagePingBindings;
+  if (legacy && typeof legacy === "object" && !Array.isArray(legacy)) {
+    return normalizeHomepagePingTaskBindings(legacy);
+  }
+
+  const raw = settings?.homepagePingBindingsJson;
+  if (typeof raw !== "string") return {};
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  try {
+    return normalizeHomepagePingTaskBindings(JSON.parse(trimmed) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+const ATTENTION_FLAT_KEYS = [
+  "attentionCpuPct",
+  "attentionMemoryPct",
+  "attentionDiskPct",
+  "attentionLossPct",
+  "attentionTrafficRemainPct",
+  "attentionExpireDays",
+] as const;
+
+/**
+ * 官方 managed 将 attentionThresholds 扁平为 6 个 number 键。旧嵌套对象存在时优先，
+ * 避免被 Komari 自动合并进公开配置的 manifest 默认值遮蔽；首次官方保存移除旧键后切到扁平值。
+ */
+export function resolveAttentionThresholds(
+  settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
+): AttentionThresholds {
+  const legacy = settings?.attentionThresholds;
+  if (legacy && typeof legacy === "object" && !Array.isArray(legacy)) {
+    return normalizeAttentionThresholds(legacy as Record<string, unknown>);
+  }
+
+  const hasFlat = ATTENTION_FLAT_KEYS.some((key) => hasOwn(settings, key));
+  if (!hasFlat) return normalizeAttentionThresholds({});
+  return normalizeAttentionThresholds({
+    cpuPct: settings?.attentionCpuPct,
+    memoryPct: settings?.attentionMemoryPct,
+    diskPct: settings?.attentionDiskPct,
+    lossPct: settings?.attentionLossPct,
+    trafficRemainPct: settings?.attentionTrafficRemainPct,
+    expireDays: settings?.attentionExpireDays,
+  });
+}
+
 export function normalizeThemeSettings(
   settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
 ): ResolvedThemeSettings {
@@ -185,7 +246,7 @@ export function normalizeThemeSettings(
     enableIconAnimations: enabledUnlessFalse(settings?.enableIconAnimations),
     enableDataAnimations: enabledUnlessFalse(settings?.enableDataAnimations),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
-    homepagePingBindings: normalizeHomepagePingTaskBindings(settings?.homepagePingBindings),
+    homepagePingBindings: resolveHomepagePingBindings(settings),
     // 默认关闭(需手动开启):给访客展示的是模拟数据,必须由站长显式决定。
     fakePingForUnbound: settings?.fakePingForUnbound === true,
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
@@ -199,9 +260,7 @@ export function normalizeThemeSettings(
     enableAttentionSort: settings?.enableAttentionSort === true,
     showNodeHistory: settings?.showNodeHistory === true,
     showVisitorInfo: enabledUnlessFalse(settings?.showVisitorInfo),
-    attentionThresholds: normalizeAttentionThresholds(
-      settings?.attentionThresholds as Record<string, unknown> | null | undefined,
-    ),
+    attentionThresholds: resolveAttentionThresholds(settings),
     compactShowTrafficTotal: enabledUnlessFalse(settings?.compactShowTrafficTotal),
     compactShowBilling: enabledUnlessFalse(settings?.compactShowBilling),
     compactShowUptime: enabledUnlessFalse(settings?.compactShowUptime),

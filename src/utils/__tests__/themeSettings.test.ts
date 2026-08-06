@@ -103,4 +103,79 @@ describe("normalizeThemeSettings", () => {
       normalizeThemeSettings({ hiddenNodes: "节点A, 节点A\nuuid-1；节点B" } as never).hiddenNodes,
     ).toEqual(["节点A", "uuid-1", "节点B"]);
   });
+
+  it("keeps legacy Ping bindings until the official full save removes the old key", () => {
+    // 模拟 Komari：manifest 默认值已合并进公开配置，但旧对象仍应在首次官方保存前生效。
+    expect(
+      normalizeThemeSettings({
+        homepagePingBindingsJson: "{}",
+        homepagePingBindings: { "9": ["legacy"] },
+      }).homepagePingBindings,
+    ).toEqual({ "9": ["legacy"] });
+
+    // 官方全量保存后旧键消失，改读 richtext JSON。
+    expect(
+      normalizeThemeSettings({
+        homepagePingBindingsJson: '{"1":["uuid-a","uuid-a",""],"x":["skip"]}',
+      }).homepagePingBindings,
+    ).toEqual({ "1": ["uuid-a"] });
+    expect(
+      normalizeThemeSettings({ homepagePingBindingsJson: "{not-json" }).homepagePingBindings,
+    ).toEqual({});
+  });
+
+  it("keeps legacy attention thresholds until the official full save removes the old key", () => {
+    const mergedBeforeSave = normalizeThemeSettings({
+      attentionCpuPct: 90,
+      attentionMemoryPct: 90,
+      attentionDiskPct: 90,
+      attentionLossPct: 5,
+      attentionTrafficRemainPct: 10,
+      attentionExpireDays: 7,
+      attentionThresholds: {
+        cpuPct: 75,
+        memoryPct: 76,
+        diskPct: 77,
+        lossPct: 4,
+        trafficRemainPct: 12,
+        expireDays: 9,
+      },
+    });
+    expect(mergedBeforeSave.attentionThresholds).toEqual({
+      cpuPct: 75,
+      memoryPct: 76,
+      diskPct: 77,
+      lossPct: 4,
+      trafficRemainPct: 12,
+      expireDays: 9,
+    });
+
+    const afterSave = normalizeThemeSettings({
+      attentionCpuPct: 80,
+      attentionMemoryPct: 70,
+      attentionDiskPct: 60,
+      attentionLossPct: 3,
+      attentionTrafficRemainPct: 15,
+      attentionExpireDays: 5,
+    });
+    expect(afterSave.attentionThresholds).toEqual({
+      cpuPct: 80,
+      memoryPct: 70,
+      diskPct: 60,
+      lossPct: 3,
+      trafficRemainPct: 15,
+      expireDays: 5,
+    });
+  });
+
+  it("parses homeGroupOrder from richtext and keeps array compatibility", () => {
+    expect(normalizeThemeSettings({ homeGroupOrder: "B, A\nB" } as never).homeGroupOrder).toEqual([
+      "B",
+      "A",
+    ]);
+    expect(normalizeThemeSettings({ homeGroupOrder: ["Z", "Y"] }).homeGroupOrder).toEqual([
+      "Z",
+      "Y",
+    ]);
+  });
 });

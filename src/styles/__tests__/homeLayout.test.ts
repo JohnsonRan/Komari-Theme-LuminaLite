@@ -43,13 +43,16 @@ describe("home responsive layout contracts", () => {
     }
   });
 
-  it("keeps the color picker out of floating controls and home-only routing out of controls", () => {
-    // 配色面板已移至主题设置页,悬浮球不再内嵌取色器与路由钩子。
+  it("keeps theme settings out of floating controls and home-only routing out of controls", () => {
+    // 主题设置已迁至官方 /admin/theme_managed，悬浮球不再内嵌取色器、theme-manage 入口或路由钩子。
     expect(controlsSource).not.toContain("MetricColorPicker");
+    expect(controlsSource).not.toContain("theme-manage");
     expect(controlsSource).not.toContain("Palette");
     expect(controlsSource).not.toContain("useLocation");
     expect(controlsSource).not.toContain("useSearchParams");
     expect(controlsSource).not.toContain("usePublicConfig");
+    expect(homeSource).not.toContain("theme-manage");
+    expect(homeSource).not.toContain("ThemeManage");
   });
 
   it("keeps mini cards observer-free and URL-encodes their detail route", () => {

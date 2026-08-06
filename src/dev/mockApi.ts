@@ -699,7 +699,7 @@ export function installDevMockApi() {
       return json(nodes);
     }
 
-    // 主题设置页（?view=theme-manage）的两个管理端列表，用来调试首页延迟绑定 UI。
+    // 管理端列表：本地 mock 下调试 Ping 任务与节点列表接口。
     if (url.pathname === "/api/admin/ping/") {
       return json(pingTasks);
     }

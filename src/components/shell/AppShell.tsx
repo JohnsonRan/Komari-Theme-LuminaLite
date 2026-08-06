@@ -37,8 +37,7 @@ export function AppShell() {
     publicConfig.data?.private_site === true &&
     !auth.isPending &&
     auth.data?.logged_in !== true;
-  const isHomeDashboard =
-    normalizedPath === "/" && new URLSearchParams(search).get("view") !== "theme-manage";
+  const isHomeDashboard = normalizedPath === "/";
   const canHydrateHome =
     isHomeDashboard && !isCheckingAccess && !accessError && !isPrivateVisitor;
   const homeStoreStatus = useNodeStoreStatus(canHydrateHome);

@@ -64,7 +64,7 @@
   --status-warning: #e9a23b;
   --status-error: #dc2626;
   --status-info: #3b82f6;
-  /* 品牌强调色,Spinner 转动弧、ThemeManage 复选框等引用。 */
+  /* 品牌强调色,Spinner 转动弧等引用。 */
   --accent-500: #3b82f6;
   /* 品牌深调:比 --accent-500 更沉、微偏靛,只用于主 CTA / 报头 / 激活态渐变的暗端,
      让品牌蓝有「azure→indigo」的体积感而非一块平涂色。数据色(--progress-cpu 等)不受影响。 */

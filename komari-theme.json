@@ -2,8 +2,578 @@
   "name": "Komari-Theme-LuminaLite",
   "short": "LuminaLite",
   "description": "Komari-Theme-LuminaLite",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "author": "JohnsonRan",
   "url": "https://github.com/JohnsonRan/Komari-Theme-LuminaLite",
-  "preview": "preview.png"
+  "preview": "preview.png",
+  "configuration": {
+    "type": "managed",
+    "name": {
+      "zh-CN": "LuminaLite 主题设置",
+      "en": "LuminaLite Theme Settings"
+    },
+    "data": [
+      {
+        "name": { "zh-CN": "外观", "en": "Appearance" },
+        "type": "title"
+      },
+      {
+        "key": "defaultAppearance",
+        "name": { "zh-CN": "默认外观", "en": "Default appearance" },
+        "type": "select",
+        "options": "system,light,dark",
+        "default": "system",
+        "help": {
+          "zh-CN": "首次访问或尚未手动切换外观时的默认模式。system=跟随系统，light=浅色，dark=深色。",
+          "en": "Default mode for first-time visitors. system follows OS, light/dark are fixed."
+        }
+      },
+      {
+        "key": "enableIconAnimations",
+        "name": { "zh-CN": "界面动效", "en": "Interface motion" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "图标变形、卡片重排、浮层进入与按压反馈等界面过渡。系统「减少动态效果」开启时自动停用。",
+          "en": "Icon morphs, card reorders, overlays and press feedback. Honors prefers-reduced-motion."
+        }
+      },
+      {
+        "key": "enableDataAnimations",
+        "name": { "zh-CN": "数据动效", "en": "Live-data motion" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "首页与节点中实时数字变化的碎片聚合动画。",
+          "en": "Fragment-rollup animation for live numeric changes."
+        }
+      },
+      {
+        "key": "enableAdminButton",
+        "name": { "zh-CN": "显示后台入口", "en": "Show admin entry" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "首页悬浮控件中显示后台管理入口。",
+          "en": "Show the admin entry in the home floating controls."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "视图", "en": "View" },
+        "type": "title"
+      },
+      {
+        "key": "desktopNodeViewMode",
+        "name": { "zh-CN": "桌面端默认视图", "en": "Desktop default view" },
+        "type": "select",
+        "options": "large,compact,mini,list",
+        "default": "large",
+        "help": {
+          "zh-CN": "宽度 > 720px 时的默认节点视图。large=大卡片，compact=小卡片，mini=迷你卡片，list=列表。",
+          "en": "Default node view above 720px. large/compact/mini/list."
+        }
+      },
+      {
+        "key": "mobileNodeViewMode",
+        "name": { "zh-CN": "移动端默认视图", "en": "Mobile default view" },
+        "type": "select",
+        "options": "large,compact,mini",
+        "default": "compact",
+        "help": {
+          "zh-CN": "宽度 ≤ 720px 时的默认节点视图（移动端不支持 list）。",
+          "en": "Default node view at ≤720px. list is not available on mobile."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "背景", "en": "Background" },
+        "type": "title"
+      },
+      {
+        "key": "enableBackgroundImage",
+        "name": { "zh-CN": "启用背景图", "en": "Enable background image" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "关闭后不加载背景图（下方 URL 会保留），站点回到纯色主题。",
+          "en": "When off, background URLs are kept but not loaded."
+        }
+      },
+      {
+        "key": "backgroundImage",
+        "name": { "zh-CN": "桌面端背景图", "en": "Desktop background URL" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "留空则不显示。可用 浅色图|深色图 分别为两种外观设置。建议 WebP/JPEG，单图 ≤ 200KB。",
+          "en": "Empty = none. Use light|dark for per-appearance URLs."
+        }
+      },
+      {
+        "key": "backgroundImageMobile",
+        "name": { "zh-CN": "移动端背景图", "en": "Mobile background URL" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "屏宽 ≤ 720px 时生效；留空则沿用桌面端。同样支持 浅色图|深色图。",
+          "en": "Used at ≤720px; falls back to desktop URL when empty."
+        }
+      },
+      {
+        "key": "backgroundAlignment",
+        "name": { "zh-CN": "背景对齐", "en": "Background alignment" },
+        "type": "string",
+        "default": "cover,center",
+        "help": {
+          "zh-CN": "格式 size,position。size: cover / contain / auto；position: top / center / bottom。例如 cover,center。",
+          "en": "Format size,position. size=cover|contain|auto; position=top|center|bottom."
+        }
+      },
+      {
+        "key": "surfaceOpacity",
+        "name": { "zh-CN": "卡片不透明度", "en": "Card opacity" },
+        "type": "number",
+        "default": 100,
+        "help": {
+          "zh-CN": "0–100 的整数。100=完全不透明；越低越通透。低于 95 时会叠加可读性遮罩。",
+          "en": "Integer 0–100. Below 95 adds a readability scrim over the background."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "配色", "en": "Colors" },
+        "type": "title"
+      },
+      {
+        "key": "darkDepth",
+        "name": { "zh-CN": "暗色深度", "en": "Dark depth" },
+        "type": "number",
+        "default": 100,
+        "help": {
+          "zh-CN": "0–100。100 为近黑（AMOLED）默认；仅影响深色模式。",
+          "en": "0–100. 100 is the near-black (AMOLED) default; dark mode only."
+        }
+      },
+      {
+        "key": "metricColorCpu",
+        "name": { "zh-CN": "CPU 颜色", "en": "CPU color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "6 位十六进制，如 #3b82f6。留空使用主题默认。",
+          "en": "6-digit hex like #3b82f6. Empty = theme default."
+        }
+      },
+      {
+        "key": "metricColorMemory",
+        "name": { "zh-CN": "内存颜色", "en": "Memory color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "6 位十六进制。留空使用主题默认。",
+          "en": "6-digit hex. Empty = theme default."
+        }
+      },
+      {
+        "key": "metricColorDisk",
+        "name": { "zh-CN": "磁盘颜色", "en": "Disk color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "6 位十六进制。留空使用主题默认。",
+          "en": "6-digit hex. Empty = theme default."
+        }
+      },
+      {
+        "key": "metricColorLoad",
+        "name": { "zh-CN": "负载颜色", "en": "Load color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "6 位十六进制。留空使用主题默认。",
+          "en": "6-digit hex. Empty = theme default."
+        }
+      },
+      {
+        "key": "metricColorSwap",
+        "name": { "zh-CN": "Swap 颜色", "en": "Swap color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "6 位十六进制。留空使用主题默认。",
+          "en": "6-digit hex. Empty = theme default."
+        }
+      },
+      {
+        "key": "metricColorSpeedIdle",
+        "name": { "zh-CN": "超低速颜色", "en": "Idle speed color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "速率热力：超低速。6 位十六进制，留空用默认。",
+          "en": "Speed heatmap: idle. 6-digit hex; empty = default."
+        }
+      },
+      {
+        "key": "metricColorSpeedLow",
+        "name": { "zh-CN": "低速颜色", "en": "Low speed color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "速率热力：低速。6 位十六进制，留空用默认。",
+          "en": "Speed heatmap: low. 6-digit hex; empty = default."
+        }
+      },
+      {
+        "key": "metricColorSpeedHigh",
+        "name": { "zh-CN": "高速颜色", "en": "High speed color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "速率热力：高速。6 位十六进制，留空用默认。",
+          "en": "Speed heatmap: high. 6-digit hex; empty = default."
+        }
+      },
+      {
+        "key": "metricColorSpeedMax",
+        "name": { "zh-CN": "急速颜色", "en": "Max speed color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "速率热力：急速。6 位十六进制，留空用默认。",
+          "en": "Speed heatmap: max. 6-digit hex; empty = default."
+        }
+      },
+      {
+        "key": "metricColorTrafficUp",
+        "name": { "zh-CN": "上行颜色", "en": "Upload color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "流量方向：上行。6 位十六进制，留空用默认。",
+          "en": "Traffic direction: upload. 6-digit hex; empty = default."
+        }
+      },
+      {
+        "key": "metricColorTrafficDown",
+        "name": { "zh-CN": "下行颜色", "en": "Download color" },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh-CN": "流量方向：下行。6 位十六进制，留空用默认。",
+          "en": "Traffic direction: download. 6-digit hex; empty = default."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "首页", "en": "Home" },
+        "type": "title"
+      },
+      {
+        "key": "showHomeOverview",
+        "name": { "zh-CN": "显示顶部总览", "en": "Show home overview" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "展示时间、在线数、地区、流量和速率。",
+          "en": "Show time, online count, regions, traffic and rates."
+        }
+      },
+      {
+        "key": "showGroupTabs",
+        "name": { "zh-CN": "显示分组筛选", "en": "Show group tabs" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "根据后端节点分组生成首页 Tab。",
+          "en": "Generate home tabs from backend node groups."
+        }
+      },
+      {
+        "key": "showRegionBar",
+        "name": { "zh-CN": "显示地区筛选", "en": "Show region bar" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "按节点地区生成国旗筛选栏。",
+          "en": "Show the region/flag filter bar."
+        }
+      },
+      {
+        "key": "showCardGroup",
+        "name": { "zh-CN": "卡片显示分组", "en": "Show group on cards" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "关闭后卡片内不再显示节点分组名（不影响筛选栏）。",
+          "en": "When off, cards hide the group label (filter tabs stay)."
+        }
+      },
+      {
+        "key": "enableHomeSort",
+        "name": { "zh-CN": "启用排序切换", "en": "Enable home sort" },
+        "type": "switch",
+        "default": false,
+        "help": {
+          "zh-CN": "首页显示排序控件，访客可临时切换排序（离线节点恒定置底）。",
+          "en": "Show sort controls; offline nodes always sink."
+        }
+      },
+      {
+        "key": "homeSortField",
+        "name": { "zh-CN": "默认排序维度", "en": "Default sort field" },
+        "type": "select",
+        "options": "default,name,speed,traffic",
+        "default": "default",
+        "help": {
+          "zh-CN": "default=后端权重，name=名称，speed=实时网速，traffic=累计流量。",
+          "en": "default=backend weight, name, speed, or traffic."
+        }
+      },
+      {
+        "key": "homeSortDirection",
+        "name": { "zh-CN": "默认排序方向", "en": "Default sort direction" },
+        "type": "select",
+        "options": "asc,desc",
+        "default": "asc",
+        "help": {
+          "zh-CN": "asc=升序，desc=降序。",
+          "en": "asc ascending, desc descending."
+        }
+      },
+      {
+        "key": "enableAttentionSort",
+        "name": { "zh-CN": "异常节点置顶", "en": "Attention sort" },
+        "type": "switch",
+        "default": false,
+        "help": {
+          "zh-CN": "命中下方阈值的节点排到最前并标出原因。离线不计入异常。",
+          "en": "Pin nodes that hit thresholds. Offline is not treated as attention."
+        }
+      },
+      {
+        "key": "attentionCpuPct",
+        "name": { "zh-CN": "异常阈值 · CPU %", "en": "Attention · CPU %" },
+        "type": "number",
+        "default": 90,
+        "help": {
+          "zh-CN": "CPU 使用率 ≥ 该值视为异常。0 表示不检查。",
+          "en": "CPU usage ≥ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "attentionMemoryPct",
+        "name": { "zh-CN": "异常阈值 · 内存 %", "en": "Attention · Memory %" },
+        "type": "number",
+        "default": 90,
+        "help": {
+          "zh-CN": "内存使用率 ≥ 该值视为异常。0 表示不检查。",
+          "en": "Memory usage ≥ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "attentionDiskPct",
+        "name": { "zh-CN": "异常阈值 · 磁盘 %", "en": "Attention · Disk %" },
+        "type": "number",
+        "default": 90,
+        "help": {
+          "zh-CN": "磁盘使用率 ≥ 该值视为异常。0 表示不检查。",
+          "en": "Disk usage ≥ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "attentionLossPct",
+        "name": { "zh-CN": "异常阈值 · 丢包 %", "en": "Attention · Loss %" },
+        "type": "number",
+        "default": 5,
+        "help": {
+          "zh-CN": "丢包率 ≥ 该值视为异常。0 表示不检查。",
+          "en": "Packet loss ≥ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "attentionTrafficRemainPct",
+        "name": { "zh-CN": "异常阈值 · 剩余流量 %", "en": "Attention · Traffic remain %" },
+        "type": "number",
+        "default": 10,
+        "help": {
+          "zh-CN": "剩余流量 ≤ 该值视为异常。0 表示不检查。",
+          "en": "Remaining traffic ≤ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "attentionExpireDays",
+        "name": { "zh-CN": "异常阈值 · 距到期天数", "en": "Attention · Expire days" },
+        "type": "number",
+        "default": 7,
+        "help": {
+          "zh-CN": "距到期天数 ≤ 该值视为异常。0 表示不检查。",
+          "en": "Days until expiry ≤ this is attention. 0 disables."
+        }
+      },
+      {
+        "key": "showNodeHistory",
+        "name": { "zh-CN": "显示 24 小时历史", "en": "Show 24h history" },
+        "type": "switch",
+        "default": false,
+        "help": {
+          "zh-CN": "大卡片底部增加 24 小时 CPU 条；会额外批量拉一次指标。默认关闭。",
+          "en": "Adds a 24h CPU strip on large cards; extra metrics fetch. Off by default."
+        }
+      },
+      {
+        "key": "showVisitorInfo",
+        "name": { "zh-CN": "显示访客 IP 信息条", "en": "Show visitor info" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "页面底部显示访客 IP/归属地（浏览器直连第三方接口，不经本站后端）。",
+          "en": "Bottom visitor IP bar via third-party APIs from the browser."
+        }
+      },
+      {
+        "key": "homeGroupOrder",
+        "name": { "zh-CN": "分组排序", "en": "Group order" },
+        "type": "richtext",
+        "default": "",
+        "help": {
+          "zh-CN": "每行一个分组名，或用逗号分隔。列出的分组按此顺序显示，未列出的按后端顺序排在后面。",
+          "en": "One group per line or comma-separated. Listed groups come first; others keep backend order."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "节点", "en": "Nodes" },
+        "type": "title"
+      },
+      {
+        "key": "hiddenNodes",
+        "name": { "zh-CN": "隐藏节点", "en": "Hidden nodes" },
+        "type": "richtext",
+        "default": "",
+        "help": {
+          "zh-CN": "每行一个节点名称或 UUID，也可用逗号分隔。被隐藏的节点从首页移除且不计入统计。",
+          "en": "One name/UUID per line or comma-separated. Hidden nodes leave the home grid and stats."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "卡片", "en": "Cards" },
+        "type": "title"
+      },
+      {
+        "key": "compactShowTrafficTotal",
+        "name": { "zh-CN": "显示累计流量", "en": "Show traffic total" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "小卡片展示出站与入站累计流量。",
+          "en": "Show cumulative up/down traffic on compact cards."
+        }
+      },
+      {
+        "key": "compactShowBilling",
+        "name": { "zh-CN": "显示费用到期", "en": "Show billing" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "小卡片展示续费价格与剩余天数。",
+          "en": "Show price and days remaining on compact cards."
+        }
+      },
+      {
+        "key": "compactShowUptime",
+        "name": { "zh-CN": "显示在线时间", "en": "Show uptime" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "小卡片流量栏右侧展示在线时长。",
+          "en": "Show uptime on the compact card traffic row."
+        }
+      },
+      {
+        "key": "showConnections",
+        "name": { "zh-CN": "显示连接数（TCP/UDP）", "en": "Show connections" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "大/小卡片展示实时 TCP/UDP 连接数；未上报显示 0。",
+          "en": "Show live TCP/UDP counts; 0 when agent does not report."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "Ping", "en": "Ping" },
+        "type": "title"
+      },
+      {
+        "key": "showPingChart",
+        "name": { "zh-CN": "显示详情页 Ping 图", "en": "Show detail ping chart" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "节点详情页是否提供 Ping 延迟/丢包图表。",
+          "en": "Whether the instance page offers the ping chart."
+        }
+      },
+      {
+        "key": "fakePingForUnbound",
+        "name": { "zh-CN": "未绑定节点显示模拟延迟", "en": "Fake ping for unbound" },
+        "type": "switch",
+        "default": false,
+        "help": {
+          "zh-CN": "未绑定 Ping 任务的在线节点显示前端模拟延迟（仅视觉统一，不代表真实质量）。",
+          "en": "Show synthetic latency on online nodes without ping bindings (visual only)."
+        }
+      },
+      {
+        "key": "homepagePingBindingsJson",
+        "name": { "zh-CN": "首页延迟绑定（JSON）", "en": "Homepage ping bindings (JSON)" },
+        "type": "richtext",
+        "default": "{}",
+        "help": {
+          "zh-CN": "JSON 对象：键为 Ping 任务 ID（数字字符串），值为节点 UUID 数组。例 {\"1\":[\"uuid-a\",\"uuid-b\"]}。每个节点最多绑定 3 个任务。非法 JSON 会回落为空。",
+          "en": "JSON object: ping task id → array of node UUIDs. Example {\"1\":[\"uuid-a\"]}. Max 3 tasks per node. Invalid JSON falls back to empty."
+        }
+      },
+
+      {
+        "name": { "zh-CN": "详情", "en": "Detail" },
+        "type": "title"
+      },
+      {
+        "key": "detailChartUnit",
+        "name": { "zh-CN": "负载图内存/磁盘单位", "en": "Load chart unit" },
+        "type": "select",
+        "options": "bytes,percent",
+        "default": "bytes",
+        "help": {
+          "zh-CN": "bytes=按字节自适应，percent=百分比。",
+          "en": "bytes = adaptive byte units; percent = percentage."
+        }
+      },
+      {
+        "key": "detailNetworkUnit",
+        "name": { "zh-CN": "实时网速单位", "en": "Network unit" },
+        "type": "select",
+        "options": "mbs,mbps",
+        "default": "mbs",
+        "help": {
+          "zh-CN": "mbs=字节族（MB/s 自适应），mbps=比特族（Mbps 自适应）。",
+          "en": "mbs = byte family (MB/s); mbps = bit family (Mbps)."
+        }
+      },
+      {
+        "key": "detailSplitLayout",
+        "name": { "zh-CN": "详情页分栏布局", "en": "Detail split layout" },
+        "type": "switch",
+        "default": true,
+        "help": {
+          "zh-CN": "宽屏左侧服务器列表、右侧详情；窄屏自动收为单列。",
+          "en": "Wide screens show a server list sidebar; narrow screens collapse to a single column."
+        }
+      }
+    ]
+  }
 }
