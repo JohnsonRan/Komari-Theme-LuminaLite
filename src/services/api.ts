@@ -358,7 +358,7 @@ async function queryMetricPayload(
   }
 }
 
-function loadPublicPingTasks() {
+export function getPublicPingTasks() {
   if (publicPingTasksCache && Date.now() - publicPingTasksCachedAt < 60_000) {
     return Promise.resolve(publicPingTasksCache);
   }
@@ -560,7 +560,7 @@ async function getPingMetricData({
       signal,
     ),
     statsRequest,
-    loadPublicPingTasks().catch(() => null),
+    getPublicPingTasks().catch(() => null),
   ]);
   let series: PingMetricSeries[] = metricPayload.series.map((item) => ({
     metricKey: item.metric_key,

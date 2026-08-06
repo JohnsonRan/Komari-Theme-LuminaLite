@@ -518,27 +518,6 @@
         }
       },
       {
-        "key": "fakePingForUnbound",
-        "name": { "zh-CN": "未绑定节点显示模拟延迟", "en": "Fake ping for unbound" },
-        "type": "switch",
-        "default": false,
-        "help": {
-          "zh-CN": "未绑定 Ping 任务的在线节点显示前端模拟延迟（仅视觉统一，不代表真实质量）。",
-          "en": "Show synthetic latency on online nodes without ping bindings (visual only)."
-        }
-      },
-      {
-        "key": "homepagePingBindingsJson",
-        "name": { "zh-CN": "首页延迟绑定（JSON）", "en": "Homepage ping bindings (JSON)" },
-        "type": "richtext",
-        "default": "{}",
-        "help": {
-          "zh-CN": "JSON 对象：键为 Ping 任务 ID（数字字符串），值为节点 UUID 数组。例 {\"1\":[\"uuid-a\",\"uuid-b\"]}。每个节点最多绑定 3 个任务。非法 JSON 会回落为空。",
-          "en": "JSON object: ping task id → array of node UUIDs. Example {\"1\":[\"uuid-a\"]}. Max 3 tasks per node. Invalid JSON falls back to empty."
-        }
-      },
-
-      {
         "name": { "zh-CN": "详情", "en": "Detail" },
         "type": "title"
       },

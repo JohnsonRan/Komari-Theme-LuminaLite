@@ -1,71 +1,56 @@
 import { describe, expect, it } from "vitest";
-import {
-  invertHomepagePingTaskBindings,
-  normalizeHomepagePingTaskBindings,
-  resolveHomepagePingTaskIds,
-  MAX_HOMEPAGE_PING_TASKS,
-} from "@/utils/pingTasks";
+import { MAX_HOMEPAGE_PING_TASKS, resolvePublicPingTaskIds } from "@/utils/pingTasks";
+import type { PingTask } from "@/types/komari";
 
-describe("homepage ping task bindings", () => {
-  it("accepts only positive decimal safe integers", () => {
-    expect(
-      normalizeHomepagePingTaskBindings({
-        "1e3": ["exponent"],
-        "1.5": ["fraction"],
-        "0x10": ["hex"],
-        "9007199254740992": ["unsafe"],
-        "42": ["valid"],
-      }),
-    ).toEqual({ "42": ["valid"] });
-  });
+function task(id: number, weight: number, clients: string[]): PingTask {
+  return {
+    id,
+    weight,
+    clients,
+    name: `task-${id}`,
+    interval: 60,
+    loss: 0,
+    type: "icmp",
+    target: "",
+  };
+}
 
-  it("merges IDs that normalize to the same decimal integer", () => {
+describe("public homepage ping tasks", () => {
+  it("uses backend task clients directly and ignores empty client values", () => {
     expect(
-      normalizeHomepagePingTaskBindings({
-        "01": ["node-a", "node-b"],
-        "1": ["node-b", "node-c"],
-      }),
-    ).toEqual({ "1": ["node-b", "node-c", "node-a"] });
-  });
-
-  it("resolves every bound task per client, ordered by task ID", () => {
-    expect(
-      resolveHomepagePingTaskIds({
-        "3": ["node-a"],
-        "1": ["node-a", "node-b"],
-        "02": ["node-a"],
-      }),
+      resolvePublicPingTaskIds([
+        task(1, 0, ["node-a", " node-b ", ""]),
+        task(2, 1, ["node-a"]),
+      ]),
     ).toEqual(
       new Map([
-        ["node-a", [1, 2, 3]],
+        ["node-a", [1, 2]],
         ["node-b", [1]],
       ]),
     );
   });
 
-  it("caps each client at MAX_HOMEPAGE_PING_TASKS, keeping the lowest task IDs", () => {
-    const bindings = Object.fromEntries(
-      Array.from({ length: MAX_HOMEPAGE_PING_TASKS + 2 }, (_, index) => [
-        String(index + 1),
-        ["node-a"],
-      ]),
+  it("orders tasks by weight then id rather than response order", () => {
+    expect(
+      resolvePublicPingTaskIds([
+        task(20, 10, ["node-a"]),
+        task(3, 1, ["node-a"]),
+        task(2, 1, ["node-a"]),
+      ]).get("node-a"),
+    ).toEqual([2, 3, 20]);
+  });
+
+  it("caps each node at the homepage task limit", () => {
+    const tasks = Array.from({ length: MAX_HOMEPAGE_PING_TASKS + 2 }, (_, index) =>
+      task(index + 1, index, ["node-a"]),
     );
-    expect(resolveHomepagePingTaskIds(bindings).get("node-a")).toEqual(
+    expect(resolvePublicPingTaskIds(tasks).get("node-a")).toEqual(
       Array.from({ length: MAX_HOMEPAGE_PING_TASKS }, (_, index) => index + 1),
     );
   });
 
-  it("inverts normalized bindings and gives the lowest task ID precedence", () => {
-    expect(
-      invertHomepagePingTaskBindings({
-        "02": ["node-a"],
-        "1": ["node-a", "node-b"],
-      }),
-    ).toEqual(
-      new Map([
-        ["node-a", 1],
-        ["node-b", 1],
-      ]),
-    );
+  it("does not create an assignment for nodes absent from every task", () => {
+    const resolved = resolvePublicPingTaskIds([task(1, 0, ["node-a"])]);
+    expect(resolved.has("node-without-ping")).toBe(false);
   });
 });

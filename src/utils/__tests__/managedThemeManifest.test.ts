@@ -26,7 +26,6 @@ const manifest = JSON.parse(
 ) as ThemeManifest;
 
 const REQUIRED_COMPLEX_KEYS = [
-  "homepagePingBindingsJson",
   "homeGroupOrder",
   "hiddenNodes",
   "attentionCpuPct",
@@ -87,7 +86,6 @@ describe("komari-theme.json managed configuration", () => {
     expectDefault("enableIconAnimations", DEFAULT_THEME_SETTINGS.enableIconAnimations);
     expectDefault("enableDataAnimations", DEFAULT_THEME_SETTINGS.enableDataAnimations);
     expectDefault("showPingChart", DEFAULT_THEME_SETTINGS.showPingChart);
-    expectDefault("fakePingForUnbound", DEFAULT_THEME_SETTINGS.fakePingForUnbound);
     expectDefault("showHomeOverview", DEFAULT_THEME_SETTINGS.showHomeOverview);
     expectDefault("showGroupTabs", DEFAULT_THEME_SETTINGS.showGroupTabs);
     expectDefault("showRegionBar", DEFAULT_THEME_SETTINGS.showRegionBar);
@@ -110,7 +108,6 @@ describe("komari-theme.json managed configuration", () => {
     expectDefault("backgroundImageMobile", DEFAULT_THEME_SETTINGS.backgroundImageMobile);
     expectDefault("backgroundAlignment", DEFAULT_THEME_SETTINGS.backgroundAlignment);
     expectDefault("surfaceOpacity", DEFAULT_THEME_SETTINGS.surfaceOpacity);
-    expectDefault("homepagePingBindingsJson", "{}");
     expectDefault("homeGroupOrder", "");
     expectDefault("hiddenNodes", "");
     expectDefault("attentionCpuPct", DEFAULT_ATTENTION_THRESHOLDS.cpuPct);

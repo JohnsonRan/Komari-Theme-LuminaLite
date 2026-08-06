@@ -222,25 +222,27 @@ export const NodeCard = memo(function NodeCard({
             </div>
           )}
 
-          <NodeHealthSection
-            ping={ping}
-            pingBuckets={pingBuckets}
-            pingSeries={pingSeries}
-            activePingIndex={pingIndex}
-            onSelectPing={setActivePingIndex}
-            redrawKey={redrawKey}
-            hasHomepagePingBinding={hasHomepagePingBinding}
-            latencyColor={latencyColor}
-            lossColor={lossColor}
-            latencyHoverTime={latencyHoverTime}
-            lossHoverTime={lossHoverTime}
-            hoveredLatencyBucket={hoveredLatencyBucket}
-            hoveredLossBucket={hoveredLossBucket}
-            latencyHoverColor={latencyHoverColor}
-            lossHoverColor={lossHoverColor}
-            onLatencyHover={setHoveredLatencyIndex}
-            onLossHover={setHoveredLossIndex}
-          />
+          {hasHomepagePingBinding && (
+            <NodeHealthSection
+              ping={ping}
+              pingBuckets={pingBuckets}
+              pingSeries={pingSeries}
+              activePingIndex={pingIndex}
+              onSelectPing={setActivePingIndex}
+              redrawKey={redrawKey}
+              hasHomepagePingBinding={hasHomepagePingBinding}
+              latencyColor={latencyColor}
+              lossColor={lossColor}
+              latencyHoverTime={latencyHoverTime}
+              lossHoverTime={lossHoverTime}
+              hoveredLatencyBucket={hoveredLatencyBucket}
+              hoveredLossBucket={hoveredLossBucket}
+              latencyHoverColor={latencyHoverColor}
+              lossHoverColor={lossHoverColor}
+              onLatencyHover={setHoveredLatencyIndex}
+              onLossHover={setHoveredLossIndex}
+            />
+          )}
 
           {history.slots.length > 0 && (
             <div className="card-metric-section card-metric-divided server-history-section">

@@ -152,6 +152,7 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     node,
     traffic,
     pingSeries,
+    hasHomepagePingBinding,
     footerTags,
     expire,
     expireColor,
@@ -191,7 +192,9 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     `上行 ${upRate.value}${upRate.unit}`,
     `下行 ${downRate.value}${downRate.unit}`,
     `流量使用 ${usedPct}`,
-    `网络延迟 ${ping.lastValue == null ? "无样本" : `${Math.round(ping.lastValue)} 毫秒`}`,
+    ...(hasHomepagePingBinding
+      ? [`网络延迟 ${ping.lastValue == null ? "无样本" : `${Math.round(ping.lastValue)} 毫秒`}`]
+      : []),
     statusLabel,
     `运行 ${uptime.value}${uptime.unit}`,
     `到期 ${expire.value}${expire.unit}`,
@@ -296,12 +299,14 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
       </div>
 
       <div className="node-list-cell col-net">
-        <ListLatency
-          pingSeries={pingSeries}
-          activeIndex={pingIndex}
-          onSelect={setActivePingIndex}
-          redrawKey={redrawKey}
-        />
+        {hasHomepagePingBinding && (
+          <ListLatency
+            pingSeries={pingSeries}
+            activeIndex={pingIndex}
+            onSelect={setActivePingIndex}
+            redrawKey={redrawKey}
+          />
+        )}
       </div>
 
       <div className="node-list-cell col-life node-list-stack">

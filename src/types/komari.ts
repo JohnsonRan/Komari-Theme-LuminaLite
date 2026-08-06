@@ -172,11 +172,6 @@ export interface ThemeSettings {
   enableIconAnimations?: boolean;
   enableDataAnimations?: boolean;
   showPingChart?: boolean;
-  /** 旧对象形态；官方 managed 表单改存 homepagePingBindingsJson。 */
-  homepagePingBindings?: Record<string, string[]>;
-  /** 官方 managed richtext：旧对象存在时优先，首次官方全量保存移除旧键后读取此 JSON 字符串。 */
-  homepagePingBindingsJson?: string;
-  fakePingForUnbound?: boolean;
   showHomeOverview?: boolean;
   showGroupTabs?: boolean;
   showRegionBar?: boolean;

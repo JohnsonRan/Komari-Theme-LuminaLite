@@ -52,15 +52,6 @@ describe("normalizeThemeSettings", () => {
     expect(normalizeThemeSettings({ homeSortField: "nope" } as never).homeSortField).toBe("default");
   });
 
-  it("keeps fake ping off unless explicitly enabled", () => {
-    expect(normalizeThemeSettings({}).fakePingForUnbound).toBe(false);
-    expect(normalizeThemeSettings({ fakePingForUnbound: true }).fakePingForUnbound).toBe(true);
-    // 非布尔真值不算显式开启。
-    expect(
-      normalizeThemeSettings({ fakePingForUnbound: "yes" } as never).fakePingForUnbound,
-    ).toBe(false);
-  });
-
   it("defaults connections display to on unless explicitly disabled", () => {
     // 默认开启(与参考站点一致);仅显式 false 才关闭。
     expect(normalizeThemeSettings({}).showConnections).toBe(true);
@@ -102,26 +93,6 @@ describe("normalizeThemeSettings", () => {
     expect(
       normalizeThemeSettings({ hiddenNodes: "节点A, 节点A\nuuid-1；节点B" } as never).hiddenNodes,
     ).toEqual(["节点A", "uuid-1", "节点B"]);
-  });
-
-  it("keeps legacy Ping bindings until the official full save removes the old key", () => {
-    // 模拟 Komari：manifest 默认值已合并进公开配置，但旧对象仍应在首次官方保存前生效。
-    expect(
-      normalizeThemeSettings({
-        homepagePingBindingsJson: "{}",
-        homepagePingBindings: { "9": ["legacy"] },
-      }).homepagePingBindings,
-    ).toEqual({ "9": ["legacy"] });
-
-    // 官方全量保存后旧键消失，改读 richtext JSON。
-    expect(
-      normalizeThemeSettings({
-        homepagePingBindingsJson: '{"1":["uuid-a","uuid-a",""],"x":["skip"]}',
-      }).homepagePingBindings,
-    ).toEqual({ "1": ["uuid-a"] });
-    expect(
-      normalizeThemeSettings({ homepagePingBindingsJson: "{not-json" }).homepagePingBindings,
-    ).toEqual({});
   });
 
   it("keeps legacy attention thresholds until the official full save removes the old key", () => {

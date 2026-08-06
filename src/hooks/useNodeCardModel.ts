@@ -1,6 +1,5 @@
 import { useMemo, useRef } from "react";
 import type { NodeInfo, NodeMetrics } from "@/types/komari";
-import { useFakePingFallback } from "@/hooks/useFakePing";
 import { useHourlyClock } from "@/hooks/useClock";
 import { useNodeCardSnapshots } from "@/hooks/useNode";
 import {
@@ -68,16 +67,10 @@ function applyRealtimePing(
 export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
   const { meta, metrics, trafficTrend } = useNodeCardSnapshots(uuid);
   const pingList = useNodePingOverviewList(uuid);
-  const { showCardGroup, fakePingForUnbound, homepagePingBindings } = useThemeSettings();
+  const { showCardGroup } = useThemeSettings();
   const now = useHourlyClock();
   const history = useNodeHistory(uuid);
-  const ping = useFakePingFallback(
-    uuid,
-    pingList[0] ?? EMPTY_PING,
-    metrics?.online === true,
-    fakePingForUnbound,
-    homepagePingBindings,
-  );
+  const ping = pingList[0] ?? EMPTY_PING;
   // Hook 数量必须恒定，所以按上限逐位取序列(缺位用空 ping)，而不是按实际长度循环。
   const pingBuckets = usePingBuckets(ping, pingBucketCount);
   const extraBuckets1 = usePingBuckets(pingList[1] ?? EMPTY_PING, pingBucketCount);
@@ -115,8 +108,8 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     };
   }, [meta, now, showCardGroup]);
 
-  // 首页可绑定多个 Ping 任务(“三网延迟”)。第一条永远是主任务(未绑定/模拟延迟时的兜底),
-  // 所以长度恒 >= 1;多于一条时卡片才渲染任务切换标签。
+  // 首页直接读取后台 Ping 任务的 clients。第一条是按 weight → id 选出的主任务；
+  // 未配置任务时以稳定 EMPTY_PING 保持 hook/模型结构不变，但卡片不渲染延迟区域。
   //
   // 每一条都合并各自任务的内嵌 ping 实时数据:延迟/丢包每 2s 跟随 latestStatus 刷新,
   // 历史柱状图仍由 overview(~60s)提供。后端 WS 帧按 taskId 下发全量 map,所以副任务
@@ -149,16 +142,16 @@ export function useNodeCardModel(uuid: string, pingBucketCount?: number) {
     }));
   }, [ping, pingList, metrics, pingBuckets, extraBuckets1, extraBuckets2]);
 
-  const resolvedPing = pingSeries[0].ping;
+  const resolvedPing = pingSeries[0]?.ping ?? EMPTY_PING;
 
   // ping 派生的颜色只在解析后的 ping 值变化时才变。
   const pingModel = useMemo(
     () => ({
       latencyColor: latencyHeatColor(resolvedPing.lastValue),
       lossColor: lossHeatColor(resolvedPing.loss),
-      hasHomepagePingBinding: resolvedPing.isAssigned,
+      hasHomepagePingBinding: pingList.length > 0,
     }),
-    [resolvedPing],
+    [pingList.length, resolvedPing],
   );
 
   // 「需要关注」由 NodeGrid 统一判定后经 context 下发，卡片只读结果 —— 见 useNodeAttention。

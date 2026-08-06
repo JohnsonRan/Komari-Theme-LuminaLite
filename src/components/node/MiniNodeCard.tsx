@@ -363,7 +363,7 @@ const MiniHealth = memo(function MiniHealth({
   return (
     // 整组吸底，见 CompactNodeCard 里同名 tail 容器的说明。
     <div className="mini-node-tail">
-      {pingSeries.length > 1 && (
+      {hasHomepagePingBinding && pingSeries.length > 1 && (
         <div className="mini-node-ping-tabs">
           <PingTaskTabs
             series={pingSeries}
@@ -373,7 +373,7 @@ const MiniHealth = memo(function MiniHealth({
           />
         </div>
       )}
-      <div className="mini-node-health">
+      {hasHomepagePingBinding && <div className="mini-node-health">
         <div className="mini-node-health-item">
           <div className="mini-node-health-head">
             <span className="mini-node-health-label">
@@ -416,7 +416,7 @@ const MiniHealth = memo(function MiniHealth({
           </div>
           <MiniHealthBars kind="loss" buckets={pingBuckets} />
         </div>
-      </div>
+      </div>}
       {/* 迷你卡同样只画条，上报率在 tooltip 里。 */}
       <NodeHistoryStrip history={history} redrawKey={redrawKey} height={12} />
     </div>
@@ -507,18 +507,20 @@ export const MiniNodeCard = memo(function MiniNodeCard({ uuid }: { uuid: string 
       <MiniChips tags={footerTags} renewalPrice={renewalPrice} ipv4={node.ipv4} ipv6={node.ipv6} />
       <MiniVitals node={node} loadFraction={loadFraction} />
       <MiniFlow node={node} upRate={upRate} downRate={downRate} />
-      <MiniHealth
-        ping={ping}
-        pingBuckets={pingBuckets}
-        pingSeries={pingSeries}
-        activePingIndex={pingIndex}
-        onSelectPing={setActivePingIndex}
-        latencyColor={latencyColor}
-        lossColor={lossColor}
-        hasHomepagePingBinding={hasHomepagePingBinding}
-        history={history}
-        redrawKey={redrawKey}
-      />
+      {(hasHomepagePingBinding || history.slots.length > 0) && (
+        <MiniHealth
+          ping={ping}
+          pingBuckets={pingBuckets}
+          pingSeries={pingSeries}
+          activePingIndex={pingIndex}
+          onSelectPing={setActivePingIndex}
+          latencyColor={latencyColor}
+          lossColor={lossColor}
+          hasHomepagePingBinding={hasHomepagePingBinding}
+          history={history}
+          redrawKey={redrawKey}
+        />
+      )}
     </article>
   );
 });

@@ -682,37 +682,41 @@ const CompactNodeHealth = memo(function CompactNodeHealth({
     // 之前是「标签行和健康区各自 auto、再用相邻选择器把后者清零」的三条规则链，
     // 每加一个底部元素就多一种组合；包一层之后加多少个都不用再动吸底逻辑。
     <div className="compact-node-tail">
-      {pingSeries.length > 1 && (
-        <div className="compact-node-ping-tabs">
-          <PingTaskTabs
-            series={pingSeries}
-            activeIndex={activePingIndex}
-            onSelect={onSelectPing}
-            size="small"
-          />
-        </div>
+      {hasHomepagePingBinding && (
+        <>
+          {pingSeries.length > 1 && (
+            <div className="compact-node-ping-tabs">
+              <PingTaskTabs
+                series={pingSeries}
+                activeIndex={activePingIndex}
+                onSelect={onSelectPing}
+                size="small"
+              />
+            </div>
+          )}
+          <div className="compact-node-bottom">
+            <CompactHealthItem
+              icon={<Clock3 size={12} />}
+              label="延迟"
+              value={ping.lastValue != null ? Math.round(ping.lastValue).toString() : emptyText}
+              unit={ping.lastValue != null ? "ms" : undefined}
+              color={latencyColor}
+              title={hourStatsTitle ?? undefined}
+            >
+              <HealthBars buckets={pingBuckets} max={ping.max} kind="latency" />
+            </CompactHealthItem>
+            <CompactHealthItem
+              icon={<Unplug size={12} />}
+              label="丢包"
+              value={ping.loss != null ? ping.loss.toFixed(1) : emptyText}
+              unit={ping.loss != null ? "%" : undefined}
+              color={lossColor}
+            >
+              <HealthBars buckets={pingBuckets} max={1} kind="loss" />
+            </CompactHealthItem>
+          </div>
+        </>
       )}
-      <div className="compact-node-bottom">
-        <CompactHealthItem
-          icon={<Clock3 size={12} />}
-          label="延迟"
-          value={ping.lastValue != null ? Math.round(ping.lastValue).toString() : emptyText}
-          unit={ping.lastValue != null ? "ms" : undefined}
-          color={latencyColor}
-          title={hourStatsTitle ?? undefined}
-        >
-          <HealthBars buckets={pingBuckets} max={ping.max} kind="latency" />
-        </CompactHealthItem>
-        <CompactHealthItem
-          icon={<Unplug size={12} />}
-          label="丢包"
-          value={ping.loss != null ? ping.loss.toFixed(1) : emptyText}
-          unit={ping.loss != null ? "%" : undefined}
-          color={lossColor}
-        >
-          <HealthBars buckets={pingBuckets} max={1} kind="loss" />
-        </CompactHealthItem>
-      </div>
       {/* 小卡不放标题行，只画条：上报率与说明都在 tooltip 里，省下约 18px。
           无数据时组件自己返回 null，这里不必再判一次。 */}
       <NodeHistoryStrip history={history} redrawKey={redrawKey} height={14} />
@@ -846,18 +850,20 @@ export const CompactNodeCard = memo(function CompactNodeCard({
         renewalPrice={renewalPrice}
       />
       <CompactTrafficBar traffic={traffic} uptimeLabel={uptimeLabel} />
-      <CompactNodeHealth
-        ping={ping}
-        pingBuckets={pingBuckets}
-        pingSeries={pingSeries}
-        activePingIndex={pingIndex}
-        onSelectPing={setActivePingIndex}
-        latencyColor={latencyColor}
-        lossColor={lossColor}
-        hasHomepagePingBinding={hasHomepagePingBinding}
-        history={history}
-        redrawKey={redrawKey}
-      />
+      {(hasHomepagePingBinding || history.slots.length > 0) && (
+        <CompactNodeHealth
+          ping={ping}
+          pingBuckets={pingBuckets}
+          pingSeries={pingSeries}
+          activePingIndex={pingIndex}
+          onSelectPing={setActivePingIndex}
+          latencyColor={latencyColor}
+          lossColor={lossColor}
+          hasHomepagePingBinding={hasHomepagePingBinding}
+          history={history}
+          redrawKey={redrawKey}
+        />
+      )}
     </article>
   );
 });

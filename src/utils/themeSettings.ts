@@ -15,7 +15,6 @@ import {
   type HomeSortDirection,
   type HomeSortField,
 } from "@/utils/homeSort";
-import { normalizeHomepagePingTaskBindings, type HomepagePingTaskBindings } from "@/utils/pingTasks";
 import {
   DEFAULT_ATTENTION_THRESHOLDS,
   normalizeAttentionThresholds,
@@ -36,8 +35,6 @@ export interface ResolvedThemeSettings {
   enableIconAnimations: boolean;
   enableDataAnimations: boolean;
   showPingChart: boolean;
-  homepagePingBindings: HomepagePingTaskBindings;
-  fakePingForUnbound: boolean;
   showHomeOverview: boolean;
   showGroupTabs: boolean;
   showRegionBar: boolean;
@@ -73,8 +70,6 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   enableIconAnimations: true,
   enableDataAnimations: true,
   showPingChart: true,
-  homepagePingBindings: {},
-  fakePingForUnbound: false,
   showHomeOverview: true,
   showGroupTabs: true,
   showRegionBar: true,
@@ -172,30 +167,6 @@ function hasOwn(settings: object | null | undefined, key: string): boolean {
   return Boolean(settings) && Object.prototype.hasOwnProperty.call(settings, key);
 }
 
-/**
- * 官方 managed 表单用 homepagePingBindingsJson（richtext JSON 字符串）整体替换对象键。
- * Komari 会把 manifest 默认值合并进公开配置，因此升级后新键即使尚未保存也会存在。
- * 旧对象键存在时必须优先，直到首次官方全量保存自然移除它；之后再读取新字符串键。
- */
-export function resolveHomepagePingBindings(
-  settings: (ThemeSettings & Record<string, unknown>) | null | undefined,
-): HomepagePingTaskBindings {
-  const legacy = settings?.homepagePingBindings;
-  if (legacy && typeof legacy === "object" && !Array.isArray(legacy)) {
-    return normalizeHomepagePingTaskBindings(legacy);
-  }
-
-  const raw = settings?.homepagePingBindingsJson;
-  if (typeof raw !== "string") return {};
-  const trimmed = raw.trim();
-  if (!trimmed) return {};
-  try {
-    return normalizeHomepagePingTaskBindings(JSON.parse(trimmed) as unknown);
-  } catch {
-    return {};
-  }
-}
-
 const ATTENTION_FLAT_KEYS = [
   "attentionCpuPct",
   "attentionMemoryPct",
@@ -246,9 +217,6 @@ export function normalizeThemeSettings(
     enableIconAnimations: enabledUnlessFalse(settings?.enableIconAnimations),
     enableDataAnimations: enabledUnlessFalse(settings?.enableDataAnimations),
     showPingChart: enabledUnlessFalse(settings?.showPingChart),
-    homepagePingBindings: resolveHomepagePingBindings(settings),
-    // 默认关闭(需手动开启):给访客展示的是模拟数据,必须由站长显式决定。
-    fakePingForUnbound: settings?.fakePingForUnbound === true,
     showHomeOverview: enabledUnlessFalse(settings?.showHomeOverview),
     showGroupTabs: enabledUnlessFalse(settings?.showGroupTabs),
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
