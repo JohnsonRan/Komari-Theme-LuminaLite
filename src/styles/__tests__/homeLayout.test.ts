@@ -63,10 +63,16 @@ describe("home responsive layout contracts", () => {
     expect(miniSource).toContain("encodeURIComponent(node.uuid)");
   });
 
-  it("keeps the online resource strip compact and horizontally scrollable on phones", () => {
+  it("keeps resource values in a stable template and horizontally scrollable on phones", () => {
     expect(nodeGridSource).toContain("<HomeResourceStrip resources={resources} />");
     expect(nodeGridSource).toContain('label="1 分钟负载"');
-    expect(homeCss).toContain(".home-resource-grid");
+    expect(nodeGridSource).toContain('className="home-resource-current"');
+    expect(nodeGridSource).toContain('className="home-resource-total"');
+    expect(nodeGridSource).toContain('className="home-resource-unit"');
+    expect(nodeGridSource).not.toContain("home-resource-strip-count");
+    expect(nodeGridSource).not.toContain("home-resource-strip-title");
+    expect(homeCss).toMatch(/\.home-resource-percent\s*\{[\s\S]*width:\s*5ch/);
+    expect(homeCss).toMatch(/\.home-resource-value\s*\{[\s\S]*grid-template-columns:/);
     expect(homeCss).toMatch(
       /@media \(max-width: 560px\)[\s\S]*\.home-resource-grid[\s\S]*overflow-x:\s*auto/,
     );

@@ -1,4 +1,5 @@
 import type { HomeNodeSummary } from "@/services/wsStore";
+import { trimFixed } from "@/utils/format";
 
 export interface HomeResourceOverview {
   onlineNodes: number;
@@ -19,6 +20,41 @@ function boundedUsed(used: number, total: number): number {
   const safeTotal = finiteNonNegative(total);
   if (safeTotal <= 0) return 0;
   return Math.min(finiteNonNegative(used), safeTotal);
+}
+
+const CAPACITY_UNITS = ["B", "KB", "MB", "GB", "TB", "PB"] as const;
+
+export interface HomeResourceCapacityParts {
+  current: string;
+  total: string;
+  unit: string;
+}
+
+function formatCapacityAmount(value: number): string {
+  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return trimFixed(value, digits);
+}
+
+/** 使用总容量选定唯一单位，让 current / total 的模板宽度和单位在实时更新时保持稳定。 */
+export function formatHomeResourceCapacity(
+  usedBytes: number,
+  totalBytes: number,
+): HomeResourceCapacityParts {
+  const total = finiteNonNegative(totalBytes);
+  if (total <= 0) return { current: "—", total: "—", unit: "" };
+
+  let unitIndex = 0;
+  let divisor = 1;
+  while (total / divisor >= 1024 && unitIndex < CAPACITY_UNITS.length - 1) {
+    divisor *= 1024;
+    unitIndex += 1;
+  }
+
+  return {
+    current: formatCapacityAmount(boundedUsed(usedBytes, total) / divisor),
+    total: formatCapacityAmount(total / divisor),
+    unit: CAPACITY_UNITS[unitIndex],
+  };
 }
 
 /**

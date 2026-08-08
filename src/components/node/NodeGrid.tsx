@@ -21,7 +21,11 @@ import {
   formatByteRateLabel,
   trimFixed,
 } from "@/utils/format";
-import { aggregateHomeResources, type HomeResourceOverview } from "@/utils/homeResources";
+import {
+  aggregateHomeResources,
+  formatHomeResourceCapacity,
+  type HomeResourceOverview,
+} from "@/utils/homeResources";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import { speedRateColor } from "@/utils/metricTone";
 import {
@@ -204,18 +208,23 @@ function formatCoreCount(value: number): string {
 function HomeResourceMetric({
   metric,
   label,
-  value,
+  current,
+  total,
+  unit,
   percent,
   title,
 }: {
   metric: HomeResourceMetricKey;
   label: string;
-  value: string;
+  current: string;
+  total: string;
+  unit: string;
   percent: number | null;
   title: string;
 }) {
   const displayPercent = percent == null ? "—" : `${Math.round(percent)}%`;
-  const barWidth = percent == null ? 0 : Math.min(100, percent);
+  const barScale = percent == null ? 0 : Math.min(1, percent / 100);
+  const valueLabel = `${label} ${current} / ${total}${unit ? ` ${unit}` : ""}`;
 
   return (
     <div className="home-resource-item" data-metric={metric} title={title}>
@@ -223,8 +232,11 @@ function HomeResourceMetric({
         <span className="home-resource-label">{label}</span>
         <span className="home-resource-percent">{displayPercent}</span>
       </div>
-      <p className="home-resource-value">
-        <AnimatedValue text={value} />
+      <p className="home-resource-value" aria-label={valueLabel}>
+        <span className="home-resource-current" aria-hidden>{current}</span>
+        <span className="home-resource-separator" aria-hidden>/</span>
+        <span className="home-resource-total" aria-hidden>{total}</span>
+        <span className="home-resource-unit" aria-hidden>{unit}</span>
       </p>
       <div
         className="home-resource-track"
@@ -235,7 +247,7 @@ function HomeResourceMetric({
         aria-valuenow={percent == null ? undefined : Math.min(100, Math.round(percent))}
         aria-valuetext={percent == null ? "暂无数据" : displayPercent}
       >
-        <span style={{ width: `${barWidth}%` }} />
+        <span style={{ transform: `scaleX(${barScale})` }} />
       </div>
     </div>
   );
@@ -255,58 +267,56 @@ function HomeResourceStrip({ resources }: { resources: HomeResourceOverview }) {
   const loadPercent = hasOnlineData
     ? resourcePercent(resources.load1, resources.cpuTotalCores)
     : null;
-  const cpuValue = cpuPercent == null
-    ? "—"
-    : `${formatCoreCount(resources.cpuUsedCores)} / ${formatCoreCount(resources.cpuTotalCores)} 核`;
-  const memoryValue = memoryPercent == null
-    ? "—"
-    : `${formatBytes(resources.memoryUsed)} / ${formatBytes(resources.memoryTotal)}`;
-  const diskValue = diskPercent == null
-    ? "—"
-    : `${formatBytes(resources.diskUsed)} / ${formatBytes(resources.diskTotal)}`;
-  const loadValue = loadPercent == null
-    ? "—"
-    : `${trimFixed(resources.load1, 1)} / ${formatCoreCount(resources.cpuTotalCores)}`;
+  const cpuCurrent = cpuPercent == null ? "—" : formatCoreCount(resources.cpuUsedCores);
+  const cpuTotal = cpuPercent == null ? "—" : formatCoreCount(resources.cpuTotalCores);
+  const memory = formatHomeResourceCapacity(resources.memoryUsed, resources.memoryTotal);
+  const disk = formatHomeResourceCapacity(resources.diskUsed, resources.diskTotal);
+  const loadCurrent = loadPercent == null ? "—" : trimFixed(resources.load1, 1);
+  const loadTotal = loadPercent == null ? "—" : formatCoreCount(resources.cpuTotalCores);
 
   return (
     <section
       className="home-resource-strip"
-      aria-label={`在线资源总览，${resources.onlineNodes} 台在线节点`}
+      aria-label={`资源概览，仅统计 ${resources.onlineNodes} 台在线节点`}
     >
-      <div className="home-resource-strip-head">
-        <span className="home-resource-strip-title">在线资源</span>
-        <span className="home-resource-strip-count">{resources.onlineNodes} 台节点</span>
-      </div>
       <div
         className="home-resource-grid"
         tabIndex={0}
-        aria-label="在线资源指标，可横向滚动查看"
+        aria-label="资源指标，可横向滚动查看"
       >
         <HomeResourceMetric
           metric="cpu"
           label="CPU 等效占用"
-          value={cpuValue}
+          current={cpuCurrent}
+          total={cpuTotal}
+          unit="核"
           percent={cpuPercent}
           title="已用核心按各在线节点 CPU 使用率折算为等效忙碌核心"
         />
         <HomeResourceMetric
           metric="memory"
           label="内存"
-          value={memoryValue}
+          current={memory.current}
+          total={memory.total}
+          unit={memory.unit}
           percent={memoryPercent}
           title="在线节点实时内存已用量 / 总量"
         />
         <HomeResourceMetric
           metric="disk"
           label="硬盘"
-          value={diskValue}
+          current={disk.current}
+          total={disk.total}
+          unit={disk.unit}
           percent={diskPercent}
           title="在线节点实时硬盘已用量 / 总量"
         />
         <HomeResourceMetric
           metric="load"
           label="1 分钟负载"
-          value={loadValue}
+          current={loadCurrent}
+          total={loadTotal}
+          unit="核"
           percent={loadPercent}
           title="在线节点 1 分钟系统负载之和 / 在线节点总核心数，可超过 100%"
         />

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { HomeNodeSummary } from "@/services/wsStore";
-import { aggregateHomeResources } from "@/utils/homeResources";
+import {
+  aggregateHomeResources,
+  formatHomeResourceCapacity,
+} from "@/utils/homeResources";
 
 function node(partial: Partial<HomeNodeSummary> & Pick<HomeNodeSummary, "uuid">): HomeNodeSummary {
   return {
@@ -28,6 +31,32 @@ function node(partial: Partial<HomeNodeSummary> & Pick<HomeNodeSummary, "uuid">)
     ...partial,
   };
 }
+
+describe("formatHomeResourceCapacity", () => {
+  const GB = 1024 ** 3;
+  const TB = 1024 ** 4;
+
+  it("uses the total capacity unit for both stable value slots", () => {
+    expect(formatHomeResourceCapacity(50.88 * GB, 78 * GB)).toEqual({
+      current: "50.9",
+      total: "78",
+      unit: "GB",
+    });
+    expect(formatHomeResourceCapacity(851.2 * GB, 1.289 * TB)).toEqual({
+      current: "0.83",
+      total: "1.29",
+      unit: "TB",
+    });
+  });
+
+  it("returns a stable empty template when total capacity is unavailable", () => {
+    expect(formatHomeResourceCapacity(0, 0)).toEqual({
+      current: "—",
+      total: "—",
+      unit: "",
+    });
+  });
+});
 
 describe("aggregateHomeResources", () => {
   it("aggregates current resource usage from online nodes only", () => {
