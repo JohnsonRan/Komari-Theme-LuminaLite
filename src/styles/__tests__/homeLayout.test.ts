@@ -63,6 +63,15 @@ describe("home responsive layout contracts", () => {
     expect(miniSource).toContain("encodeURIComponent(node.uuid)");
   });
 
+  it("keeps the online resource strip compact and horizontally scrollable on phones", () => {
+    expect(nodeGridSource).toContain("<HomeResourceStrip resources={resources} />");
+    expect(nodeGridSource).toContain('label="1 分钟负载"');
+    expect(homeCss).toContain(".home-resource-grid");
+    expect(homeCss).toMatch(
+      /@media \(max-width: 560px\)[\s\S]*\.home-resource-grid[\s\S]*overflow-x:\s*auto/,
+    );
+  });
+
   it("does not render zero-value overview cards before the node store is hydrated", () => {
     expect(nodeGridSource).toContain("hydrated: storeHydrated");
     expect(nodeGridSource).toContain("!themeSettings.isReady || !storeHydrated");

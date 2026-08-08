@@ -19,7 +19,9 @@ import {
   formatBytes,
   formatByteRate,
   formatByteRateLabel,
+  trimFixed,
 } from "@/utils/format";
+import { aggregateHomeResources, type HomeResourceOverview } from "@/utils/homeResources";
 import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import { speedRateColor } from "@/utils/metricTone";
 import {
@@ -70,9 +72,15 @@ function structureAsSortable(node: HomeNodeStructure): HomeNodeSummary {
     netDown: 0,
     connectionsTcp: 0,
     connectionsUdp: 0,
+    cpuCores: 0,
     cpuPct: 0,
+    ramUsed: 0,
+    ramTotal: 0,
     ramPct: 0,
+    diskUsed: 0,
+    diskTotal: 0,
     diskPct: 0,
+    load1: 0,
     pingLoss: null,
   };
 }
@@ -180,6 +188,131 @@ function OverviewTopTooltip({ metric, rows }: { metric: OverviewTopMetricKey; ro
 function formatCompactCount(value: number): string {
   if (value >= 10_000) return `${(value / 1000).toFixed(1)}k`;
   return value.toLocaleString();
+}
+
+type HomeResourceMetricKey = "cpu" | "memory" | "disk" | "load";
+
+function resourcePercent(used: number, total: number): number | null {
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return Math.max(0, (used / total) * 100);
+}
+
+function formatCoreCount(value: number): string {
+  return trimFixed(value, value >= 100 ? 0 : 1);
+}
+
+function HomeResourceMetric({
+  metric,
+  label,
+  value,
+  percent,
+  title,
+}: {
+  metric: HomeResourceMetricKey;
+  label: string;
+  value: string;
+  percent: number | null;
+  title: string;
+}) {
+  const displayPercent = percent == null ? "—" : `${Math.round(percent)}%`;
+  const barWidth = percent == null ? 0 : Math.min(100, percent);
+
+  return (
+    <div className="home-resource-item" data-metric={metric} title={title}>
+      <div className="home-resource-item-head">
+        <span className="home-resource-label">{label}</span>
+        <span className="home-resource-percent">{displayPercent}</span>
+      </div>
+      <p className="home-resource-value">
+        <AnimatedValue text={value} />
+      </p>
+      <div
+        className="home-resource-track"
+        role="progressbar"
+        aria-label={`${label}占比`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent == null ? undefined : Math.min(100, Math.round(percent))}
+        aria-valuetext={percent == null ? "暂无数据" : displayPercent}
+      >
+        <span style={{ width: `${barWidth}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function HomeResourceStrip({ resources }: { resources: HomeResourceOverview }) {
+  const hasOnlineData = resources.onlineNodes > 0;
+  const cpuPercent = hasOnlineData
+    ? resourcePercent(resources.cpuUsedCores, resources.cpuTotalCores)
+    : null;
+  const memoryPercent = hasOnlineData
+    ? resourcePercent(resources.memoryUsed, resources.memoryTotal)
+    : null;
+  const diskPercent = hasOnlineData
+    ? resourcePercent(resources.diskUsed, resources.diskTotal)
+    : null;
+  const loadPercent = hasOnlineData
+    ? resourcePercent(resources.load1, resources.cpuTotalCores)
+    : null;
+  const cpuValue = cpuPercent == null
+    ? "—"
+    : `${formatCoreCount(resources.cpuUsedCores)} / ${formatCoreCount(resources.cpuTotalCores)} 核`;
+  const memoryValue = memoryPercent == null
+    ? "—"
+    : `${formatBytes(resources.memoryUsed)} / ${formatBytes(resources.memoryTotal)}`;
+  const diskValue = diskPercent == null
+    ? "—"
+    : `${formatBytes(resources.diskUsed)} / ${formatBytes(resources.diskTotal)}`;
+  const loadValue = loadPercent == null
+    ? "—"
+    : `${trimFixed(resources.load1, 1)} / ${formatCoreCount(resources.cpuTotalCores)}`;
+
+  return (
+    <section
+      className="home-resource-strip"
+      aria-label={`在线资源总览，${resources.onlineNodes} 台在线节点`}
+    >
+      <div className="home-resource-strip-head">
+        <span className="home-resource-strip-title">在线资源</span>
+        <span className="home-resource-strip-count">{resources.onlineNodes} 台节点</span>
+      </div>
+      <div
+        className="home-resource-grid"
+        tabIndex={0}
+        aria-label="在线资源指标，可横向滚动查看"
+      >
+        <HomeResourceMetric
+          metric="cpu"
+          label="CPU 等效占用"
+          value={cpuValue}
+          percent={cpuPercent}
+          title="已用核心按各在线节点 CPU 使用率折算为等效忙碌核心"
+        />
+        <HomeResourceMetric
+          metric="memory"
+          label="内存"
+          value={memoryValue}
+          percent={memoryPercent}
+          title="在线节点实时内存已用量 / 总量"
+        />
+        <HomeResourceMetric
+          metric="disk"
+          label="硬盘"
+          value={diskValue}
+          percent={diskPercent}
+          title="在线节点实时硬盘已用量 / 总量"
+        />
+        <HomeResourceMetric
+          metric="load"
+          label="1 分钟负载"
+          value={loadValue}
+          percent={loadPercent}
+          title="在线节点 1 分钟系统负载之和 / 在线节点总核心数，可超过 100%"
+        />
+      </div>
+    </section>
+  );
 }
 
 function TrafficBarsIcon({ size = 19 }: { size?: number }) {
@@ -305,6 +438,7 @@ function HomeOverviewCards({
   const bandwidthCompactLabel = `↑${formatCompactBytes(overview.netUp)} ↓${formatCompactBytes(overview.netDown)}`;
   const connectionsDetailLabel = `TCP ${overview.connectionsTcp.toLocaleString()} · UDP ${overview.connectionsUdp.toLocaleString()}`;
   const connectionsCompactLabel = `TCP ${formatCompactCount(overview.connectionsTcp)} UDP ${formatCompactCount(overview.connectionsUdp)}`;
+  const resources = useMemo(() => aggregateHomeResources(nodes), [nodes]);
 
   // TOP 3 只在悬停那张卡片时才算：nodes 每个 WS tick 都会换引用，
   // 无条件计算三份榜单等于每 2s 白跑三趟全表。
@@ -315,7 +449,8 @@ function HomeOverviewCards({
   );
 
   return (
-    <section className={`home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
+    <>
+      <section className={`home-overview${dense ? " is-dense" : ""}`} aria-label="首页总览">
       <article className="overview-card" data-metric="online">
         <span className="overview-card-label">在线节点</span>
         <div className="overview-card-main">
@@ -439,7 +574,9 @@ function HomeOverviewCards({
         </div>
         {hoveredCard === "connections" && <OverviewTopTooltip metric="connections" rows={topNodes} />}
       </article>
-    </section>
+      </section>
+      <HomeResourceStrip resources={resources} />
+    </>
   );
 }
 

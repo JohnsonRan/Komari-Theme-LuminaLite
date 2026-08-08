@@ -42,10 +42,16 @@ export interface HomeNodeSummary extends HomeNodeStructure {
   netDown: number;
   connectionsTcp: number;
   connectionsUdp: number;
-  /** 异常置顶判定用；与 netUp/netDown 一样每帧都变，不额外增加重建频率。 */
+  /** 异常置顶与首页在线资源聚合共用；与 netUp/netDown 一样每帧都变。 */
+  cpuCores: number;
   cpuPct: number;
+  ramUsed: number;
+  ramTotal: number;
   ramPct: number;
+  diskUsed: number;
+  diskTotal: number;
   diskPct: number;
+  load1: number;
   /** 已绑定 ping 任务中最差的丢包率 (%)；未绑定或无样本为 null。 */
   pingLoss: number | null;
 }
@@ -1306,9 +1312,15 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
     const netDown = metrics?.netDown ?? 0;
     const connectionsTcp = metrics?.connectionsTcp ?? 0;
     const connectionsUdp = metrics?.connectionsUdp ?? 0;
+    const cpuCores = meta.cpu_cores;
     const cpuPct = metrics?.cpuPct ?? 0;
+    const ramUsed = metrics?.ramUsed ?? 0;
+    const ramTotal = metrics?.ramTotal ?? 0;
     const ramPct = metrics?.ramPct ?? 0;
+    const diskUsed = metrics?.diskUsed ?? 0;
+    const diskTotal = metrics?.diskTotal ?? 0;
     const diskPct = metrics?.diskPct ?? 0;
+    const load1 = metrics?.load1 ?? 0;
     const pingLoss = worstPingLoss(metrics?.pingStats);
 
     if (
@@ -1324,9 +1336,15 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
       prev.netDown === netDown &&
       prev.connectionsTcp === connectionsTcp &&
       prev.connectionsUdp === connectionsUdp &&
+      prev.cpuCores === cpuCores &&
       prev.cpuPct === cpuPct &&
+      prev.ramUsed === ramUsed &&
+      prev.ramTotal === ramTotal &&
       prev.ramPct === ramPct &&
+      prev.diskUsed === diskUsed &&
+      prev.diskTotal === diskTotal &&
       prev.diskPct === diskPct &&
+      prev.load1 === load1 &&
       prev.pingLoss === pingLoss
     ) {
       next.push(prev);
@@ -1345,9 +1363,15 @@ export function getHomeNodeSummariesSnapshot(): HomeNodeSummary[] {
         netDown,
         connectionsTcp,
         connectionsUdp,
+        cpuCores,
         cpuPct,
+        ramUsed,
+        ramTotal,
         ramPct,
+        diskUsed,
+        diskTotal,
         diskPct,
+        load1,
         pingLoss,
       });
     }
