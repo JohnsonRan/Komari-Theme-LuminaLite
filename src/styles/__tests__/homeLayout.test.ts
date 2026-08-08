@@ -77,6 +77,12 @@ describe("home responsive layout contracts", () => {
     );
     expect(homeCss).toMatch(/\.home-resource-value\s*\{[\s\S]*column-gap:\s*0\.28em/);
     expect(homeCss).toMatch(
+      /\.home-resource-item\s*\{[\s\S]*grid-template-areas:[\s\S]*"label value percent"/,
+    );
+    expect(homeCss).toMatch(
+      /@media \(max-width: 1100px\)[\s\S]*\.home-resource-item\s*\{[\s\S]*display:\s*block/,
+    );
+    expect(homeCss).toMatch(
       /@media \(max-width: 560px\)[\s\S]*\.home-resource-grid[\s\S]*overflow-x:\s*auto/,
     );
   });
