@@ -199,9 +199,10 @@
 .home-resource-value {
   display: grid;
   min-width: 0;
-  grid-template-columns: 5.5ch 1.4ch 5ch minmax(2.4em, max-content);
+  grid-template-columns: 5ch repeat(3, max-content);
   align-items: baseline;
   justify-content: start;
+  column-gap: 0.28em;
   margin: 4px 0 6px;
   overflow: hidden;
   color: var(--text-primary);
@@ -214,21 +215,24 @@
   font-variant-numeric: tabular-nums;
 }
 
-.home-resource-current,
+.home-resource-current {
+  display: block;
+  width: 5ch;
+  min-width: 5ch;
+  text-align: right;
+}
+
 .home-resource-total {
   display: block;
   min-width: 0;
-  text-align: right;
 }
 
 .home-resource-separator {
   color: var(--text-tertiary);
-  text-align: center;
 }
 
 .home-resource-unit {
   min-width: 0;
-  padding-left: 0.28em;
   overflow: hidden;
   color: var(--text-secondary);
   font-family: var(--font-sans);

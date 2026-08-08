@@ -72,7 +72,10 @@ describe("home responsive layout contracts", () => {
     expect(nodeGridSource).not.toContain("home-resource-strip-count");
     expect(nodeGridSource).not.toContain("home-resource-strip-title");
     expect(homeCss).toMatch(/\.home-resource-percent\s*\{[\s\S]*width:\s*5ch/);
-    expect(homeCss).toMatch(/\.home-resource-value\s*\{[\s\S]*grid-template-columns:/);
+    expect(homeCss).toMatch(
+      /\.home-resource-value\s*\{[\s\S]*grid-template-columns:\s*5ch repeat\(3, max-content\)/,
+    );
+    expect(homeCss).toMatch(/\.home-resource-value\s*\{[\s\S]*column-gap:\s*0\.28em/);
     expect(homeCss).toMatch(
       /@media \(max-width: 560px\)[\s\S]*\.home-resource-grid[\s\S]*overflow-x:\s*auto/,
     );
