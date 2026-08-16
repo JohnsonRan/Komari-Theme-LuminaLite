@@ -15,8 +15,20 @@ const AUTO_DISMISS_MS = 8000;
  * 失败则整条不出现：访客本来也不需要知道站点查过他的 IP 但没查到。
  */
 export function VisitorInfoPill() {
-  const { data } = useVisitorInfo();
+  const [activated, setActivated] = useState(false);
+  const { data } = useVisitorInfo(activated);
   const [dismissed, setDismissed] = useState(false);
+
+  // 首次输入会结束 LCP 采样；之后再查第三方 IP，避免晚到的信息条成为 LCP。
+  useEffect(() => {
+    const activate = () => setActivated(true);
+    window.addEventListener("pointerdown", activate, { once: true, passive: true });
+    window.addEventListener("keydown", activate, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", activate);
+      window.removeEventListener("keydown", activate);
+    };
+  }, []);
 
   useEffect(() => {
     if (!data) return;

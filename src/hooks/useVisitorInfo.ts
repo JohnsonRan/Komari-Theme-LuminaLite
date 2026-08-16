@@ -29,12 +29,12 @@ async function fetchVisitorInfo(signal?: AbortSignal): Promise<VisitorInfo | nul
  * 访客自身的 IP 信息。同一次会话内不会变，所以查一次就长期复用，
  * 也不随路由切换重取（react-query 按 key 缓存）。
  */
-export function useVisitorInfo() {
+export function useVisitorInfo(activated = true) {
   const { isReady, showVisitorInfo } = useThemeSettings();
   return useQuery({
     queryKey: ["visitor-info"],
     queryFn: ({ signal }) => fetchVisitorInfo(signal),
-    enabled: isReady && showVisitorInfo,
+    enabled: activated && isReady && showVisitorInfo,
     staleTime: Infinity,
     gcTime: Infinity,
     // 三家接口内部已经逐个回退过了，整体再重试只是把同样的请求重发一遍。

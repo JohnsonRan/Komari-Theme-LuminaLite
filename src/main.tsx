@@ -9,17 +9,24 @@ const root = rootEl;
 
 /**
  * MiSans 分区字体 CSS 体积大（~90 个 @font-face）。
- * 不阻塞首屏：先用系统字体栈渲染，空闲后再拉 MiSans，unicode-range 仍按需下载 woff2。
+ * 不阻塞首屏：load 后再等待 3 秒和空闲时机，unicode-range 仍按需下载 woff2。
  */
 function loadThemeFonts() {
   const run = () => {
     void import("subsetted-fonts/MiSans-VF/MiSans-VF.css");
   };
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(run, { timeout: 1500 });
-  } else {
-    window.setTimeout(run, 1);
-  }
+  const schedule = () => {
+    window.setTimeout(() => {
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(run, { timeout: 4000 });
+      } else {
+        run();
+      }
+    }, 3000);
+  };
+
+  if (document.readyState === "complete") schedule();
+  else window.addEventListener("load", schedule, { once: true });
 }
 
 async function bootstrap() {

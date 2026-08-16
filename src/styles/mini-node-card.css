@@ -261,7 +261,7 @@
 
 .mini-node-flow-row small {
   margin-left: 1px;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 500;
 }

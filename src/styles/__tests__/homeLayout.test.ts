@@ -98,15 +98,17 @@ describe("home responsive layout contracts", () => {
       nodeGridSource.indexOf("const homeHeader"),
     );
     expect(loadingBranch).not.toContain("<HomeBrand");
+    expect(loadingBranch).toContain("<HomeLoadingSkeleton");
     expect(loadingBranch).not.toContain("<Spinner");
     expect(homeSource).toContain("const homeReady = themeSettings.isReady && storeHydrated");
     expect(homeSource).toContain("{homeReady && <FloatingControls");
   });
 
-  it("keeps access and initial home hydration behind one shell-owned spinner", () => {
-    expect(appShellSource).toContain("useNodeStoreStatus(canHydrateHome)");
-    expect(appShellSource).toContain("isCheckingAccess || isCheckingHomeData");
+  it("keeps access checks behind the shell spinner and lets home render its skeleton", () => {
+    expect(appShellSource).not.toContain("useNodeStoreStatus");
+    expect(appShellSource).toContain("const isCheckingShell = isCheckingAccess");
     expect(appShellSource).toContain("isCheckingShell ?");
+    expect(nodeGridSource).toContain("function HomeLoadingSkeleton");
     expect(routerSource).toContain('import { Home } from "@/pages/Home"');
     expect(routerSource).not.toMatch(/const Home\s*=\s*lazy/);
     expect(routerSource).toContain("element: <Home />");

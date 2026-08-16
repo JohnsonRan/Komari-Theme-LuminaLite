@@ -48,7 +48,7 @@ import { useVersion } from "@/hooks/useVersion";
 import { HomeSortControl } from "./HomeSortControl";
 import { CompactNodeCard } from "./CompactNodeCard";
 import { MiniNodeCard } from "./MiniNodeCard";
-import { NodeCard } from "./NodeCard";
+import { NodeCard, NodeCardSkeleton } from "./NodeCard";
 import { NodeListView } from "./NodeListView";
 import type { NodeViewMode } from "@/utils/themeSettings";
 
@@ -662,6 +662,25 @@ function RegionTabs({
   );
 }
 
+function HomeLoadingSkeleton({ siteName }: { siteName: string }) {
+  return (
+    <div aria-busy="true" aria-label="正在加载节点">
+      <header className="home-brand" aria-hidden>
+        <h1 className="home-brand-title">{siteName}</h1>
+      </header>
+      <div
+        className="grid gap-4 xl:gap-5"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 360px), 1fr))" }}
+        aria-hidden
+      >
+        {Array.from({ length: 6 }, (_, index) => (
+          <NodeCardSkeleton key={index} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function NodeGrid() {
   const queryClient = useQueryClient();
   // 结构态：分组/地区/权重/在线。网速抖动不推这里。
@@ -901,7 +920,7 @@ export function NodeGrid() {
   useLayoutTransition(gridRef, orderedUuids, mode, contentRevision);
 
   if (!themeSettings.isReady || !storeHydrated) {
-    if (!nodeInfoError) return null;
+    if (!nodeInfoError) return <HomeLoadingSkeleton siteName={siteName} />;
     return (
       <div
         className="home-empty-state"

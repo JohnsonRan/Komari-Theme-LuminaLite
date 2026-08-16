@@ -10,7 +10,6 @@ import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useSiteMetadata } from "@/hooks/useSiteMetadata";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useMetricColorsSync } from "@/hooks/useMetricColors";
-import { useNodeStoreStatus } from "@/hooks/useNode";
 import { useVisitorTracking } from "@/hooks/useVisitorTracking";
 
 export function AppShell() {
@@ -37,13 +36,7 @@ export function AppShell() {
     publicConfig.data?.private_site === true &&
     !auth.isPending &&
     auth.data?.logged_in !== true;
-  const isHomeDashboard = normalizedPath === "/";
-  const canHydrateHome =
-    isHomeDashboard && !isCheckingAccess && !accessError && !isPrivateVisitor;
-  const homeStoreStatus = useNodeStoreStatus(canHydrateHome);
-  const isCheckingHomeData =
-    canHydrateHome && !homeStoreStatus.hydrated && !homeStoreStatus.nodeInfoError;
-  const isCheckingShell = isCheckingAccess || isCheckingHomeData;
+  const isCheckingShell = isCheckingAccess;
   return (
     <div className="relative flex min-h-screen flex-col">
       <BackgroundLayer />

@@ -28,9 +28,6 @@ export default defineConfig({
           if (normalized.includes("/node_modules/@tanstack/react-query/")) {
             return "query";
           }
-          if (/\/node_modules\/(?:uplot|uplot-react)\//.test(normalized)) {
-            return "charts";
-          }
           if (normalized.includes("/node_modules/zod/")) {
             return "validation";
           }
