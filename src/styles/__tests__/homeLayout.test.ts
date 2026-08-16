@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const homeCss = readFileSync(new URL("../home.css", import.meta.url), "utf8");
 const surfaceCss = readFileSync(new URL("../surface.css", import.meta.url), "utf8");
+const indexCss = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 const homeSource = readFileSync(new URL("../../pages/Home.tsx", import.meta.url), "utf8");
 const controlsSource = readFileSync(
   new URL("../../components/shell/FloatingControls.tsx", import.meta.url),
@@ -21,6 +22,16 @@ const appShellSource = readFileSync(
   "utf8",
 );
 const routerSource = readFileSync(new URL("../../router.tsx", import.meta.url), "utf8");
+const todayMetricSource = readFileSync(
+  new URL("../../components/today/TodayMetricPage.tsx", import.meta.url),
+  "utf8",
+);
+const useAuthSource = readFileSync(new URL("../../hooks/useAuth.ts", import.meta.url), "utf8");
+const wsStoreSource = readFileSync(new URL("../../services/wsStore.ts", import.meta.url), "utf8");
+const queryClientSource = readFileSync(
+  new URL("../../services/queryClient.ts", import.meta.url),
+  "utf8",
+);
 
 describe("home responsive layout contracts", () => {
   it("uses an explicit expanded state through tablet widths without :has()", () => {
@@ -112,5 +123,25 @@ describe("home responsive layout contracts", () => {
     expect(routerSource).toContain('import { Home } from "@/pages/Home"');
     expect(routerSource).not.toMatch(/const Home\s*=\s*lazy/);
     expect(routerSource).toContain("element: <Home />");
+  });
+
+  it("loads only the active card view and keeps non-home CSS off the home route", () => {
+    for (const moduleName of ["NodeCard", "CompactNodeCard", "MiniNodeCard", "NodeListView"]) {
+      expect(nodeGridSource).toContain(`const ${moduleName} = lazy(`);
+      expect(nodeGridSource).not.toMatch(
+        new RegExp(`import \\{ ${moduleName} \\} from ["']\\./${moduleName}["']`),
+      );
+    }
+    expect(indexCss).not.toContain('@import "./traffic-stats.css"');
+    expect(todayMetricSource).toContain('import "@/styles/traffic-stats.css"');
+  });
+
+  it("keeps API and Zod code behind dynamic imports", () => {
+    expect(useAuthSource).toContain('await import("@/services/api")');
+    expect(wsStoreSource).toContain('await import("@/services/api")');
+    expect(useAuthSource).not.toMatch(/^import (?!type).*@\/services\/api/m);
+    expect(wsStoreSource).not.toMatch(/^import (?!type).*@\/services\/api/m);
+    expect(queryClientSource).toContain('from "@/services/apiError"');
+    expect(queryClientSource).not.toContain('from "@/services/api"');
   });
 });

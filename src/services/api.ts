@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ApiRequestError } from "@/services/apiError";
 import { getRpc2Client } from "@/services/rpc2Client";
 import {
   MeSchema,
@@ -147,17 +148,6 @@ interface ApiCallOptions {
   signal?: AbortSignal;
   timeout?: number;
   skipMetricQuery?: boolean;
-}
-
-export class ApiRequestError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly path: string,
-  ) {
-    super(message);
-    this.name = "ApiRequestError";
-  }
 }
 
 function getRecordsMaxCount(hours: number, recordsPerHour: number) {

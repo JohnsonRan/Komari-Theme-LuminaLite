@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAllNodeMeta, useVisibleNodeUuids } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import { getPingOverview, getPublicPingTasks } from "@/services/api";
 import { setPingBindingResolver } from "@/services/wsStore";
 import type {
   PingOverviewBucket,
@@ -261,6 +260,7 @@ async function buildOverviewMap(
     };
   }
 
+  const { getPingOverview, getPublicPingTasks } = await import("@/services/api");
   const publicTasks = await getPublicPingTasks();
   const publicTaskById = new Map(publicTasks.map((task) => [task.id, task] as const));
   const selectedTasksByClient = resolveSelectedTasks(normalizedUuids, publicTasks);

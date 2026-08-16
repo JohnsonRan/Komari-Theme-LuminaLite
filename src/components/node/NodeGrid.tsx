@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
@@ -46,11 +55,21 @@ import { useHourlyClock } from "@/hooks/useClock";
 import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { useVersion } from "@/hooks/useVersion";
 import { HomeSortControl } from "./HomeSortControl";
-import { CompactNodeCard } from "./CompactNodeCard";
-import { MiniNodeCard } from "./MiniNodeCard";
-import { NodeCard, NodeCardSkeleton } from "./NodeCard";
-import { NodeListView } from "./NodeListView";
+import { NodeCardSkeleton } from "./NodeCardSkeleton";
 import type { NodeViewMode } from "@/utils/themeSettings";
+
+const NodeCard = lazy(() =>
+  import("./NodeCard").then((module) => ({ default: module.NodeCard })),
+);
+const CompactNodeCard = lazy(() =>
+  import("./CompactNodeCard").then((module) => ({ default: module.CompactNodeCard })),
+);
+const MiniNodeCard = lazy(() =>
+  import("./MiniNodeCard").then((module) => ({ default: module.MiniNodeCard })),
+);
+const NodeListView = lazy(() =>
+  import("./NodeListView").then((module) => ({ default: module.NodeListView })),
+);
 
 // 卡片视图网格密度；列表档由独立组件布局。
 const GRID_LAYOUT: Record<NodeViewMode, { className: string; minColumnWidth: number }> = {
@@ -871,23 +890,17 @@ export function NodeGrid() {
     [uuidsKey],
   );
   // 列表档由下方 NodeListView 渲染,这里不必构造卡片元素。
-  const cards = useMemo(
-    () =>
-      mode === "list"
-        ? null
-        : orderedUuids.map((uuid) => (
-            <div key={uuid} className="min-w-0" data-flip-id={uuid}>
-              {mode === "mini" ? (
-                <MiniNodeCard uuid={uuid} />
-              ) : mode === "compact" ? (
-                <CompactNodeCard uuid={uuid} />
-              ) : (
-                <NodeCard uuid={uuid} />
-              )}
-            </div>
-          )),
-    [orderedUuids, mode],
-  );
+  const cards = useMemo(() => {
+    if (mode === "list") return null;
+    const Card = mode === "mini" ? MiniNodeCard : mode === "compact" ? CompactNodeCard : NodeCard;
+    return orderedUuids.map((uuid) => (
+      <div key={uuid} className="min-w-0" data-flip-id={uuid}>
+        <Suspense fallback={<NodeCardSkeleton />}>
+          <Card uuid={uuid} />
+        </Suspense>
+      </div>
+    ));
+  }, [orderedUuids, mode]);
   const contentRevision = `${selectedGroup}${UUID_KEY_SEPARATOR}${selectedRegion}`;
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
@@ -995,7 +1008,9 @@ export function NodeGrid() {
         />
       )}
       {isList ? (
-        <NodeListView uuids={orderedUuids} contentRevision={contentRevision} />
+        <Suspense fallback={<NodeCardSkeleton />}>
+          <NodeListView uuids={orderedUuids} contentRevision={contentRevision} />
+        </Suspense>
       ) : (
         <div ref={gridRef} className={gridWrapClassName} style={gridStyle}>
           {cards}

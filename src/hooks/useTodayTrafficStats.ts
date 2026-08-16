@@ -1,5 +1,4 @@
 import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
-import { getLoadRecords, getTodayTrafficMetrics } from "@/services/api";
 import {
   buildTodayConnectionMetricSamples,
   buildTodayConnectionRecordSamples,
@@ -41,6 +40,7 @@ async function loadRecordFallback(
 ): Promise<
   Pick<TodayTrafficStatsResponse, "rows" | "samplesByUuid" | "connectionSamplesByUuid">
 > {
+  const { getLoadRecords } = await import("@/services/api");
   const rows: TodayTrafficStat[] = [];
   const samplesByUuid: Record<string, TodayTrafficSample[]> = {};
   const connectionSamplesByUuid: Record<string, TodayConnectionSample[]> = {};
@@ -83,6 +83,7 @@ function getTodayTrafficQueryOptions(uuids: string[], now: number) {
     queryFn: async ({ signal }): Promise<TodayTrafficStatsResponse> => {
       const endMs = Date.now();
       try {
+        const { getTodayTrafficMetrics } = await import("@/services/api");
         const data = await getTodayTrafficMetrics(stableUuids, startMs, endMs, {
           signal,
           timeout: OPTIONAL_METRIC_TIMEOUT_MS,

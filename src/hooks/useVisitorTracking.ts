@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { recordVisitorEvent } from "@/services/api";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 
 const DEBOUNCE_MS = 300;
@@ -27,11 +26,15 @@ export function useVisitorTracking() {
     }
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
-      recordVisitorEvent({
-        event: "pageview",
-        path: pathname,
-        detail: document.referrer ? { referrer: document.referrer } : undefined,
-      });
+      void import("@/services/api")
+        .then(({ recordVisitorEvent }) => {
+          recordVisitorEvent({
+            event: "pageview",
+            path: pathname,
+            detail: document.referrer ? { referrer: document.referrer } : undefined,
+          });
+        })
+        .catch(() => undefined);
     }, DEBOUNCE_MS);
 
     return () => {

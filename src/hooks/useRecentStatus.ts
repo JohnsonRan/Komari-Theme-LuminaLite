@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getNodeRecentStatus, type RecentStatusRecord } from "@/services/api";
+import type { RecentStatusRecord } from "@/services/api";
 
 /**
  * 获取节点近期实时缓冲数据，用于详情页在完整历史加载前快速展示迷你趋势。
@@ -8,7 +8,10 @@ import { getNodeRecentStatus, type RecentStatusRecord } from "@/services/api";
 export function useRecentStatus(uuid: string | undefined) {
   return useQuery<RecentStatusRecord[]>({
     queryKey: ["recentStatus", uuid],
-    queryFn: ({ signal }) => getNodeRecentStatus(uuid!, { signal }),
+    queryFn: async ({ signal }) => {
+      const { getNodeRecentStatus } = await import("@/services/api");
+      return getNodeRecentStatus(uuid!, { signal });
+    },
     enabled: Boolean(uuid),
     staleTime: 30_000,
     retry: false,

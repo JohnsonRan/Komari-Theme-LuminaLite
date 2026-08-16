@@ -14,6 +14,7 @@ import { collectMatchingNodeUuids } from "@/utils/nodeIdentity";
 import type { NodeInfo } from "@/types/komari";
 import type { TodayConnectionSample, TodayTrafficSample, TodayTrafficStat } from "@/utils/trafficStats";
 import type { TodaySeriesPoint } from "./TodaySeriesChart";
+import "@/styles/traffic-stats.css";
 
 const TodaySeriesChart = lazy(() =>
   import("./TodaySeriesChart").then((module) => ({ default: module.TodaySeriesChart })),

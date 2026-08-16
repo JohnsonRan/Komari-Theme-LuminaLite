@@ -5,7 +5,6 @@ import type {
   PingRealtimeStats,
   TrafficTrendSample,
 } from "@/types/komari";
-import { getNodes } from "@/services/api";
 import { asRecord, normalizeRealtime } from "@/services/ws/realtime";
 
 export { resolveFlatConnectionsTcp } from "@/services/ws/realtime";
@@ -831,6 +830,7 @@ async function performNodeInfoSync() {
   const controller = new AbortController();
   nodeInfoController = controller;
   try {
+    const { getNodes } = await import("@/services/api");
     const nodes = sortNodes(await getNodes({ signal: controller.signal }));
     if (controller.signal.aborted) return;
     const order = nodes.map((node) => node.uuid);

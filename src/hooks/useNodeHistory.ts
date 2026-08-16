@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getHomeHistory, type HomeHistoryResponse } from "@/services/api";
+import type { HomeHistoryResponse } from "@/services/api";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { buildNodeHistory, EMPTY_NODE_HISTORY, type NodeHistory } from "@/utils/nodeHistory";
 
@@ -24,7 +24,10 @@ function useHomeHistoryQuery() {
   const { isReady, showNodeHistory } = useThemeSettings();
   return useQuery<HomeHistoryResponse>({
     queryKey: HOME_HISTORY_QUERY_KEY,
-    queryFn: ({ signal }) => getHomeHistory(HOME_HISTORY_HOURS, HOME_HISTORY_SLOTS, { signal }),
+    queryFn: async ({ signal }) => {
+      const { getHomeHistory } = await import("@/services/api");
+      return getHomeHistory(HOME_HISTORY_HOURS, HOME_HISTORY_SLOTS, { signal });
+    },
     enabled: isReady && showNodeHistory,
     staleTime: REFRESH_MS,
     refetchInterval: REFRESH_MS,

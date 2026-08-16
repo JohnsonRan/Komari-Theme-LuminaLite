@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { getLoadRecords, getPingMetricStats, getPingRecords } from "@/services/api";
 
 const RECORD_QUERY_OPTIONS = {
   staleTime: 300_000,
@@ -10,7 +9,10 @@ const RECORD_QUERY_OPTIONS = {
 export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
   return useQuery({
     queryKey: ["records", "load", uuid, hours],
-    queryFn: ({ signal }) => getLoadRecords(uuid, hours, { signal }),
+    queryFn: async ({ signal }) => {
+      const { getLoadRecords } = await import("@/services/api");
+      return getLoadRecords(uuid, hours, { signal });
+    },
     ...RECORD_QUERY_OPTIONS,
     enabled: Boolean(uuid) && enabled,
   });
@@ -19,7 +21,10 @@ export function useLoadRecords(uuid: string, hours = 6, enabled = true) {
 export function usePingRecords(uuid: string, hours = 6, enabled = true) {
   return useQuery({
     queryKey: ["records", "ping", uuid, hours],
-    queryFn: ({ signal }) => getPingRecords(uuid, hours, { signal }),
+    queryFn: async ({ signal }) => {
+      const { getPingRecords } = await import("@/services/api");
+      return getPingRecords(uuid, hours, { signal });
+    },
     ...RECORD_QUERY_OPTIONS,
     enabled: Boolean(uuid) && enabled,
   });
@@ -28,7 +33,10 @@ export function usePingRecords(uuid: string, hours = 6, enabled = true) {
 export function usePingStats(uuid: string, hours = 6, enabled = true) {
   return useQuery({
     queryKey: ["records", "ping-stats", uuid, hours],
-    queryFn: ({ signal }) => getPingMetricStats(uuid, hours, { signal }),
+    queryFn: async ({ signal }) => {
+      const { getPingMetricStats } = await import("@/services/api");
+      return getPingMetricStats(uuid, hours, { signal });
+    },
     ...RECORD_QUERY_OPTIONS,
     retry: false,
     enabled: Boolean(uuid) && enabled,
