@@ -8,25 +8,18 @@ if (!rootEl) throw new Error("#root not found");
 const root = rootEl;
 
 /**
- * MiSans 分区字体 CSS 体积大（~90 个 @font-face）。
- * 不阻塞首屏：load 后再等待 3 秒和空闲时机，unicode-range 仍按需下载 woff2。
+ * MiSans CSS 在首屏渲染后尽快加载；unicode-range 仍只下载页面实际使用的字形。
  */
 function loadThemeFonts() {
   const run = () => {
     void import("subsetted-fonts/MiSans-VF/MiSans-VF.css");
   };
-  const schedule = () => {
-    window.setTimeout(() => {
-      if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(run, { timeout: 4000 });
-      } else {
-        run();
-      }
-    }, 3000);
-  };
 
-  if (document.readyState === "complete") schedule();
-  else window.addEventListener("load", schedule, { once: true });
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    window.setTimeout(run, 300);
+  }
 }
 
 async function bootstrap() {

@@ -1125,8 +1125,8 @@
   .home-overview {
     display: flex;
     gap: 8px;
-    margin-inline: -14px;
-    padding-inline: 14px;
+    margin-inline: calc(var(--app-gutter) * -1);
+    padding-inline: var(--app-gutter);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
@@ -1153,8 +1153,8 @@
   .home-resource-grid {
     display: flex;
     gap: 8px;
-    margin-inline: -14px;
-    padding-inline: 14px;
+    margin-inline: calc(var(--app-gutter) * -1);
+    padding-inline: var(--app-gutter);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;

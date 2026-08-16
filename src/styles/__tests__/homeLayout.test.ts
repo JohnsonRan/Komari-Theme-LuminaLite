@@ -45,6 +45,9 @@ describe("home responsive layout contracts", () => {
     expect(surfaceCss).toContain("env(safe-area-inset-right, 0px)");
     expect(surfaceCss).toMatch(/padding-left:\s*max\(var\(--app-gutter\)/);
     expect(surfaceCss).toMatch(/padding-right:\s*max\(var\(--app-gutter\)/);
+    expect(indexCss).toMatch(/html,\s*body\s*\{[\s\S]*overflow-x:\s*clip/);
+    expect(homeCss).not.toContain("margin-inline: -14px");
+    expect(homeCss.match(/margin-inline: calc\(var\(--app-gutter\) \* -1\)/g)).toHaveLength(2);
   });
 
   it("enforces the mini card width floor before adding another fixed column", () => {
