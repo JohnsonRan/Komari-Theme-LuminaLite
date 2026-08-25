@@ -27,7 +27,8 @@ const manifest = JSON.parse(
 
 const REQUIRED_COMPLEX_KEYS = [
   "homeGroupOrder",
-  "hiddenNodes",
+  "hiddenNodeIds",
+  "homepagePingTasks",
   "attentionCpuPct",
   "attentionMemoryPct",
   "attentionDiskPct",
@@ -46,10 +47,13 @@ describe("komari-theme.json managed configuration", () => {
 
     const titles = data.filter((item) => item.type === "title");
     expect(titles.length).toBeGreaterThanOrEqual(5);
-    // title 行不应带 key，避免污染 theme_settings。
-    for (const title of titles) {
-      expect(title.key).toBeUndefined();
+    // title/textbox 行不应带 key，避免污染 theme_settings。
+    for (const staticItem of data.filter(
+      (item) => item.type === "title" || item.type === "textbox",
+    )) {
+      expect(staticItem.key).toBeUndefined();
     }
+    expect(data.some((item) => item.type === "textbox")).toBe(true);
   });
 
   it("keeps non-title keys unique and covers complex migration fields", () => {
@@ -109,7 +113,8 @@ describe("komari-theme.json managed configuration", () => {
     expectDefault("backgroundAlignment", DEFAULT_THEME_SETTINGS.backgroundAlignment);
     expectDefault("surfaceOpacity", DEFAULT_THEME_SETTINGS.surfaceOpacity);
     expectDefault("homeGroupOrder", "");
-    expectDefault("hiddenNodes", "");
+    expectDefault("hiddenNodeIds", "[]");
+    expectDefault("homepagePingTasks", "[]");
     expectDefault("attentionCpuPct", DEFAULT_ATTENTION_THRESHOLDS.cpuPct);
     expectDefault("attentionMemoryPct", DEFAULT_ATTENTION_THRESHOLDS.memoryPct);
     expectDefault("attentionDiskPct", DEFAULT_ATTENTION_THRESHOLDS.diskPct);
@@ -121,5 +126,17 @@ describe("komari-theme.json managed configuration", () => {
     for (const { flatKey } of METRIC_COLOR_META) {
       expectDefault(flatKey, "");
     }
+  });
+
+  it("uses Komari 1.4.3 selectors for nodes and Ping tasks", () => {
+    const data = manifest.configuration?.data ?? [];
+    const byKey = new Map(
+      data
+        .filter((item) => typeof item.key === "string")
+        .map((item) => [item.key as string, item]),
+    );
+
+    expect(byKey.get("hiddenNodeIds")?.type).toBe("nodes");
+    expect(byKey.get("homepagePingTasks")?.type).toBe("pingtasks");
   });
 });

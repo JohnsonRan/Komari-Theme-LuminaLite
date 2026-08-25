@@ -88,11 +88,26 @@ describe("normalizeThemeSettings", () => {
     expect(legacy.enableDataAnimations).toBe(true);
   });
 
-  it("parses hiddenNodes from a delimited string and dedupes", () => {
+  it("merges legacy hiddenNodes text with the Komari nodes selector", () => {
     expect(normalizeThemeSettings({}).hiddenNodes).toEqual([]);
     expect(
-      normalizeThemeSettings({ hiddenNodes: "节点A, 节点A\nuuid-1；节点B" } as never).hiddenNodes,
-    ).toEqual(["节点A", "uuid-1", "节点B"]);
+      normalizeThemeSettings({
+        hiddenNodes: "节点A, 节点A\nuuid-1；节点B",
+        hiddenNodeIds: ["uuid-1", "uuid-2"],
+      } as never).hiddenNodes,
+    ).toEqual(["节点A", "uuid-1", "节点B", "uuid-2"]);
+  });
+
+  it("normalizes Komari pingtasks arrays and keeps an empty selection automatic", () => {
+    expect(normalizeThemeSettings({}).homepagePingTaskIds).toEqual([]);
+    expect(
+      normalizeThemeSettings({ homepagePingTasks: [3, 1, 3, -1, 2.5] } as never)
+        .homepagePingTaskIds,
+    ).toEqual([3, 1]);
+    expect(
+      normalizeThemeSettings({ homepagePingTasks: "[2,\"4\",2]" } as never)
+        .homepagePingTaskIds,
+    ).toEqual([2, 4]);
   });
 
   it("keeps legacy attention thresholds until the official full save removes the old key", () => {

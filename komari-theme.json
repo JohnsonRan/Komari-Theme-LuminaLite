@@ -2,7 +2,7 @@
   "name": "Komari-Theme-LuminaLite",
   "short": "LuminaLite",
   "description": "Komari-Theme-LuminaLite",
-  "version": "2.7.3",
+  "version": "2.7.4",
   "author": "JohnsonRan",
   "url": "https://github.com/JohnsonRan/Komari-Theme-LuminaLite",
   "preview": "preview.png",
@@ -16,6 +16,13 @@
       {
         "name": { "zh-CN": "外观", "en": "Appearance" },
         "type": "title"
+      },
+      {
+        "name": {
+          "zh-CN": "<strong>LuminaLite</strong> 的设置会立即公开给主题使用。节点与 Ping 任务选择器需要 Komari 1.4.3 或更高版本。",
+          "en": "<strong>LuminaLite</strong> settings are exposed to the theme immediately. Node and Ping task selectors require Komari 1.4.3 or newer."
+        },
+        "type": "textbox"
       },
       {
         "key": "defaultAppearance",
@@ -448,13 +455,20 @@
         "type": "title"
       },
       {
-        "key": "hiddenNodes",
+        "name": {
+          "zh-CN": "从节点对话框中勾选后隐藏；旧版文本配置仍会继续生效，首次保存新设置后可完成迁移。",
+          "en": "Select nodes to hide in the dialog. Legacy text values remain supported until the new settings are saved."
+        },
+        "type": "textbox"
+      },
+      {
+        "key": "hiddenNodeIds",
         "name": { "zh-CN": "隐藏节点", "en": "Hidden nodes" },
-        "type": "richtext",
-        "default": "",
+        "type": "nodes",
+        "default": "[]",
         "help": {
-          "zh-CN": "每行一个节点名称或 UUID，也可用逗号分隔。被隐藏的节点从首页移除且不计入统计。",
-          "en": "One name/UUID per line or comma-separated. Hidden nodes leave the home grid and stats."
+          "zh-CN": "选中的节点会从首页移除，且不计入总览统计与 Ping 请求。",
+          "en": "Selected nodes leave the home grid, overview statistics, and Ping requests."
         }
       },
 
@@ -506,6 +520,23 @@
       {
         "name": { "zh-CN": "Ping", "en": "Ping" },
         "type": "title"
+      },
+      {
+        "name": {
+          "zh-CN": "可限制首页卡片展示的延迟检测任务；留空时仍按任务权重自动选择每个节点的前三项。",
+          "en": "Optionally limit homepage latency tasks. When empty, each node still uses its first three tasks by weight."
+        },
+        "type": "textbox"
+      },
+      {
+        "key": "homepagePingTasks",
+        "name": { "zh-CN": "首页延迟检测", "en": "Homepage Ping tasks" },
+        "type": "pingtasks",
+        "default": "[]",
+        "help": {
+          "zh-CN": "只展示选中的任务；留空为自动选择。节点仍需在对应 Ping 任务中绑定。",
+          "en": "Show only selected tasks; empty keeps automatic selection. Nodes must still be assigned to each task."
+        }
       },
       {
         "key": "showPingChart",

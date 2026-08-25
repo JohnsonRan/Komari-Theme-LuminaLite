@@ -207,8 +207,12 @@ export interface ThemeSettings {
   // 存储类型：旧配置可能存了已废弃的 "auto"，由 normalizeThemeSettings 归一化到 mbs。
   detailNetworkUnit?: "auto" | "mbs" | "mbps";
   detailSplitLayout?: boolean;
-  /** 旧数组或官方 richtext 分隔文本。 */
+  /** 旧版 richtext 配置，保留名称/UUID 分隔文本兼容。 */
   hiddenNodes?: string[] | string;
+  /** Komari 1.4.3 nodes 选择器返回的节点 UUID。 */
+  hiddenNodeIds?: string[] | string;
+  /** Komari 1.4.3 pingtasks 选择器返回的 Ping 任务数字 ID。 */
+  homepagePingTasks?: number[] | string;
   enableBackgroundImage?: boolean;
   backgroundImage?: string;
   backgroundImageMobile?: string;

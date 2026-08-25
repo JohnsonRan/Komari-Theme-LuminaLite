@@ -14,10 +14,19 @@ function taskOrder(left: PingTask, right: PingTask) {
  * 直接从 Komari 后台公开的 Ping 任务生成节点 → 任务列表。
  * 只有出现在 task.clients 中的节点会进入结果；同一节点最多取前三个任务。
  */
-export function resolvePublicPingTaskIds(tasks: PingTask[]): Map<string, number[]> {
+export function resolvePublicPingTaskIds(
+  tasks: PingTask[],
+  selectedTaskIds: number[] = [],
+): Map<string, number[]> {
   const taskIdsByClient = new Map<string, number[]>();
+  const selectedSet = new Set(selectedTaskIds);
   const sortedTasks = [...tasks]
-    .filter((task) => Number.isSafeInteger(task.id) && task.id > 0)
+    .filter(
+      (task) =>
+        Number.isSafeInteger(task.id) &&
+        task.id > 0 &&
+        (selectedSet.size === 0 || selectedSet.has(task.id)),
+    )
     .sort(taskOrder);
 
   for (const task of sortedTasks) {

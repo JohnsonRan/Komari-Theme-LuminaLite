@@ -55,6 +55,7 @@ export interface ResolvedThemeSettings {
   detailNetworkUnit: DetailNetworkUnit;
   detailSplitLayout: boolean;
   hiddenNodes: string[];
+  homepagePingTaskIds: number[];
   enableBackgroundImage: boolean;
   backgroundImage: string;
   backgroundImageMobile: string;
@@ -95,6 +96,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   detailNetworkUnit: "mbs",
   detailSplitLayout: true,
   hiddenNodes: [],
+  homepagePingTaskIds: [],
   enableBackgroundImage: true,
   backgroundImage: "",
   backgroundImageMobile: "",
@@ -138,6 +140,26 @@ function normalizeMobileNodeViewMode(
 
 function enabledUnlessFalse(value: unknown) {
   return value !== false;
+}
+
+function normalizePingTaskIds(value: unknown): number[] {
+  let entries: unknown = value;
+  if (typeof value === "string") {
+    try {
+      entries = JSON.parse(value);
+    } catch {
+      entries = value.split(/[\s,，;；]+/);
+    }
+  }
+  if (!Array.isArray(entries)) return [];
+
+  return Array.from(
+    new Set(
+      entries
+        .map((entry) => (typeof entry === "number" ? entry : Number(entry)))
+        .filter((entry) => Number.isSafeInteger(entry) && entry > 0),
+    ),
+  );
 }
 
 function normalizeDetailChartUnit(value: unknown): DetailChartUnit {
@@ -237,7 +259,11 @@ export function normalizeThemeSettings(
     detailChartUnit: normalizeDetailChartUnit(settings?.detailChartUnit),
     detailNetworkUnit: normalizeDetailNetworkUnit(settings?.detailNetworkUnit),
     detailSplitLayout: enabledUnlessFalse(settings?.detailSplitLayout),
-    hiddenNodes: normalizeNodeIdentityList(settings?.hiddenNodes),
+    hiddenNodes: normalizeNodeIdentityList([
+      ...normalizeNodeIdentityList(settings?.hiddenNodes),
+      ...normalizeNodeIdentityList(settings?.hiddenNodeIds),
+    ]),
+    homepagePingTaskIds: normalizePingTaskIds(settings?.homepagePingTasks),
     // 默认开:让已配置背景图的存量站点升级后行为不变;关闭 = 保留 URL 但不加载背景图。
     enableBackgroundImage: enabledUnlessFalse(settings?.enableBackgroundImage),
     backgroundImage: normalizeBackgroundUrl(settings?.backgroundImage),

@@ -198,9 +198,13 @@ export function buildPingOverviewItems(
   return result;
 }
 
-function resolveSelectedTasks(clientUuids: string[], tasks: PingTask[]) {
+function resolveSelectedTasks(
+  clientUuids: string[],
+  tasks: PingTask[],
+  selectedTaskIds: number[],
+) {
   const selectedTasksByClient = new Map<string, number[]>();
-  const publicAssignments = resolvePublicPingTaskIds(tasks);
+  const publicAssignments = resolvePublicPingTaskIds(tasks, selectedTaskIds);
 
   for (const uuid of clientUuids) {
     const taskIds = publicAssignments.get(uuid);
@@ -247,6 +251,7 @@ function assignedEmptyPing(
 async function buildOverviewMap(
   hours: number,
   clientUuids: string[],
+  configuredTaskIds: number[],
   signal?: AbortSignal,
   previous?: PreviousPingOverview,
 ): Promise<PingOverviewMapResult> {
@@ -263,7 +268,11 @@ async function buildOverviewMap(
   const { getPingOverview, getPublicPingTasks } = await import("@/services/api");
   const publicTasks = await getPublicPingTasks();
   const publicTaskById = new Map(publicTasks.map((task) => [task.id, task] as const));
-  const selectedTasksByClient = resolveSelectedTasks(normalizedUuids, publicTasks);
+  const selectedTasksByClient = resolveSelectedTasks(
+    normalizedUuids,
+    publicTasks,
+    configuredTaskIds,
+  );
   const selectedTaskIds = Array.from(
     new Set(Array.from(selectedTasksByClient.values()).flat()),
   ).sort((left, right) => left - right);
@@ -372,7 +381,8 @@ let pingOverviewState: PingOverviewStoreState = {
   items: new Map(),
 };
 let scheduledVisibleUuids: string[] = [];
-let scheduledVisibleKey = "";
+let scheduledPingTaskIds: number[] = [];
+let scheduledSelectionKey = "";
 let currentTaskIdsByClient = new Map<string, number[]>();
 let pingRefreshInFlight = false;
 let pingRefreshTimer: number | null = null;
@@ -468,12 +478,13 @@ async function refreshPingOverview() {
   if (pingRefreshInFlight) return;
 
   pingRefreshInFlight = true;
-  const visibleKey = scheduledVisibleKey;
+  const selectionKey = scheduledSelectionKey;
   const controller = new AbortController();
   pingAbortController = controller;
   const { signal } = controller;
-  // 判断当前请求是否仍然有效（没被 stopPingPolling 中止，且可见节点集合未变化）。
-  const isCurrent = () => !signal.aborted && visibleKey === scheduledVisibleKey;
+  // 判断当前请求是否仍然有效（没被中止，且可见节点/任务选择均未变化）。
+  const isCurrent = () =>
+    !signal.aborted && selectionKey === scheduledSelectionKey;
 
   try {
     if (scheduledVisibleUuids.length === 0) {
@@ -484,6 +495,7 @@ async function refreshPingOverview() {
     const next = await buildOverviewMap(
       1,
       scheduledVisibleUuids,
+      scheduledPingTaskIds,
       signal,
       pingOverviewState,
     );
@@ -517,13 +529,17 @@ async function refreshPingOverview() {
   }
 }
 
-function ensurePingOverviewStarted(visibleUuids: string[]) {
+function ensurePingOverviewStarted(visibleUuids: string[], selectedTaskIds: number[]) {
   const normalizedVisibleUuids = normalizeVisibleUuids(visibleUuids);
-  const visibleKey = normalizedVisibleUuids.join("|");
+  const normalizedTaskIds = Array.from(new Set(selectedTaskIds)).sort(
+    (left, right) => left - right,
+  );
+  const selectionKey = `${normalizedVisibleUuids.join("|")}::${normalizedTaskIds.join(",")}`;
 
-  if (scheduledVisibleKey !== visibleKey) {
+  if (scheduledSelectionKey !== selectionKey) {
     scheduledVisibleUuids = normalizedVisibleUuids;
-    scheduledVisibleKey = visibleKey;
+    scheduledPingTaskIds = normalizedTaskIds;
+    scheduledSelectionKey = selectionKey;
 
     pingAbortController?.abort();
 
@@ -589,7 +605,7 @@ export function useHomepagePingOverview() {
   useEffect(() => {
     if (!themeSettings.isReady) return;
     activeConsumers += 1;
-    ensurePingOverviewStarted(effectiveUuids);
+    ensurePingOverviewStarted(effectiveUuids, themeSettings.homepagePingTaskIds);
     return () => {
       activeConsumers -= 1;
       if (activeConsumers <= 0) {
@@ -597,7 +613,11 @@ export function useHomepagePingOverview() {
         stopPingPolling();
       }
     };
-  }, [themeSettings.isReady, effectiveUuids]);
+  }, [
+    themeSettings.isReady,
+    themeSettings.homepagePingTaskIds,
+    effectiveUuids,
+  ]);
 
   // 向 wsStore 注册自动任务解析器，让内嵌 ping 帧按后台 task.clients 提取延迟/丢包。
   // 解析表由 overview 刷新原子更新，最多保留按 weight → id 排序的前三个任务。

@@ -49,6 +49,17 @@ describe("public homepage ping tasks", () => {
     );
   });
 
+  it("limits assignments to selected Ping tasks and treats an empty selection as automatic", () => {
+    const tasks = [
+      task(1, 0, ["node-a"]),
+      task(2, 1, ["node-a"]),
+      task(3, 2, ["node-a"]),
+    ];
+
+    expect(resolvePublicPingTaskIds(tasks, [3, 1]).get("node-a")).toEqual([1, 3]);
+    expect(resolvePublicPingTaskIds(tasks, []).get("node-a")).toEqual([1, 2, 3]);
+  });
+
   it("does not create an assignment for nodes absent from every task", () => {
     const resolved = resolvePublicPingTaskIds([task(1, 0, ["node-a"])]);
     expect(resolved.has("node-without-ping")).toBe(false);
