@@ -1,4 +1,4 @@
-import type { NodeInfo, NodeMetrics, NodeRealtime } from "@/types/komari";
+import type { GpuDevice, GpuReport, NodeInfo, NodeMetrics, NodeRealtime } from "@/types/komari";
 
 export type RealtimePayload = Record<string, unknown>;
 
@@ -23,52 +23,49 @@ export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   return Math.max(0, asNumber(payload.connections) - asNumber(payload.connections_udp));
 }
 
-/**
- * 解析后端 v1.Report 中的 GPU 字段。
- * 后端协议：{ count, average_usage, detailed_info: [{ name, memory_total, memory_used, utilization, temperature }] }
- * 兼容旧版扁平字段（usage / memoryUsed 等）。
- */
-function parseGpuReport(
-  gpu: RealtimePayload,
-): { usage: number; memoryUsed?: number; memoryTotal?: number; temperature?: number } | undefined {
-  if (Object.keys(gpu).length === 0) return undefined;
+// GPU 缺失、负数和无效值不能伪装成 0；空闲设备的真实 0 必须保留。
+function gpuNumber(value: unknown, max = Infinity): number | undefined {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return undefined;
+  const number = asNumber(value, NaN);
+  return number >= 0 && number <= max ? number : undefined;
+}
 
-  // 新版协议：average_usage + detailed_info[]
-  const detailedInfo = gpu.detailed_info;
-  if (Array.isArray(detailedInfo) && detailedInfo.length > 0) {
-    let memoryUsed = 0;
-    let memoryTotal = 0;
-    let tempSum = 0;
-    let tempCount = 0;
-    for (const device of detailedInfo) {
-      const d = asRecord(device);
-      memoryUsed += asNumber(d.memory_used ?? d.memoryUsed);
-      memoryTotal += asNumber(d.memory_total ?? d.memoryTotal);
-      const temp = asNumber(d.temperature, -1);
-      if (temp >= 0) {
-        tempSum += temp;
-        tempCount += 1;
-      }
-    }
-    return {
-      usage: asNumber(gpu.average_usage ?? gpu.averageUsage ?? gpu.usage),
-      memoryUsed,
-      memoryTotal,
-      temperature: tempCount > 0 ? tempSum / tempCount : undefined,
-    };
+/** 兼容 v2.Report、旧嵌套字段，以及由调用方映射的 1.5.0 扁平字段。 */
+function parseGpuReport(gpu: RealtimePayload): GpuReport | undefined {
+  const devices: GpuDevice[] = [];
+  for (const raw of Array.isArray(gpu.detailed_info) ? gpu.detailed_info : []) {
+    const device = asRecord(raw);
+    if (Object.keys(device).length === 0) continue;
+    devices.push({
+      name: typeof device.name === "string" ? device.name.trim() : "",
+      usage: gpuNumber(device.utilization ?? device.usage, 100),
+      memoryUsed: gpuNumber(device.memory_used ?? device.memoryUsed),
+      memoryTotal: gpuNumber(device.memory_total ?? device.memoryTotal),
+      temperature: gpuNumber(device.temperature),
+    });
   }
-
-  // 旧版 / 扁平协议兼容
-  const usage = asNumber(gpu.average_usage ?? gpu.averageUsage ?? gpu.usage);
-  if (usage <= 0 && !asNumber(gpu.memory_used ?? gpu.memoryUsed) && !asNumber(gpu.temperature)) {
-    return undefined;
-  }
-  return {
+  const count = gpuNumber(gpu.count);
+  const usage = gpuNumber(gpu.average_usage ?? gpu.averageUsage ?? gpu.usage, 100);
+  const report: GpuReport = {
+    count: count == null ? (devices.length || undefined) : Math.max(Math.trunc(count), devices.length),
+    devices: Array.isArray(gpu.detailed_info) ? devices : undefined,
     usage,
-    memoryUsed: asNumber(gpu.memory_used ?? gpu.memoryUsed) || undefined,
-    memoryTotal: asNumber(gpu.memory_total ?? gpu.memoryTotal) || undefined,
-    temperature: asNumber(gpu.temperature) || undefined,
+    memoryUsed: gpuNumber(gpu.memory_used ?? gpu.memoryUsed),
+    memoryTotal: gpuNumber(gpu.memory_total ?? gpu.memoryTotal),
+    temperature: gpuNumber(gpu.temperature),
   };
+  if (devices.length > 0) {
+    for (const field of ["usage", "memoryUsed", "memoryTotal", "temperature"] as const) {
+      const values = devices.flatMap((device) => device[field] == null ? [] : [device[field]]);
+      // 只有全部已声明设备都有该指标时才补算，不能把部分设备的平均/合计冒充整机值。
+      if (values.length !== devices.length || report.count !== devices.length) continue;
+      const isMemory = field === "memoryUsed" || field === "memoryTotal";
+      report[field] ??= values.reduce((sum, value) => sum + value, 0) / (isMemory ? 1 : values.length);
+    }
+  }
+  if (report.count === 0) return { count: 0, devices: [] };
+  return report.count != null || report.usage != null || report.memoryUsed != null ||
+    report.memoryTotal != null || report.temperature != null ? report : undefined;
 }
 
 /**
@@ -103,7 +100,7 @@ export function parseEmbeddedPing(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-/** Normalizes both nested v1.Report and legacy flat realtime payloads. */
+/** Normalizes nested reports and both current/legacy flat realtime payloads. */
 export function normalizeRealtime(
   raw: unknown,
   meta: NodeInfo,
@@ -169,13 +166,18 @@ export function normalizeRealtime(
     cpu: { usage: asNumber(payload.cpu) },
     gpu: typeof payload.gpu === "object" && payload.gpu !== null
       ? parseGpuReport(asRecord(payload.gpu))
-      : asNumber(payload.gpu) > 0 || asNumber(payload.gpu_temperature) > 0
-        ? {
-            usage: asNumber(payload.gpu),
-            memoryUsed: asNumber(payload.gpu_memory_used) || undefined,
-            memoryTotal: asNumber(payload.gpu_memory_total) || undefined,
-            temperature: asNumber(payload.gpu_temperature) || undefined,
-          }
+      : payload.gpu_count != null || Array.isArray(payload.gpu_detailed_info) ||
+          (Boolean(meta.gpu_name.trim()) && !/^none$/i.test(meta.gpu_name.trim())) ||
+          [payload.gpu, payload.gpu_average_usage, payload.gpu_memory_used, payload.gpu_memory_total, payload.gpu_temperature]
+            .some((value) => (gpuNumber(value) ?? 0) > 0)
+        ? parseGpuReport({
+            count: payload.gpu_count,
+            average_usage: payload.gpu_average_usage ?? payload.gpu,
+            detailed_info: payload.gpu_detailed_info,
+            memory_used: payload.gpu_memory_used,
+            memory_total: payload.gpu_memory_total,
+            temperature: payload.gpu_temperature,
+          })
         : undefined,
     ram: {
       total: asNumber(payload.ram_total, metrics.ramTotal || meta.mem_total),

@@ -50,10 +50,6 @@ export interface LoadMetricSeries {
 function emptyLoadRecord(client: string, time: string): LoadRecord {
   return {
     cpu: 0,
-    gpu: 0,
-    gpu_memory_used: 0,
-    gpu_memory_total: 0,
-    gpu_temperature: 0,
     ram: 0,
     ram_total: 0,
     swap: 0,

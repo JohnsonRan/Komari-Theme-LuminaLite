@@ -192,7 +192,7 @@ export function Instance() {
         <h1 className="instance-page-title">{pageTitle}</h1>
         <InstanceSwitcher currentUuid={uuid} />
       </div>
-      <InstanceDetails uuid={uuid} onNodeReady={alignCharts} />
+      <InstanceDetails uuid={uuid} onNodeReady={alignCharts} isAdmin={authMe?.logged_in === true} />
       <div ref={chartControlsRef} className="instance-chart-controls">
         <div className="instance-segmented">
           <button

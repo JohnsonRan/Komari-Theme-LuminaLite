@@ -283,7 +283,14 @@ function latestStatus() {
         {
           online: true,
           cpu,
-          gpu: node.gpu_name ? { count: 1, average_usage: 34 + index * 8, detailed_info: [{ name: node.gpu_name, memory_used: 18 * GIB, memory_total: 40 * GIB, utilization: 34 + index * 8, temperature: 52 + index * 3 }] } : undefined,
+          gpu: node.gpu_name ? {
+            count: 2,
+            average_usage: (34 + index * 8) / 2,
+            detailed_info: [
+              { name: node.gpu_name, memory_used: 0, memory_total: 40 * GIB, utilization: 0, temperature: 40 },
+              { name: node.gpu_name, memory_used: 18 * GIB, memory_total: 40 * GIB, utilization: 34 + index * 8, temperature: 52 + index * 3 },
+            ],
+          } : undefined,
           ram: (node.mem_total * memoryPct) / 100,
           ram_total: node.mem_total,
           swap: (node.swap_total * swapPct) / 100,
@@ -326,7 +333,7 @@ function loadRecords(uuid: string) {
       cpu,
       gpu: hasGpu ? Math.max(2, Math.min(98, 38 + index * 6 + Math.sin(phase) * 12)) : 0,
       gpu_memory_used: hasGpu ? 18 * GIB * (0.7 + Math.sin(phase) * 0.15) : 0,
-      gpu_memory_total: hasGpu ? 40 * GIB : 0,
+      gpu_memory_total: hasGpu ? 80 * GIB : 0,
       gpu_temperature: hasGpu ? 52 + index * 3 + Math.sin(phase) * 5 : 0,
       ram,
       ram_total: node.mem_total,

@@ -19,9 +19,11 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("zh-CN", {
 export function InstanceDetails({
   uuid,
   onNodeReady,
+  isAdmin = false,
 }: {
   uuid: string;
   onNodeReady?: () => (() => void) | void;
+  isAdmin?: boolean;
 }) {
   const meta = useNodeMeta(uuid);
   const metrics = useNodeMetrics(uuid);
@@ -57,11 +59,23 @@ export function InstanceDetails({
 
   // 只呈现身份与累计量，不放百分比/进度条——占比交给下方负载图表，避免重复。
   const cpuLine = `${meta.cpu_name || "—"}${meta.cpu_cores > 0 ? ` ×${meta.cpu_cores}` : ""}`;
-  const hasGpu = Boolean(meta.gpu_name && meta.gpu_name !== "None");
+  const hasGpu = Boolean(meta.gpu_name.trim() && !/^none$/i.test(meta.gpu_name.trim()));
+  const gpuDevices = metrics.gpu?.devices ?? [];
 
   return (
     <InstancePanel
       className="instance-details-panel"
+      aside={isAdmin && themeSettings.enableAdminButton ? (
+        <a
+          className="instance-toggle-button"
+          href={`/terminal?${new URLSearchParams({ uuid })}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="打开当前节点的官方终端；文件管理在工作区工具栏中（Komari 1.5.0+）"
+        >
+          终端 / 文件管理 ↗
+        </a>
+      ) : undefined}
       description={
         isOnline ? undefined : "节点当前离线，以下展示最近一次上报的缓存数据。"
       }
@@ -136,6 +150,26 @@ export function InstanceDetails({
             <InfoRow label="虚拟化" value={meta.virtualization || "—"} />
           </div>
         </section>
+
+        {gpuDevices.length > 0 && (
+          <section className="instance-bento-card instance-bento-gpu" aria-label="GPU 逐卡详情">
+            <h2 className="instance-panel-title">GPU 设备 · {metrics.gpu?.count ?? gpuDevices.length}</h2>
+            <div className="instance-gpu-devices">
+              {gpuDevices.map((device, index) => (
+                <div key={index} className="instance-bento-grid instance-gpu-device">
+                  <SpecItem label={`GPU ${index + 1}`} value={device.name || "未知型号"} wide />
+                  <SpecItem label="使用率" value={device.usage == null ? "—" : `${device.usage.toFixed(2)}%`} />
+                  <SpecItem label="温度" value={device.temperature == null ? "—" : `${device.temperature.toFixed(1)}°C`} />
+                  <SpecItem
+                    label="显存"
+                    value={`${device.memoryUsed == null ? "—" : formatBytes(device.memoryUsed)} / ${device.memoryTotal == null ? "—" : formatBytes(device.memoryTotal)}`}
+                    wide
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* 网络卡横贯整行：实时速率 + 累计量。 */}
         <section className="instance-bento-card instance-bento-network">

@@ -841,8 +841,22 @@ body::after {
   grid-column: span 4;
 }
 
-.instance-bento-network {
+.instance-bento-network,
+.instance-bento-gpu {
   grid-column: 1 / -1;
+}
+
+.instance-gpu-devices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.instance-gpu-device {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
 }
 
 /* 运行时长是全页第一落点，字号压过其余一切。 */

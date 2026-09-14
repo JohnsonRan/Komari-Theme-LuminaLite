@@ -210,7 +210,7 @@ function getSeriesLabel(key: string) {
   return SERIES_LABELS[key] ?? key;
 }
 
-function pointFromNode(node: NodeMetrics): ChartPoint {
+export function pointFromNode(node: NodeMetrics): ChartPoint {
   return {
     time: node.updatedAt > 0 ? node.updatedAt / 1000 : Date.now() / 1000,
     cpu: node.cpuPct,
@@ -225,10 +225,11 @@ function pointFromNode(node: NodeMetrics): ChartPoint {
     connections: node.connectionsTcp,
     udp: node.connectionsUdp,
     process: node.process,
-    gpu: node.gpuPct,
-    gpuMem: node.gpuMemTotal > 0 ? (node.gpuMemUsed / node.gpuMemTotal) * 100 : 0,
-    gpuMemBytes: node.gpuMemUsed,
-    gpuTemp: node.gpuTemp,
+    gpu: node.gpu?.usage ?? null,
+    gpuMem: node.gpu?.memoryUsed != null && (node.gpu.memoryTotal ?? 0) > 0
+      ? (node.gpu.memoryUsed / node.gpu.memoryTotal!) * 100 : null,
+    gpuMemBytes: node.gpu?.memoryUsed ?? null,
+    gpuTemp: node.gpu?.temperature ?? null,
   };
 }
 
@@ -254,7 +255,7 @@ type ChartSourceRecord = Pick<
 >;
 
 // 记录自带 total 为 0（新版后端不再存储 *_total 序列）时回退到节点注册时的静态总量。
-function pointFromRecord(
+export function pointFromRecord(
   record: ChartSourceRecord,
   time: number,
   fallbackRamTotal: number,
@@ -278,10 +279,11 @@ function pointFromRecord(
     connections: record.connections,
     udp: record.connections_udp,
     process: record.process,
-    gpu: record.gpu,
-    gpuMem: record.gpu_memory_total > 0 ? (record.gpu_memory_used / record.gpu_memory_total) * 100 : 0,
-    gpuMemBytes: record.gpu_memory_used,
-    gpuTemp: record.gpu_temperature,
+    gpu: record.gpu ?? null,
+    gpuMem: record.gpu_memory_used != null && (record.gpu_memory_total ?? 0) > 0
+      ? (record.gpu_memory_used / record.gpu_memory_total!) * 100 : null,
+    gpuMemBytes: record.gpu_memory_used ?? null,
+    gpuTemp: record.gpu_temperature ?? null,
   };
 }
 
@@ -663,7 +665,7 @@ export function LoadChart({
   // 新版后端不再存储 memory.total / swap.total / disk.total 指标序列，
   // 历史记录的 total 字段为 0 时回退到节点注册时的静态总量。
   const meta = useNodeMeta(uuid);
-  const hasGpu = Boolean(meta?.gpu_name && meta.gpu_name !== "None");
+  const hasGpu = Boolean(meta?.gpu_name.trim() && !/^none$/i.test(meta.gpu_name.trim()));
   const { resolvedAppearance } = usePreferences();
   const themeSettings = useThemeSettings();
   const useBytesUnit = themeSettings.isReady && themeSettings.detailChartUnit === "bytes";
@@ -803,16 +805,13 @@ export function LoadChart({
     [points],
   );
 
-  // 即使节点标有 GPU 型号，若无实际数据上报（gpu_memory_total 始终为 0）
-  // 则 GPU 图表无意义，直接隐藏。
-  const hasGpuData = useMemo(() => {
-    if (!hasGpu) return false;
-    // gpu_memory_total > 0 是 GPU 监控活跃的最可靠信号
-    if (historyRecords.some(({ record }) => record.gpu_memory_total > 0)) return true;
-    if (recentPoints.some((p) => (p.gpuMemBytes ?? 0) > 0 || (p.gpuTemp ?? 0) > 0)) return true;
-    if (isRealtime && node && node.gpuMemTotal > 0) return true;
-    return false;
-  }, [hasGpu, historyRecords, recentPoints, isRealtime, node]);
+  // 各指标独立判断；仅使用率（包括空闲 0%）也应显示，缺失显存/温度不画零线。
+  // 旧状态接口给无 GPU 节点也返回 gpu: 0，所以零值历史还需要设备身份佐证。
+  const gpuDeviceKnown = hasGpu || (node?.gpu?.count ?? 0) > 0 ||
+    (node?.gpu != null && node.gpu.count !== 0);
+  const hasGpuUsageData = points.some((point) => point.gpu != null && (point.gpu > 0 || gpuDeviceKnown));
+  const hasGpuMemoryData = points.some((point) => point.gpuMem != null || (point.gpuMemBytes ?? 0) > 0);
+  const hasGpuTemperatureData = points.some((point) => point.gpuTemp != null && (point.gpuTemp > 0 || gpuDeviceKnown));
 
   const sourceRecordCount = historyRecords.length;
   const wasDownsampled = !isRealtime && sourceRecordCount > getHistoryRenderLimit(hours);
@@ -843,7 +842,7 @@ export function LoadChart({
   const lastDiskTotal = (lastRecord?.disk_total ?? 0) > 0 ? lastRecord!.disk_total : fallbackDiskTotal;
   const lastGpuMemUsed = lastRecord?.gpu_memory_used ?? 0;
   const lastGpuMemTotal =
-    (lastRecord?.gpu_memory_total ?? 0) > 0 ? lastRecord!.gpu_memory_total : (node?.gpuMemTotal ?? 0);
+    (lastRecord?.gpu_memory_total ?? 0) > 0 ? lastRecord!.gpu_memory_total! : (node?.gpuMemTotal ?? 0);
 
   if (isLoading && !recentPoints.length) {
     return <InstanceChartLoading title="负载图表" />;
@@ -1054,15 +1053,13 @@ export function LoadChart({
           colors={PROCESS_COLORS}
           axisKind="count"
         />
-        {hasGpuData && (
+        {hasGpuUsageData && (
           <ChartCard
             {...sharedChartProps}
             icon={<CircuitBoard size={13} />}
             title="GPU 使用率"
             value={
-              isRealtime && node
-                ? `${node.gpuPct.toFixed(2)}%`
-                : `${(points[points.length - 1]?.gpu ?? 0).toFixed(2)}%`
+              formatTooltipValue("gpu", isRealtime && node ? node.gpu?.usage : points[points.length - 1]?.gpu, "%", networkUnit)
             }
             note={meta?.gpu_name || "使用率"}
             keys={GPU_USAGE_KEYS}
@@ -1071,19 +1068,21 @@ export function LoadChart({
             axisKind="percent"
           />
         )}
-        {hasGpuData && (
+        {hasGpuMemoryData && (
           <ChartCard
             {...sharedChartProps}
             icon={<MemoryStick size={13} />}
             title="GPU 显存"
             value={
               isRealtime && node
-                ? node.gpuMemTotal > 0
-                  ? `${formatBytes(node.gpuMemUsed)} / ${formatBytes(node.gpuMemTotal)}`
-                  : formatBytes(node.gpuMemUsed)
-                : lastGpuMemTotal > 0
-                  ? `${formatBytes(lastGpuMemUsed)} / ${formatBytes(lastGpuMemTotal)}`
-                  : formatBytes(lastGpuMemUsed)
+                ? node.gpu?.memoryUsed == null ? "—"
+                  : node.gpuMemTotal > 0
+                    ? `${formatBytes(node.gpuMemUsed)} / ${formatBytes(node.gpuMemTotal)}`
+                    : formatBytes(node.gpuMemUsed)
+                : lastRecord?.gpu_memory_used == null ? "—"
+                  : lastGpuMemTotal > 0
+                    ? `${formatBytes(lastGpuMemUsed)} / ${formatBytes(lastGpuMemTotal)}`
+                    : formatBytes(lastGpuMemUsed)
             }
             note={meta?.gpu_name || "显存占用"}
             keys={useBytesUnit ? GPU_BYTES_KEYS : GPU_MEM_KEYS}
@@ -1092,17 +1091,13 @@ export function LoadChart({
             axisKind={useBytesUnit ? "bytes" : "percent"}
           />
         )}
-        {hasGpuData && (
+        {hasGpuTemperatureData && (
           <ChartCard
             {...sharedChartProps}
             icon={<Thermometer size={13} />}
             title="GPU 温度"
             value={
-              isRealtime && node
-                ? node.gpuTemp > 0 ? `${node.gpuTemp.toFixed(1)}°C` : "—"
-                : (points[points.length - 1]?.gpuTemp ?? 0) > 0
-                  ? `${(points[points.length - 1]?.gpuTemp ?? 0).toFixed(1)}°C`
-                  : "—"
+              formatTooltipValue("gpuTemp", isRealtime && node ? node.gpu?.temperature : points[points.length - 1]?.gpuTemp, "°C", networkUnit)
             }
             note={meta?.gpu_name || "温度"}
             keys={GPU_TEMP_KEYS}

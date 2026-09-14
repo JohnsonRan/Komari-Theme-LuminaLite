@@ -260,7 +260,7 @@ function toTimestamp(value: string | number | undefined): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function mergeRealtime(
+export function mergeRealtime(
   metrics: NodeMetrics,
   rt: NodeRealtime,
   online: boolean,
@@ -298,6 +298,9 @@ function mergeRealtime(
     }
   }
 
+  const nextGpu = rt.gpu ?? metrics.gpu;
+  const gpu = equalGpuReports(metrics.gpu, nextGpu) ? metrics.gpu : nextGpu;
+
   return {
     online,
     cpuPct: rt.cpu?.usage ?? 0,
@@ -322,15 +325,31 @@ function mergeRealtime(
     connectionsUdp: rt.connections?.udp ?? 0,
     updatedAt: updatedAt > 0 ? updatedAt : metrics.updatedAt,
     pingStats,
-    // WS 帧未携带 GPU 字段时保留上一帧的值，避免偶发缺样导致 GPU 指标闪零。
-    gpuPct: rt.gpu?.usage ?? metrics.gpuPct,
-    gpuMemUsed: rt.gpu?.memoryUsed ?? metrics.gpuMemUsed,
-    gpuMemTotal: rt.gpu?.memoryTotal ?? metrics.gpuMemTotal,
-    gpuTemp: rt.gpu?.temperature ?? metrics.gpuTemp,
+    // 整个 GPU 报告缺失时保留缓存；报告内缺失指标不能沿用过期值。
+    gpu,
+    gpuPct: gpu?.usage ?? 0,
+    gpuMemUsed: gpu?.memoryUsed ?? 0,
+    gpuMemTotal: gpu?.memoryTotal ?? 0,
+    gpuTemp: gpu?.temperature ?? 0,
   };
 }
 
-function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
+function equalGpuReports(a: NodeRealtime["gpu"], b: NodeRealtime["gpu"]) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.count === b.count && a.usage === b.usage &&
+    a.memoryUsed === b.memoryUsed && a.memoryTotal === b.memoryTotal &&
+    a.temperature === b.temperature &&
+    (a.devices?.length ?? 0) === (b.devices?.length ?? 0) &&
+    (a.devices?.every((device, index) => {
+      const other = b.devices?.[index];
+      return other != null && device.name === other.name && device.usage === other.usage &&
+        device.memoryUsed === other.memoryUsed && device.memoryTotal === other.memoryTotal &&
+        device.temperature === other.temperature;
+    }) ?? true);
+}
+
+export function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
   return (
     a.online === b.online &&
     a.cpuPct === b.cpuPct &&
@@ -358,7 +377,8 @@ function shallowEqualMetrics(a: NodeMetrics, b: NodeMetrics) {
     a.gpuPct === b.gpuPct &&
     a.gpuMemUsed === b.gpuMemUsed &&
     a.gpuMemTotal === b.gpuMemTotal &&
-    a.gpuTemp === b.gpuTemp
+    a.gpuTemp === b.gpuTemp &&
+    equalGpuReports(a.gpu, b.gpu)
   );
 }
 
@@ -585,7 +605,7 @@ function commit(next: State, touches: CommitTouches = {}) {
 }
 
 // ─── WebSocket 实时通道 ───────────────────────────────────────────────────────
-// 与默认主题相同，通过 /api/clients WebSocket 获取完整 v1.Report（含 GPU）。
+// 与默认主题相同，通过 /api/clients WebSocket 获取嵌套报告（含 GPU）。
 // 这是实时数据的唯一来源，不作 RPC 降级。
 
 function wsIsFresh(): boolean {

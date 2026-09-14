@@ -94,9 +94,22 @@ export interface NodeInfo {
   updated_at: string;
 }
 
+export interface GpuDevice {
+  name: string;
+  usage?: number;
+  memoryUsed?: number;
+  memoryTotal?: number;
+  temperature?: number;
+}
+
+export interface GpuReport extends Omit<GpuDevice, "name"> {
+  count?: number;
+  devices?: GpuDevice[];
+}
+
 export interface NodeRealtime {
   cpu: { usage: number };
-  gpu?: { usage: number; memoryUsed?: number; memoryTotal?: number; temperature?: number };
+  gpu?: GpuReport;
   ram: { total: number; used: number };
   swap: { total: number; used: number };
   load: { load1: number; load5: number; load15: number };
@@ -154,6 +167,8 @@ export interface NodeMetrics {
    * 未绑定的节点为 null —— 站长没配置延迟检测，卡片就不该显示任何延迟数值。
    */
   pingStats: Record<string, PingRealtimeStats> | null;
+  /** 原始 GPU 可用性与逐卡信息；缺失指标不等于 0。 */
+  gpu?: GpuReport;
   /** GPU 使用率 (%)，无 GPU 或未上报时为 0。 */
   gpuPct: number;
   /** GPU 显存已用 (bytes)，无 GPU 或未上报时为 0。 */
@@ -320,10 +335,10 @@ export interface Me {
 export const LoadRecordSchema = z
   .object({
     cpu: z.number().default(0),
-    gpu: z.number().default(0),
-    gpu_memory_used: z.number().default(0),
-    gpu_memory_total: z.number().default(0),
-    gpu_temperature: z.number().default(0),
+    gpu: z.number().optional(),
+    gpu_memory_used: z.number().optional(),
+    gpu_memory_total: z.number().optional(),
+    gpu_temperature: z.number().optional(),
     ram: z.number().default(0),
     ram_total: z.number().default(0),
     swap: z.number().default(0),
@@ -346,10 +361,10 @@ export const LoadRecordSchema = z
 
 export interface LoadRecord {
   cpu: number;
-  gpu: number;
-  gpu_memory_used: number;
-  gpu_memory_total: number;
-  gpu_temperature: number;
+  gpu?: number;
+  gpu_memory_used?: number;
+  gpu_memory_total?: number;
+  gpu_temperature?: number;
   ram: number;
   ram_total: number;
   swap: number;
