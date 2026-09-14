@@ -35,6 +35,7 @@ import {
   interpolateMetricGaps,
 } from "./chartData";
 import { formatByteRateLabel, formatBytes, formatTrafficRateLabel } from "@/utils/format";
+import { getReportedGpuLabel } from "@/utils/gpu";
 import { historyChartRangeSeconds, historyCoverageLabel } from "@/utils/historyRange";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -804,6 +805,11 @@ export function LoadChart({
     [points],
   );
 
+  // 历史聚合数据没有设备身份，不能借用当前静态清单或实时设备名称。
+  const gpuLabel = isRealtime
+    ? getReportedGpuLabel(node?.gpu) ?? "实时采集设备汇总"
+    : "历史采集设备汇总";
+
   // 型号只代表安装了 GPU，不代表 Agent 能采集它。旧记录/近期缓冲会用 gpu: 0 占位。
   // 只有真实 Metric 样本、实时使用率或其他 GPU 遥测，才能把零值视为空闲而非缺失。
   const hasGpuMemoryData = points.some((point) => point.gpuMem != null || (point.gpuMemBytes ?? 0) > 0);
@@ -1062,7 +1068,7 @@ export function LoadChart({
             value={
               formatTooltipValue("gpu", isRealtime && node ? node.gpu?.usage : points[points.length - 1]?.gpu, "%", networkUnit)
             }
-            note={meta?.gpu_name || "使用率"}
+            note={gpuLabel}
             keys={GPU_USAGE_KEYS}
             colors={GPU_USAGE_COLORS}
             unit="%"
@@ -1085,7 +1091,7 @@ export function LoadChart({
                     ? `${formatBytes(lastGpuMemUsed)} / ${formatBytes(lastGpuMemTotal)}`
                     : formatBytes(lastGpuMemUsed)
             }
-            note={meta?.gpu_name || "显存占用"}
+            note={gpuLabel}
             keys={useBytesUnit ? GPU_BYTES_KEYS : GPU_MEM_KEYS}
             colors={GPU_MEM_COLORS}
             unit={useBytesUnit ? "" : "%"}
@@ -1100,7 +1106,7 @@ export function LoadChart({
             value={
               formatTooltipValue("gpuTemp", isRealtime && node ? node.gpu?.temperature : points[points.length - 1]?.gpuTemp, "°C", networkUnit)
             }
-            note={meta?.gpu_name || "温度"}
+            note={gpuLabel}
             keys={GPU_TEMP_KEYS}
             colors={GPU_TEMP_COLORS}
             unit="°C"

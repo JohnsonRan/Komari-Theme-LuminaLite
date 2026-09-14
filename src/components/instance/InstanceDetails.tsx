@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 import { useNodeMeta, useNodeMetrics } from "@/hooks/useNode";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { formatByteRate, formatBytes, formatTrafficRate, formatUptimeDays } from "@/utils/format";
+import { getReportedGpuLabel } from "@/utils/gpu";
 import { Flag } from "@/components/ui/Flag";
 import { IpStackBadges } from "@/components/node/IpStackBadges";
 import { InstancePanel } from "./InstancePanel";
@@ -61,6 +62,7 @@ export function InstanceDetails({
   const cpuLine = `${meta.cpu_name || "—"}${meta.cpu_cores > 0 ? ` ×${meta.cpu_cores}` : ""}`;
   const hasGpu = Boolean(meta.gpu_name.trim() && !/^none$/i.test(meta.gpu_name.trim()));
   const gpuDevices = metrics.gpu?.devices ?? [];
+  const reportedGpuLabel = getReportedGpuLabel(metrics.gpu);
 
   return (
     <InstancePanel
@@ -137,7 +139,11 @@ export function InstanceDetails({
               }
               primary
             />
-            {hasGpu && <SpecItem label="显卡" value={meta.gpu_name} wide />}
+            {reportedGpuLabel ? (
+              <SpecItem label="监控显卡" value={reportedGpuLabel} wide />
+            ) : hasGpu ? (
+              <SpecItem label="系统识别显卡" value={meta.gpu_name} wide />
+            ) : null}
           </div>
         </section>
 

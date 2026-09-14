@@ -107,6 +107,60 @@ describe("GPU chart availability", () => {
 });
 
 describe("GPU details and management entry", () => {
+  it("labels live charts and hardware from the sampled GPU instead of the static inventory", () => {
+    // 真实响应形状：静态枚举带 ×2 和 AMD，但详细上报仅包含一张 RTX 5080。
+    state.meta.gpu_name = "NVIDIA GeForce RTX 5080 × 2, AMD Radeon(TM) Graphics";
+    state.node.gpu = { count: 1, usage: 93, memoryUsed: 12028215296, memoryTotal: 17094934528, temperature: 62,
+      devices: [{ name: "NVIDIA GeForce RTX 5080", usage: 93, memoryUsed: 12028215296, memoryTotal: 17094934528, temperature: 62 }] };
+    state.records = [LoadRecordSchema.parse({ time, gpu: 93, gpu_memory_used: 12028215296, gpu_memory_total: 17094934528, gpu_temperature: 62 })];
+    const details = renderToStaticMarkup(<InstanceDetails uuid="node-1" />);
+    expect(details).toContain("监控显卡");
+    expect(details).toContain("GPU 设备 · 1");
+    for (const html of [details, renderToStaticMarkup(<LoadChart uuid="node-1" hours={0} />)]) {
+      expect(html).toContain("NVIDIA GeForce RTX 5080");
+      expect(html).not.toContain("AMD Radeon");
+      expect(html).not.toContain("× 2");
+    }
+  });
+
+  it("does not assign current device identities to historical aggregate samples", () => {
+    state.meta.gpu_name = "NVIDIA GeForce RTX 5080 × 2, AMD Radeon(TM) Graphics";
+    state.node.gpu = { count: 1, usage: 20, devices: [{ name: "NVIDIA GeForce RTX 5080", usage: 20 }] };
+    state.records = [LoadRecordSchema.parse({ time, gpu: 20 })];
+    const html = renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />);
+    expect(html).toContain("历史采集设备汇总");
+    expect(html).not.toContain("NVIDIA GeForce");
+    expect(html).not.toContain("AMD Radeon");
+  });
+
+  it("preserves two reported devices even when they have the same model name", () => {
+    state.node.gpu = { count: 2, usage: 0, devices: [
+      { name: "NVIDIA GeForce RTX 5080", usage: 0 },
+      { name: "NVIDIA GeForce RTX 5080", usage: 0 },
+    ] };
+    const details = renderToStaticMarkup(<InstanceDetails uuid="node-1" />);
+    expect(details).toContain("GPU 设备 · 2");
+    expect(details.match(/NVIDIA GeForce RTX 5080/g)).toHaveLength(2);
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={0} />)).toContain("2 张 GPU 汇总");
+  });
+
+  it("explicitly labels inventory-only information when no GPU report is available", () => {
+    state.meta.gpu_name = "Integrated GPU";
+    const html = renderToStaticMarkup(<InstanceDetails uuid="node-1" />);
+    expect(html).toContain("系统识别显卡");
+    expect(html).toContain("Integrated GPU");
+    expect(html).not.toContain("监控显卡");
+  });
+
+  it("does not guess a reported device model from static inventory when its name is unavailable", () => {
+    state.meta.gpu_name = "Unrelated static GPU";
+    state.node.gpu = { count: 1, usage: 0 };
+    for (const html of [renderToStaticMarkup(<InstanceDetails uuid="node-1" />), renderToStaticMarkup(<LoadChart uuid="node-1" hours={0} />)]) {
+      expect(html).toContain("1 张 GPU");
+      expect(html).not.toContain("Unrelated static GPU");
+    }
+  });
+
   it("renders separate devices, valid zeros and unknown values with escaped model names", () => {
     state.node.gpu = { count: 2, devices: [
       { name: "GPU <A>", usage: 0, memoryUsed: 0, memoryTotal: 1024, temperature: 0 },
