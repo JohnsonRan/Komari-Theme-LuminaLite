@@ -3,10 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Run independently of app chunks; old PWA caches can break their loading. -->
+    <script src="/registerSW.js?luminalite-pwa=off"></script>
     <meta
       name="keywords"
       content="Komari-Theme-LuminaLite, LuminaLite, server monitor, real-time server status, server performance dashboard, monitoring tool" />
     <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="" />
+    <link rel="apple-touch-icon" href="/favicon.ico" />
     <meta property="og:title" content="Komari-Theme-LuminaLite" />
     <meta property="og:description" content="A Komari monitor theme." />
     <meta name="twitter:card" content="summary_large_image" />

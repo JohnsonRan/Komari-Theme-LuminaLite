@@ -17,7 +17,7 @@ describe("Komari site metadata integration", () => {
     expect(count(html, DESCRIPTION_PLACEHOLDER)).toBe(1);
   });
 
-  it("only synchronizes social metadata at runtime", () => {
+  it("preserves server-rendered title and description while synchronizing derived metadata", () => {
     const source = readFileSync(
       resolve(process.cwd(), "src/hooks/useSiteMetadata.ts"),
       "utf8",
@@ -28,5 +28,13 @@ describe("Komari site metadata integration", () => {
     expect(source).toContain("readMeta('meta[name=\"description\"]')");
     expect(source).toContain("og:title");
     expect(source).toContain("twitter:description");
+    expect(source).toContain("apple-mobile-web-app-title");
+  });
+
+  it("uses the backend favicon for the Apple home-screen icon, not the default manifest", () => {
+    const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
+    expect(html).toContain('<link rel="apple-touch-icon" href="/favicon.ico" />');
+    expect(html).toContain('<meta name="apple-mobile-web-app-capable" content="yes" />');
+    expect(html).not.toContain('href="/manifest.webmanifest"');
   });
 });
