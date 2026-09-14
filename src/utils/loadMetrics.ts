@@ -91,6 +91,7 @@ export function mergeLoadMetricSeries(series: LoadMetricSeries[]): LoadRecord[] 
       const key = `${item.client}\u0000${timeMs}`;
       const record = records.get(key) ?? emptyLoadRecord(item.client, point.time);
       records.set(key, record);
+      if (field === "gpu") record.gpu_usage_reported = true;
 
       if (isGpuDevice && (GPU_SUM_FIELDS.has(field) || GPU_AVG_FIELDS.has(field))) {
         // 多 GPU 设备聚合

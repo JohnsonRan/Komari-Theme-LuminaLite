@@ -665,7 +665,6 @@ export function LoadChart({
   // 新版后端不再存储 memory.total / swap.total / disk.total 指标序列，
   // 历史记录的 total 字段为 0 时回退到节点注册时的静态总量。
   const meta = useNodeMeta(uuid);
-  const hasGpu = Boolean(meta?.gpu_name.trim() && !/^none$/i.test(meta.gpu_name.trim()));
   const { resolvedAppearance } = usePreferences();
   const themeSettings = useThemeSettings();
   const useBytesUnit = themeSettings.isReady && themeSettings.detailChartUnit === "bytes";
@@ -805,13 +804,15 @@ export function LoadChart({
     [points],
   );
 
-  // 各指标独立判断；仅使用率（包括空闲 0%）也应显示，缺失显存/温度不画零线。
-  // 旧状态接口给无 GPU 节点也返回 gpu: 0，所以零值历史还需要设备身份佐证。
-  const gpuDeviceKnown = hasGpu || (node?.gpu?.count ?? 0) > 0 ||
-    (node?.gpu != null && node.gpu.count !== 0);
-  const hasGpuUsageData = points.some((point) => point.gpu != null && (point.gpu > 0 || gpuDeviceKnown));
+  // 型号只代表安装了 GPU，不代表 Agent 能采集它。旧记录/近期缓冲会用 gpu: 0 占位。
+  // 只有真实 Metric 样本、实时使用率或其他 GPU 遥测，才能把零值视为空闲而非缺失。
   const hasGpuMemoryData = points.some((point) => point.gpuMem != null || (point.gpuMemBytes ?? 0) > 0);
-  const hasGpuTemperatureData = points.some((point) => point.gpuTemp != null && (point.gpuTemp > 0 || gpuDeviceKnown));
+  const gpuUsageReported = node?.gpu?.usage != null || hasGpuMemoryData ||
+    historyRecords.some(({ record }) => record.gpu_usage_reported === true || (record.gpu_memory_total ?? 0) > 0) ||
+    points.some((point) => (point.gpu ?? 0) > 0 || (point.gpuTemp ?? 0) > 0);
+  const hasGpuUsageData = gpuUsageReported && points.some((point) => point.gpu != null);
+  const hasGpuTemperatureData = points.some((point) => point.gpuTemp != null &&
+    (point.gpuTemp > 0 || node?.gpu?.temperature != null || gpuUsageReported));
 
   const sourceRecordCount = historyRecords.length;
   const wasDownsampled = !isRealtime && sourceRecordCount > getHistoryRenderLimit(hours);

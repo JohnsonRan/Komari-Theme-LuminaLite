@@ -75,7 +75,8 @@ const MetricSeriesSchema = z
     tags: z.record(z.string(), z.string()).optional(),
     tag: z.record(z.string(), z.string()).optional(),
     interval_seconds: z.number().default(0),
-    points: z.array(MetricPointSchema).default([]),
+    // Go 的空切片可能序列化为 null；空序列不是接口失败，不能因此回退旧记录。
+    points: z.array(MetricPointSchema).nullish().transform((value) => value ?? []),
   })
   .passthrough();
 
@@ -83,7 +84,7 @@ const MetricQueryResponseSchema = z
   .object({
     start: z.string().optional(),
     end: z.string().optional(),
-    series: z.array(MetricSeriesSchema).default([]),
+    series: z.array(MetricSeriesSchema).nullish().transform((value) => value ?? []),
   })
   .passthrough();
 

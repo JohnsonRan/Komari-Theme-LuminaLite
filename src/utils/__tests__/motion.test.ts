@@ -81,6 +81,13 @@ describe("motion tokens stay aligned with the JS constants", () => {
     }
   });
 
+  it("keeps mobile detail entry at the top instead of auto-aligning charts", () => {
+    expect(instanceSource).toMatch(
+      /const alignCharts = useCallback\([\s\S]*?requestAnimationFrame\([\s\S]*?if \(window\.matchMedia\("\(max-width: 720px\)"\)\.matches\) return;[\s\S]*?element\.scrollIntoView/,
+    );
+    expect(instanceSource).toMatch(/window\.scrollTo\(0, 0\);\s*\}, \[uuid\]\)/);
+  });
+
   it("replays detail split and chart-pane transitions on every switch", () => {
     expect(instanceSource).toContain(
       'clsx("instance-page-main", splitLayout && "instance-node-enter")',

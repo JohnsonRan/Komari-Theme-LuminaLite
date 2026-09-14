@@ -172,6 +172,28 @@ describe("metric boundary repair in the API adapter", () => {
     );
   });
 
+  it("treats null metric points as no samples without falling back to placeholder records", async () => {
+    // 真实 1.5.0-fix1 响应：CPU 有样本，未采集的 GPU 序列 points 为 null。
+    rpcCallMock.mockImplementation((method: string) => Promise.resolve(method === "public:queryMetrics"
+      ? { series: [
+          metricSeries("cpu.usage", [{ time: START, value: 10, count: 1 }]),
+          { ...metricSeries("gpu.usage", []), points: null },
+        ] }
+      : { count: 1, records: [{ time: START, cpu: 10, gpu: 0 }] }));
+
+    const result = await getLoadRecords("node-a", 1);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].cpu).toBe(10);
+    expect(result.records[0].gpu).toBeUndefined();
+    expect(rpcCallMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a null metric series list as an empty query", async () => {
+    rpcCallMock.mockResolvedValue({ series: null, count: 0, records: [] });
+    expect((await getLoadRecords("node-a", 1)).records).toEqual([]);
+    expect(rpcCallMock).toHaveBeenCalledTimes(1);
+  });
+
   it("skips the metric probe when the traffic compatibility path already failed it", async () => {
     rpcCallMock.mockResolvedValue({ count: 0, records: [] });
 

@@ -78,6 +78,8 @@ export function Instance() {
 
   const alignCharts = useCallback(() => {
     const frame = window.requestAnimationFrame(() => {
+      // 窄屏详情纵向较长，自动对齐图表会覆盖进入/切换节点时的回顶。
+      if (window.matchMedia("(max-width: 720px)").matches) return;
       const element = chartControlsRef.current;
       if (!element) return;
       const rect = element.getBoundingClientRect();

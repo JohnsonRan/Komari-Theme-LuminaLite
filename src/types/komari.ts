@@ -362,6 +362,8 @@ export const LoadRecordSchema = z
 export interface LoadRecord {
   cpu: number;
   gpu?: number;
+  /** Metric API 的有效使用率样本；区别于旧记录接口的占位 gpu: 0。 */
+  gpu_usage_reported?: boolean;
   gpu_memory_used?: number;
   gpu_memory_total?: number;
   gpu_temperature?: number;

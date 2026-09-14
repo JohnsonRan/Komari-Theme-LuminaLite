@@ -2,21 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { InstanceDetails } from "../InstanceDetails";
 import { LoadChart, pointFromNode, pointFromRecord } from "../LoadChart";
-import { LoadRecordSchema, NodeInfoSchema, type NodeMetrics } from "@/types/komari";
+import { LoadRecordSchema, NodeInfoSchema, type LoadRecord, type NodeMetrics } from "@/types/komari";
 import { RecentStatusRecordSchema } from "@/services/api";
 import { mergeLoadMetricSeries } from "@/utils/loadMetrics";
 
 vi.mock("uplot-react", () => ({ default: () => null }));
 vi.mock("@/hooks/useNode", () => ({ useNodeMeta: () => state.meta, useNodeMetrics: () => state.node }));
 vi.mock("@/hooks/useRecords", () => ({ useLoadRecords: () => ({ data: { records: state.records }, refetch: vi.fn() }) }));
-vi.mock("@/hooks/useRecentStatus", () => ({ useRecentStatus: () => ({ data: [] }) }));
+vi.mock("@/hooks/useRecentStatus", () => ({ useRecentStatus: () => ({ data: state.recentRecords }) }));
 vi.mock("@/hooks/useThemeSettings", () => ({ useThemeSettings: () => ({ isReady: true, enableAdminButton: state.adminButton, detailNetworkUnit: "mbs" }) }));
 vi.mock("@/hooks/usePreferences", () => ({ usePreferences: () => ({ resolvedAppearance: "light" }) }));
 
 const time = "2026-09-14T12:00:00Z";
 const state = {
   meta: NodeInfoSchema.parse({ uuid: "node-1", gpu_name: "GPU" }),
-  records: [LoadRecordSchema.parse({ time, gpu: 0 })],
+  records: [LoadRecordSchema.parse({ time, gpu: 0 })] as LoadRecord[],
+  recentRecords: [] as ReturnType<typeof RecentStatusRecordSchema.parse>[],
   adminButton: true,
   node: {
     online: true, cpuPct: 0, ramUsed: 0, ramTotal: 0, ramPct: 0,
@@ -32,6 +33,7 @@ beforeEach(() => {
   state.meta.gpu_name = "GPU";
   state.node.gpu = undefined;
   state.records = [LoadRecordSchema.parse({ time, gpu: 0 })];
+  state.recentRecords = [];
   state.adminButton = true;
 });
 
@@ -63,12 +65,36 @@ describe("GPU chart availability", () => {
     expect(pointFromNode(state.node)).toMatchObject({ gpu: 0, gpuMem: null, gpuMemBytes: null, gpuTemp: null });
   });
 
-  it("shows idle utilization without requiring or inventing memory and temperature graphs", () => {
+  it("shows recorded idle utilization without requiring a model name, memory or temperature", () => {
+    state.meta.gpu_name = "";
+    state.records = mergeLoadMetricSeries([
+      { metricKey: "gpu.usage", client: "node-1", points: [{ time, value: 0, count: 1 }] },
+    ]);
     const html = renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />);
     expect(html).toContain("GPU 使用率");
     expect(html).toContain("0.00%");
     expect(html).not.toContain("GPU 显存");
     expect(html).not.toContain("GPU 温度");
+  });
+
+  it("does not treat a static GPU model as evidence for legacy or recent placeholder zeros", () => {
+    state.meta.gpu_name = "AMD Radeon (TM) Graphics × 2, Microsoft Basic Render Driver";
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />)).not.toContain("GPU 使用率");
+    state.records = [];
+    state.recentRecords = [RecentStatusRecordSchema.parse({ time, gpu: 0 })];
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />)).not.toContain("GPU 使用率");
+  });
+
+  it("keeps idle charts when a live utilization report confirms zero", () => {
+    state.node.gpu = { count: 1, usage: 0 };
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={0} />)).toContain("GPU 使用率");
+  });
+
+  it("keeps legacy GPU data supported by nonzero usage or reported memory", () => {
+    state.records = [LoadRecordSchema.parse({ time, gpu: 20 })];
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />)).toContain("GPU 使用率");
+    state.records = [LoadRecordSchema.parse({ time, gpu: 0, gpu_memory_total: 1024, gpu_memory_used: 0 })];
+    expect(renderToStaticMarkup(<LoadChart uuid="node-1" hours={1} />)).toContain("GPU 使用率");
   });
 
   it("hides missing reports and zero placeholders from nodes without a GPU", () => {
