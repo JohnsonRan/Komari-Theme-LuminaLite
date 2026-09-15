@@ -1,19 +1,14 @@
 import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import {
   buildTodayConnectionMetricSamples,
-  buildTodayConnectionRecordSamples,
   buildTodayTrafficMetricSamples,
-  buildTodayTrafficRecordSamples,
   summarizeTodayTrafficMetrics,
-  summarizeTodayTrafficRecords,
   type TodayConnectionSample,
   type TodayTrafficSample,
   type TodayTrafficStat,
 } from "@/utils/trafficStats";
 
-const FALLBACK_CONCURRENCY = 8;
-const OPTIONAL_METRIC_TIMEOUT_MS = 6_000;
-const FALLBACK_REQUEST_TIMEOUT_MS = 8_000;
+const METRIC_TIMEOUT_MS = 6_000;
 const TRAFFIC_STATS_REFRESH_MS = 5 * 60 * 1000;
 
 export interface TodayTrafficStatsResponse {
@@ -23,54 +18,12 @@ export interface TodayTrafficStatsResponse {
   rangeStartMs: number;
   rangeEndMs: number;
   intervalSeconds?: number;
-  source: "metrics" | "records";
 }
 
 export function localDayStartMs(now: number) {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   return start.getTime();
-}
-
-async function loadRecordFallback(
-  uuids: string[],
-  startMs: number,
-  endMs: number,
-  signal: AbortSignal,
-): Promise<
-  Pick<TodayTrafficStatsResponse, "rows" | "samplesByUuid" | "connectionSamplesByUuid">
-> {
-  const { getLoadRecords } = await import("@/services/api");
-  const rows: TodayTrafficStat[] = [];
-  const samplesByUuid: Record<string, TodayTrafficSample[]> = {};
-  const connectionSamplesByUuid: Record<string, TodayConnectionSample[]> = {};
-  for (let index = 0; index < uuids.length; index += FALLBACK_CONCURRENCY) {
-    const batch = uuids.slice(index, index + FALLBACK_CONCURRENCY);
-    const responses = await Promise.all(
-      batch.map(async (uuid) => {
-        const data = await getLoadRecords(uuid, 24, {
-          signal,
-          timeout: FALLBACK_REQUEST_TIMEOUT_MS,
-          // 聚合接口刚刚失败过，兼容路径直接读 records，避免每台节点重复探测。
-          skipMetricQuery: true,
-        });
-        return {
-          row: summarizeTodayTrafficRecords(uuid, data.records, startMs, endMs),
-          samples: buildTodayTrafficRecordSamples(data.records, startMs, endMs),
-          connectionSamples: buildTodayConnectionRecordSamples(data.records, startMs, endMs),
-        };
-      }),
-    );
-    for (let offset = 0; offset < responses.length; offset += 1) {
-      const uuid = batch[offset];
-      const response = responses[offset];
-      if (!uuid || !response) continue;
-      rows.push(response.row);
-      samplesByUuid[uuid] = response.samples;
-      connectionSamplesByUuid[uuid] = response.connectionSamples;
-    }
-  }
-  return { rows, samplesByUuid, connectionSamplesByUuid };
 }
 
 function getTodayTrafficQueryOptions(uuids: string[], now: number) {
@@ -82,41 +35,29 @@ function getTodayTrafficQueryOptions(uuids: string[], now: number) {
     queryKey: ["traffic-stats", "today", startMs, uuidSignature],
     queryFn: async ({ signal }): Promise<TodayTrafficStatsResponse> => {
       const endMs = Date.now();
-      try {
-        const { getTodayTrafficMetrics } = await import("@/services/api");
-        const data = await getTodayTrafficMetrics(stableUuids, startMs, endMs, {
-          signal,
-          timeout: OPTIONAL_METRIC_TIMEOUT_MS,
-        });
-        return {
-          rows: summarizeTodayTrafficMetrics(data.series, stableUuids),
-          samplesByUuid: Object.fromEntries(
-            stableUuids.map((uuid) => [
-              uuid,
-              buildTodayTrafficMetricSamples(data.series, uuid),
-            ]),
-          ),
-          connectionSamplesByUuid: Object.fromEntries(
-            stableUuids.map((uuid) => [
-              uuid,
-              buildTodayConnectionMetricSamples(data.series, uuid),
-            ]),
-          ),
-          rangeStartMs: data.rangeStartMs,
-          rangeEndMs: data.rangeEndMs,
-          intervalSeconds: data.intervalSeconds,
-          source: "metrics",
-        };
-      } catch (error) {
-        if (signal.aborted) throw error;
-        const fallback = await loadRecordFallback(stableUuids, startMs, endMs, signal);
-        return {
-          ...fallback,
-          rangeStartMs: startMs,
-          rangeEndMs: endMs,
-          source: "records",
-        };
-      }
+      const { getTodayTrafficMetrics } = await import("@/services/api");
+      const data = await getTodayTrafficMetrics(stableUuids, startMs, endMs, {
+        signal,
+        timeout: METRIC_TIMEOUT_MS,
+      });
+      return {
+        rows: summarizeTodayTrafficMetrics(data.series, stableUuids),
+        samplesByUuid: Object.fromEntries(
+          stableUuids.map((uuid) => [
+            uuid,
+            buildTodayTrafficMetricSamples(data.series, uuid),
+          ]),
+        ),
+        connectionSamplesByUuid: Object.fromEntries(
+          stableUuids.map((uuid) => [
+            uuid,
+            buildTodayConnectionMetricSamples(data.series, uuid),
+          ]),
+        ),
+        rangeStartMs: data.rangeStartMs,
+        rangeEndMs: data.rangeEndMs,
+        intervalSeconds: data.intervalSeconds,
+      };
     },
     enabled: stableUuids.length > 0,
     staleTime: 60_000,

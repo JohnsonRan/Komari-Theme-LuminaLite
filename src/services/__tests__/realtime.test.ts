@@ -123,7 +123,9 @@ describe("GPU report pipeline", () => {
   it("keeps idle utilization without inventing missing memory or temperature", () => {
     expect(merge({ gpu: { count: 1, average_usage: 0 } }).gpu)
       .toMatchObject({ count: 1, usage: 0, memoryUsed: undefined, temperature: undefined });
-    expect(normalize({ gpu: 0 }, { ...meta, gpu_name: "AMD" }).gpu?.usage).toBe(0);
+    // 静态 GPU 型号不证明探针正在采集；RPC 的占位 gpu:0 仍是缺样。
+    expect(normalize({ gpu: 0 }, { ...meta, gpu_name: "AMD" }).gpu).toBeUndefined();
+    expect(normalize({ gpu: 0, gpu_count: 1 }).gpu?.usage).toBe(0);
     expect(normalize({ gpu: 0 }).gpu).toBeUndefined();
     expect(normalize({}).gpu).toBeUndefined();
   });

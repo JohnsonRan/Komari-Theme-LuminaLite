@@ -63,15 +63,15 @@ export function Instance() {
   const metricRetentionHours =
     config?.metric_retention_days && config.metric_retention_days > 0
       ? config.metric_retention_days * 24
-      : null;
+      : undefined;
 
   const loadRanges = useMemo(
-    () => buildLoadTimeRangeOptions(metricRetentionHours ?? config?.record_preserve_time),
-    [config?.record_preserve_time, metricRetentionHours],
+    () => buildLoadTimeRangeOptions(metricRetentionHours),
+    [metricRetentionHours],
   );
   const pingRanges = useMemo(
-    () => buildPingTimeRangeOptions(metricRetentionHours ?? config?.ping_record_preserve_time),
-    [config?.ping_record_preserve_time, metricRetentionHours],
+    () => buildPingTimeRangeOptions(metricRetentionHours),
+    [metricRetentionHours],
   );
   const showPingChart = themeSettings.isReady && themeSettings.showPingChart;
   const splitLayout = themeSettings.isReady && themeSettings.detailSplitLayout;

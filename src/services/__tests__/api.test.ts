@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { rpcCallMock } = vi.hoisted(() => ({ rpcCallMock: vi.fn() }));
 
@@ -6,7 +6,7 @@ vi.mock("@/services/rpc2Client", () => ({
   getRpc2Client: () => ({ call: rpcCallMock }),
 }));
 
-import { getLoadRecords, getPingOverview, getPingRecords } from "@/services/api";
+import { getLoadRecords, getNodesLatestStatus, getPingOverview, getPingRecords } from "@/services/api";
 
 const START = "2026-07-15T03:00:00Z";
 const END = "2026-07-15T04:00:00Z";
@@ -102,6 +102,42 @@ function installRpcResponses({ hasGap, rawFails = false }: { hasGap: boolean; ra
   });
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
+describe("current Komari API contract", () => {
+  beforeEach(() => rpcCallMock.mockReset());
+
+  it.each(["load", "ping", "overview"])("propagates %s metric errors without legacy requests", async (kind) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const error = new Error("Method not found: public:queryMetrics");
+    rpcCallMock.mockRejectedValue(error);
+    const request = () => kind === "load" ? getLoadRecords("node-a", 1)
+      : kind === "ping" ? getPingRecords("node-a", 1)
+        : getPingOverview(1, 7, { entityIds: ["node-a"] });
+    await expect(request()).rejects.toBe(error);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(rpcCallMock.mock.calls.every(([method]) => String(method).startsWith("public:"))).toBe(true);
+
+    // 不永久缓存方法缺失；后端恢复/升级后允许正常查询。
+    rpcCallMock.mockResolvedValue({ series: [] });
+    await expect(request()).resolves.toMatchObject({ records: [] });
+  });
+
+  it("reads validated latest status through RPC2 and preserves GPU/ping fields", async () => {
+    const data = { "node-a": { online: true, cpu: 12, gpu_count: 1,
+      gpu_average_usage: 0, gpu_detailed_info: [{ name: "GPU", utilization: 0 }],
+      ping: { "7": { latest: 20, loss: 0 } } } };
+    rpcCallMock.mockResolvedValue(data);
+    const options = { signal: new AbortController().signal, timeout: 6_000 };
+    expect(await getNodesLatestStatus(options)).toEqual(data);
+    expect(rpcCallMock).toHaveBeenCalledWith("common:getNodesLatestStatus", {}, options);
+
+    rpcCallMock.mockResolvedValue({ "node-a": { online: "true" } });
+    await expect(getNodesLatestStatus()).rejects.toThrow("Schema mismatch");
+  });
+});
+
 describe("metric boundary repair in the API adapter", () => {
   beforeEach(() => {
     rpcCallMock.mockReset();
@@ -194,20 +230,18 @@ describe("metric boundary repair in the API adapter", () => {
     expect(rpcCallMock).toHaveBeenCalledTimes(1);
   });
 
-  it("skips the metric probe when the traffic compatibility path already failed it", async () => {
-    rpcCallMock.mockResolvedValue({ count: 0, records: [] });
+  it("forwards timeout and cancellation to metric queries", async () => {
+    rpcCallMock.mockResolvedValue({ series: [] });
+    const options = { signal: new AbortController().signal, timeout: 8_000 };
 
-    const result = await getLoadRecords("node-a", 24, {
-      skipMetricQuery: true,
-      timeout: 8_000,
-    });
+    await getLoadRecords("node-a", 24, options);
+    await getPingRecords("node-a", 24, options);
 
-    expect(result.records).toEqual([]);
-    expect(rpcCallMock).toHaveBeenCalledTimes(1);
-    expect(rpcCallMock).toHaveBeenCalledWith(
-      "common:getRecords",
-      expect.objectContaining({ uuid: "node-a", hours: 24, type: "load" }),
-      { signal: undefined, timeout: 8_000 },
-    );
+    const calls = rpcCallMock.mock.calls.filter(([method]) => method === "public:queryMetrics");
+    expect(calls).toHaveLength(2);
+    for (const [, params, callOptions] of calls) {
+      expect(params).toMatchObject({ entity_ids: ["node-a"], hours: 24 });
+      expect(callOptions).toEqual(options);
+    }
   });
 });

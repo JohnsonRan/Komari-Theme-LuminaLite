@@ -283,14 +283,13 @@ function latestStatus() {
         {
           online: true,
           cpu,
-          gpu: node.gpu_name ? {
-            count: 2,
-            average_usage: (34 + index * 8) / 2,
-            detailed_info: [
-              { name: node.gpu_name, memory_used: 0, memory_total: 40 * GIB, utilization: 0, temperature: 40 },
-              { name: node.gpu_name, memory_used: 18 * GIB, memory_total: 40 * GIB, utilization: 34 + index * 8, temperature: 52 + index * 3 },
-            ],
-          } : undefined,
+          gpu: node.gpu_name ? (34 + index * 8) / 2 : 0,
+          gpu_count: node.gpu_name ? 2 : undefined,
+          gpu_average_usage: node.gpu_name ? (34 + index * 8) / 2 : undefined,
+          gpu_detailed_info: node.gpu_name ? [
+            { name: node.gpu_name, memory_used: 0, memory_total: 40 * GIB, utilization: 0, temperature: 40 },
+            { name: node.gpu_name, memory_used: 18 * GIB, memory_total: 40 * GIB, utilization: 34 + index * 8, temperature: 52 + index * 3 },
+          ] : undefined,
           ram: (node.mem_total * memoryPct) / 100,
           ram_total: node.mem_total,
           swap: (node.swap_total * swapPct) / 100,
@@ -308,9 +307,9 @@ function latestStatus() {
           process: 96 + index * 21,
           connections: 180 + index * 44,
           connections_udp: 12 + index * 3,
-          updated_at: now,
+          time: new Date(now).toISOString(),
           // 内嵌 ping 统计（键为 taskId 字符串，与 pingTasks[].id 对应），
-          // 与生产 WS 帧的 v1.Report 结构一致：后端下发的是全量任务 map，
+          // 与 common:getNodesLatestStatus 一致：后端下发的是全量任务 map，
           // 前端按节点绑定的任务各自取用，所以多任务标签上的延迟都是实时的。
           ping: embeddedPingStats(ping, index, now),
         },
@@ -480,6 +479,40 @@ function pingRecords(uuid?: string, taskId = 1) {
   });
 }
 
+function pingMetricPayload(params: {
+  hours?: number;
+  entity_ids?: string[];
+  metric_keys?: string[];
+  task_id?: number;
+  tags?: { task_id?: string };
+}) {
+  const now = Date.now();
+  const taskId = Number(params.tags?.task_id ?? params.task_id);
+  const tasks = pingTasks.filter((task) => !taskId || task.id === taskId);
+  return {
+    start: new Date(now - (params.hours ?? 1) * 3_600_000).toISOString(),
+    end: new Date(now).toISOString(),
+    series: tasks.flatMap((task) => task.clients
+      .filter((uuid) => !params.entity_ids?.length || params.entity_ids.includes(uuid))
+      .flatMap((uuid) => {
+        const records = pingRecords(uuid, task.id);
+        return (params.metric_keys ?? []).map((metricKey) => ({
+          metric_key: metricKey,
+          entity_id: uuid,
+          tags: { task_id: String(task.id) },
+          interval_seconds: 60,
+          points: records.map((record) => ({
+            time: new Date(record.time).toISOString(),
+            value: metricKey === "ping.loss"
+              ? (record.value < 0 ? 100 : 0)
+              : (record.value < 0 ? null : record.value),
+            count: 1,
+          })),
+        }));
+      })),
+  };
+}
+
 // 后台任务本身声明 clients：首页直接据此显示。Singapore 与 Hong Kong 没有加入
 // 任何任务，用来验证未配置 Ping 的节点完全不渲染延迟区域。
 const UNBOUND_MOCK_NODES = new Set(["singapore-api-01", "hong-kong-cache-01"]);
@@ -509,17 +542,8 @@ function json(data: unknown, init?: ResponseInit) {
   });
 }
 
-// ─── Mock WebSocket（实时通道）─────────────────────────────────────
-// mock 模式下服务端不存在 /api/clients WebSocket。替换 window.WebSocket 为
-// 模拟实现，让 wsStore 走与生产完全相同的 WS 代码路径（send "get" → 收帧）。
-function buildLiveFrame(): string {
-  const status = latestStatus();
-  const online = Object.keys(status).filter(
-    (uuid) => (status[uuid] as { online?: boolean })?.online !== false,
-  );
-  return JSON.stringify({ data: { data: status, online } });
-}
-
+// ─── Mock RPC2 WebSocket ──────────────────────────────────────────
+// 实时状态与历史指标共用 JSON-RPC 传输，和生产保持一致。
 class MockLiveSocket {
   static CONNECTING = 0;
   static OPEN = 1;
@@ -533,9 +557,7 @@ class MockLiveSocket {
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
-  // wsStore 用 on* 属性，但 rpc2Client 用的是 EventTarget 那套 API。只实现前者会让
-  // rpc2Client 的 cleanup() 抛 "ws.removeEventListener is not a function"，
-  // mock 下 RPC2 通道整个用不了。这里把两套接口桥接到同一组回调上。
+  // RPC2 握手用 EventTarget，响应与关闭用 on* 属性，两套接口都要支持。
   private listeners = new Map<string, Set<(event: unknown) => void>>();
 
   addEventListener(type: string, handler: (event: unknown) => void) {
@@ -565,16 +587,6 @@ class MockLiveSocket {
 
   send(data: string) {
     if (this.readyState !== MockLiveSocket.OPEN) return;
-    if (data === "get") {
-      setTimeout(() => {
-        if (this.readyState !== MockLiveSocket.OPEN) return;
-        const frame = { data: buildLiveFrame() };
-        this.onmessage?.(frame);
-        this.emit("message", frame);
-      }, 0);
-      return;
-    }
-
     // rpc2Client 在 WebSocket 可用时把 JSON-RPC 请求发到这里（不可用才回退 HTTP）。
     // 转给同一套 mock fetch 处理，保证两条路给出一样的结果 —— 只补 addEventListener
     // 而不接这一段，rpc2Client 会以为通道可用、请求却石沉大海。
@@ -606,8 +618,7 @@ class MockLiveSocket {
   close() {
     this.readyState = MockLiveSocket.CLOSED;
     this.listeners.clear();
-    // 不触发 onclose：stopWsConnection 会先摘掉回调，不触发可避免
-    // mock 环境误入重连 / 失败计数路径。
+    // 主动关闭只做清理，避免 mock 环境误入重连。
   }
 }
 
@@ -617,7 +628,7 @@ export function installDevMockApi() {
   // （含首页延迟绑定 UI，需要下面的 /api/admin/* mock）。
   const mockLoggedIn =
     new URLSearchParams(window.location.search).get("admin") === "1";
-  // 实时数据走 mock WS（与生产同为唯一数据源，无 RPC 降级）。
+  // 所有 RPC2 请求共用 mock WebSocket/HTTP 响应。
   window.WebSocket = MockLiveSocket as unknown as typeof WebSocket;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -664,9 +675,6 @@ export function installDevMockApi() {
         disable_password_login: false,
         oauth_enable: false,
         private_site: false,
-        record_enabled: true,
-        record_preserve_time: 30,
-        ping_record_preserve_time: 30,
         metric_retention_days: 90,
         custom_head: "",
         custom_body: "",
@@ -718,8 +726,8 @@ export function installDevMockApi() {
         method?: string;
         params?: {
           uuid?: string;
-          type?: string;
           task_id?: number;
+          tags?: { task_id?: string };
           metric_keys?: string[];
           entity_ids?: string[];
           start?: string;
@@ -736,6 +744,8 @@ export function installDevMockApi() {
           result = homeHistoryPayload(payload.params ?? {});
         } else if (metricKeys.some((key) => key === "traffic.up" || key === "traffic.down")) {
           result = trafficMetricPayload(payload.params ?? {});
+        } else if (metricKeys.includes("ping.latency_ms") || metricKeys.includes("ping.loss")) {
+          result = pingMetricPayload(payload.params ?? {});
         } else if (metricKeys.some((key) => key in LOAD_METRIC_TO_FIELD)) {
           // 模拟新版后端：返回 used/rate 类指标，不返回已废弃的 total 类指标。
           result = loadMetricPayload(payload.params ?? {});
@@ -747,25 +757,17 @@ export function installDevMockApi() {
           });
         }
       } else if (payload.method === "public:getPingMetricStats") {
-        // mock 数据仍由兼容 records 接口提供；明确返回 Method not found 才会触发
-        // api.ts 的旧接口回退，不能用空对象伪装成功（那会得到空图表）。
-        return json({
-          jsonrpc: "2.0",
-          id: payload.id,
-          error: { code: -32601, message: `Method not found: ${payload.method}` },
-        });
+        // 区间统计由 API 适配器从同一批 metric 样本推导。
+        result = { stats: [] };
       }
       if (payload.method === "public:getPublicPingTasks") {
         result = pingTasks;
       } else if (payload.method === "common:getNodes") {
         result = Object.fromEntries(nodes.map((node) => [node.uuid, node]));
-      } else if (payload.method === "common:getRecords") {
-        const isPing = payload.params?.type === "ping";
-        const taskId = Number(payload.params?.task_id) || 1;
-        const records = isPing
-          ? pingRecords(payload.params?.uuid, taskId)
-          : loadRecords(payload.params?.uuid ?? nodes[0].uuid);
-        result = { count: records.length, records, tasks: isPing ? pingTasks : [] };
+      } else if (payload.method === "common:getNodesLatestStatus") {
+        result = latestStatus();
+      } else if (payload.method === "common:getNodeRecentStatus") {
+        result = loadRecords(payload.params?.uuid ?? nodes[0].uuid);
       }
       return json({ jsonrpc: "2.0", id: payload.id, result });
     }

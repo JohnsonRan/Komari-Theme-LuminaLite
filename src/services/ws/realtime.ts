@@ -17,7 +17,7 @@ export function asRecord(value: unknown): RealtimePayload {
     : {};
 }
 
-// 旧扁平协议的 connections 是 TCP+UDP 合计。
+// common:getNodesLatestStatus 的 connections 是 TCP+UDP 合计。
 export function resolveFlatConnectionsTcp(payload: RealtimePayload): number {
   if (payload.connections_tcp != null) return asNumber(payload.connections_tcp);
   return Math.max(0, asNumber(payload.connections) - asNumber(payload.connections_udp));
@@ -167,7 +167,6 @@ export function normalizeRealtime(
     gpu: typeof payload.gpu === "object" && payload.gpu !== null
       ? parseGpuReport(asRecord(payload.gpu))
       : payload.gpu_count != null || Array.isArray(payload.gpu_detailed_info) ||
-          (Boolean(meta.gpu_name.trim()) && !/^none$/i.test(meta.gpu_name.trim())) ||
           [payload.gpu, payload.gpu_average_usage, payload.gpu_memory_used, payload.gpu_memory_total, payload.gpu_temperature]
             .some((value) => (gpuNumber(value) ?? 0) > 0)
         ? parseGpuReport({

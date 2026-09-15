@@ -5,7 +5,7 @@ import type {
   PingRealtimeStats,
   TrafficTrendSample,
 } from "@/types/komari";
-import { asRecord, normalizeRealtime } from "@/services/ws/realtime";
+import { normalizeRealtime } from "@/services/ws/realtime";
 
 export { resolveFlatConnectionsTcp } from "@/services/ws/realtime";
 
@@ -78,11 +78,10 @@ const NODE_INFO_REFRESH_INTERVAL_MS = 30_000;
 const IDLE_THRESHOLD_MS = 120_000;
 const IDLE_REFRESH_INTERVAL_MS = 10_000;
 const IDLE_NODE_INFO_INTERVAL_MS = 60_000;
-// WebSocket 实时通道（同默认主题 /api/clients）是实时数据的唯一来源，不作 RPC 降级。
-const WS_RECONNECT_DELAY_MS = 3_000;
-const WS_FRESH_THRESHOLD_MS = 8_000;
+// 复用 RPC2 客户端的 WebSocket/HTTP 传输；不再连接旧实时端点。
+const LIVE_STATUS_TIMEOUT_MS = 6_000;
 // 节点数据超过此阈值未更新时，强制视为离线，即使用户端 onlineSet 仍标记为在线。
-// WebSocket 帧间隔 ~2 秒，60 秒的窗口足够容忍网络抖动，同时能捕获小时/天级的过期数据。
+// 实时查询间隔 ~2 秒，60 秒窗口容忍网络抖动，同时捕获小时/天级过期数据。
 const NODE_DATA_STALE_MS = 60_000;
 const TRAFFIC_TREND_SAMPLE_COUNT = 18;
 const EMPTY_TRAFFIC_TREND_SAMPLE: TrafficTrendSample = {
@@ -532,10 +531,7 @@ let storeStatusSnapshot: StoreStatusSnapshot = {
   hydrated: false,
   nodeInfoError: false,
 };
-let ws: WebSocket | null = null;
-let wsGetTimer: number | null = null;
-let wsReconnectTimer: number | null = null;
-let wsLastMessageAt = 0;
+let liveStatusController: AbortController | null = null;
 
 interface CommitTouches {
   meta?: Iterable<string>;
@@ -604,23 +600,11 @@ function commit(next: State, touches: CommitTouches = {}) {
   if (touches.trafficTrends) emitMappedListeners(trafficTrendListeners, touches.trafficTrends);
 }
 
-// ─── WebSocket 实时通道 ───────────────────────────────────────────────────────
-// 与默认主题相同，通过 /api/clients WebSocket 获取嵌套报告（含 GPU）。
-// 这是实时数据的唯一来源，不作 RPC 降级。
+// ─── RPC2 实时状态 ────────────────────────────────────────────────────────────
 
-function wsIsFresh(): boolean {
-  return wsLastMessageAt > 0 && Date.now() - wsLastMessageAt < WS_FRESH_THRESHOLD_MS;
-}
-
-function applyWsLivePayload(payload: unknown) {
-  const envelope = asRecord(payload);
-  const body = asRecord(envelope.data);
-  const dataMap = asRecord(body.data);
-  const onlineList = body.online;
+function applyLivePayload(dataMap: Record<string, { online: boolean }>) {
   const onlineSet = new Set(
-    Array.isArray(onlineList)
-      ? onlineList.filter((item): item is string => typeof item === "string")
-      : [],
+    Object.keys(dataMap).filter((uuid) => dataMap[uuid].online),
   );
 
   const touchedMetrics = new Set<string>();
@@ -748,86 +732,33 @@ function applyWsLivePayload(payload: unknown) {
   }
 }
 
-function stopWsConnection() {
-  if (wsGetTimer != null) {
-    window.clearInterval(wsGetTimer);
-    wsGetTimer = null;
-  }
-  if (wsReconnectTimer != null) {
-    window.clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = null;
-  }
-  if (ws) {
-    ws.onopen = null;
-    ws.onmessage = null;
-    ws.onerror = null;
-    ws.onclose = null;
-    ws.close();
-    ws = null;
-  }
-}
-
-/** WS 已连接时立即请求一帧（用于节点信息就绪后马上拿数据，不等下一个 2s "get"）。 */
-function requestWsFrame() {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send("get");
-}
-
-/** 强制断开并重连（看门狗检测到 half-open 假死连接时使用）。 */
-function restartWsConnection() {
-  stopWsConnection();
-  wsLastMessageAt = 0;
-  startWsConnection();
-}
-
-function startWsConnection() {
-  if (ws || wsReconnectTimer != null) return;
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  let socket: WebSocket;
+async function syncLiveStatus() {
+  if (liveStatusController || !started || pageHidden) return;
+  const controller = new AbortController();
+  liveStatusController = controller;
   try {
-    socket = new WebSocket(`${protocol}//${window.location.host}/api/clients`);
-  } catch {
-    return;
-  }
-  ws = socket;
-
-  socket.onopen = () => {
-    wsLastMessageAt = Date.now();
-    // 连接建立/恢复：清空失败计数，撤销同步告警。
+    const { getNodesLatestStatus } = await import("@/services/api");
+    const data = await getNodesLatestStatus({
+      signal: controller.signal,
+      timeout: LIVE_STATUS_TIMEOUT_MS,
+    });
+    if (controller.signal.aborted) return;
+    applyLivePayload(data);
     if (state.failureStreak > 0) {
       commit({ ...state, failureStreak: 0 }, { storeStatus: true });
     }
-    socket.send("get");
-    wsGetTimer = window.setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) socket.send("get");
-    }, LIVE_STATUS_REFRESH_INTERVAL_MS);
-  };
-  socket.onmessage = (event) => {
-    wsLastMessageAt = Date.now();
-    try {
-      applyWsLivePayload(JSON.parse(String(event.data)));
-    } catch {
-      // 格式异常时忽略本帧。
+  } catch {
+    if (!controller.signal.aborted) {
+      commit({ ...state, failureStreak: state.failureStreak + 1 }, { storeStatus: true });
     }
-  };
-  socket.onerror = () => {
-    socket.close();
-  };
-  socket.onclose = () => {
-    if (wsGetTimer != null) {
-      window.clearInterval(wsGetTimer);
-      wsGetTimer = null;
-    }
-    if (ws === socket) ws = null;
-    // 非主动关闭（stopWsConnection 会先摘掉回调）：记一次失败，驱动同步告警。
-    commit({ ...state, failureStreak: state.failureStreak + 1 }, { storeStatus: true });
-    if (started && !pageHidden) {
-      wsReconnectTimer = window.setTimeout(() => {
-        wsReconnectTimer = null;
-        startWsConnection();
-      }, WS_RECONNECT_DELAY_MS);
-    }
-  };
+  } finally {
+    if (liveStatusController === controller) liveStatusController = null;
+  }
+}
+
+function stopLiveStatus() {
+  liveStatusController?.abort();
+  liveStatusController = null;
 }
 
 let hydrated = false;
@@ -916,7 +847,7 @@ async function performNodeInfoSync() {
         {
           meta: touchedMeta,
           metrics: touchedMetrics,
-          // traffic trend 只由 WS 帧改动；syncNodeInfo 原样带过来，这里无需通知。
+          // traffic trend 只由实时响应改动；syncNodeInfo 原样带过来，这里无需通知。
           nodeList: nodeListChanged,
           allNodes: orderChanged || touchedMeta.size > 0,
           storeStatus: storeStatusChanged,
@@ -937,8 +868,8 @@ async function performNodeInfoSync() {
 async function bootstrap() {
   try {
     await syncNodeInfo();
-    // 节点信息就绪后立即向 WS 要一帧，避免等下一个 2s "get"。
-    requestWsFrame();
+    // 节点信息就绪后立即获取实时状态，不等下一个调度周期。
+    await syncLiveStatus();
   } catch {
     // 下一个调度 tick 再重试。
   }
@@ -1000,9 +931,8 @@ function scheduleLiveStatusTick() {
     if (pageHidden || !started) return;
     if (!hydrated) {
       void bootstrap();
-    } else if (ws != null && ws.readyState === WebSocket.OPEN && !wsIsFresh()) {
-      // WS 已连接但长时间无数据（half-open 假死）：强制重连而非降级 RPC。
-      restartWsConnection();
+    } else {
+      void syncLiveStatus();
     }
     scheduleLiveStatusTick();
   }, getEffectiveLiveInterval());
@@ -1034,15 +964,16 @@ function handleVisibilityChange() {
       window.clearTimeout(nodeInfoTimer);
       nodeInfoTimer = null;
     }
-    stopWsConnection();
+    stopLiveStatus();
   } else {
-    // 页面恢复可见：重连 WS 并恢复正常调度（WS 是唯一实时数据源）。
+    // 页面恢复可见：立即更新实时状态并恢复正常调度。
     markUserInteraction();
     if (started) {
       if (!hydrated) {
         void bootstrap();
+      } else {
+        void syncLiveStatus();
       }
-      startWsConnection();
       scheduleLiveStatusTick();
       scheduleNodeInfoTick();
     }
@@ -1059,7 +990,6 @@ function ensureStarted() {
   lastInteractionTime = Date.now();
 
   void bootstrap();
-  startWsConnection();
   // 实时指标与节点信息使用自适应调度（感知 visibility + 空闲状态）。
   scheduleLiveStatusTick();
   scheduleNodeInfoTick();
@@ -1093,8 +1023,7 @@ function stopStore() {
   }
   nodeInfoController?.abort();
   nodeInfoController = null;
-  stopWsConnection();
-  wsLastMessageAt = 0;
+  stopLiveStatus();
   if (liveStatusTimer != null) {
     window.clearTimeout(liveStatusTimer);
     liveStatusTimer = null;

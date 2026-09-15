@@ -4,6 +4,14 @@
 
 > 本仓库由 Komari-Theme-LuminaPlus 分支独立演化而来，已与上游脱离。感谢原作者 [shanyang242](https://github.com/shanyang242) 的 LuminaPlus，以及更上游 [stqfdyr](https://github.com/stqfdyr) 的 [komari-theme-Lumina](https://github.com/stqfdyr/komari-theme-Lumina) 打下的基础。
 
+## 后端兼容性
+
+- 历史数据仅使用 `public:queryMetrics`，保留时长读取 `metric_retention_days`；不再回退旧记录接口。
+- 实时数据通过 RPC2 `common:getNodesLatestStatus` 获取。GPU 逐卡信息需要后端返回 `gpu_count` / `gpu_detailed_info`。
+- 请使用提供上述接口的新版 Komari；缺少接口时会显示同步或加载错误，不再兼容旧实时通道。
+- 访客事件由服务端 `visitor_audit_enabled` 决定是否记录。
+- 兼容性依据：[Komari 兼容性维护时间表](https://github.com/komari-monitor/komari-document/blob/main/dev/compatibility.md)。
+
 ## 主要特性
 
 ### 首页

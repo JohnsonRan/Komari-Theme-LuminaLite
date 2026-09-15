@@ -273,9 +273,6 @@ export const PublicConfigSchema = z
     disable_password_login: z.boolean().default(false),
     oauth_enable: z.boolean().default(false),
     private_site: z.boolean().default(false),
-    record_enabled: z.boolean().default(true),
-    record_preserve_time: z.number().default(0),
-    ping_record_preserve_time: z.number().default(0),
     metric_retention_days: z.number().default(0),
     custom_head: z.string().default(""),
     custom_body: z.string().default(""),
@@ -291,9 +288,6 @@ export interface PublicConfig {
   disable_password_login: boolean;
   oauth_enable: boolean;
   private_site: boolean;
-  record_enabled: boolean;
-  record_preserve_time: number;
-  ping_record_preserve_time: number;
   metric_retention_days: number;
   custom_head: string;
   custom_body: string;
@@ -446,7 +440,7 @@ export interface PingRecordsResponse {
   intervalSeconds?: number;
   rangeStartMs?: number;
   rangeEndMs?: number;
-  /** 新 metric API 返回的服务端区间统计；旧后端回退时不存在。 */
+  /** Metric API 返回的服务端区间统计；未请求统计时不存在。 */
   stats?: PingTaskStats[];
 }
 

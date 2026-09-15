@@ -5,8 +5,6 @@ import {
   MeSchema,
   NodeInfoSchema,
   PublicConfigSchema,
-  LoadRecordSchema,
-  PingRecordSchema,
   PingTaskSchema,
   type Me,
   type NodeInfo,
@@ -17,7 +15,6 @@ import {
   type PingTaskStats,
 } from "@/types/komari";
 import { fetchWithTimeout } from "@/utils/abort";
-import { inferHistoryIntervalSeconds } from "@/utils/historyRange";
 import {
   LOAD_LAST_AGGREGATION,
   LOAD_METRIC_KEYS,
@@ -52,14 +49,6 @@ const ApiEnvelope = <T extends z.ZodTypeAny>(inner: T) =>
     data: inner,
   });
 
-const RpcRecordsSchema = z
-  .object({
-    count: z.number().default(0),
-    records: z.unknown().optional(),
-    tasks: z.unknown().optional(),
-  })
-  .passthrough();
-
 const MetricPointSchema = z
   .object({
     time: z.string(),
@@ -75,7 +64,7 @@ const MetricSeriesSchema = z
     tags: z.record(z.string(), z.string()).optional(),
     tag: z.record(z.string(), z.string()).optional(),
     interval_seconds: z.number().default(0),
-    // Go 的空切片可能序列化为 null；空序列不是接口失败，不能因此回退旧记录。
+    // Go 的空切片可能序列化为 null；空序列不是接口失败。
     points: z.array(MetricPointSchema).nullish().transform((value) => value ?? []),
   })
   .passthrough();
@@ -115,21 +104,11 @@ const PingMetricStatsResponseSchema = z
   })
   .passthrough();
 
-const LOAD_RECORDS_PER_HOUR = 12;
-const PING_RECORDS_PER_HOUR = 240;
-const MAX_RPC_RECORDS = 20_000;
-const OVERVIEW_PING_MAX_COUNT = 4_000;
 const OVERVIEW_METRIC_MAX_POINTS = 24;
 const DETAIL_METRIC_MAX_POINTS = 500;
-// 普通 HTTP GET(/api/nodes、/api/public、load/ping 兜底)自身没有传输超时,
+// 普通 HTTP GET(/api/nodes、/api/public)自身没有传输超时,
 // 在这里统一兜底,half-open socket 能快速失败而不是无限挂住调用方。
 const DEFAULT_API_TIMEOUT_MS = 12_000;
-
-interface RpcRecordsPayload {
-  count?: number;
-  records?: unknown;
-  tasks?: unknown;
-}
 
 interface PingOverviewResponse {
   records: PingRecordsResponse["records"];
@@ -148,15 +127,6 @@ interface RequestRange {
 interface ApiCallOptions {
   signal?: AbortSignal;
   timeout?: number;
-  skipMetricQuery?: boolean;
-}
-
-function getRecordsMaxCount(hours: number, recordsPerHour: number) {
-  const safeHours = Number.isFinite(hours) && hours > 0 ? hours : 1;
-  return Math.min(
-    MAX_RPC_RECORDS,
-    Math.max(recordsPerHour, Math.ceil(safeHours * recordsPerHour)),
-  );
 }
 
 function createRequestRange(hours: number, now = Date.now()): RequestRange {
@@ -226,48 +196,6 @@ async function rpcCall<T>(
   return parsed.data;
 }
 
-// 丢掉单条解析失败的记录,而不是让整个数组抛错。否则一条坏记录会让 RPC normalize
-// 抛错,调用方捕获后兜底到完整 HTTP 请求 —— 一条坏数据就变成每次轮询都 RPC + HTTP
-// 双重拉取。
-function parseArrayLenient<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S>[] {
-  if (!Array.isArray(value)) return [];
-  const out: z.infer<S>[] = [];
-  for (const item of value) {
-    const parsed = schema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
-  }
-  return out;
-}
-
-function extractRpcRecords(payload: RpcRecordsPayload, key?: string): unknown[] {
-  if (Array.isArray(payload.records)) return payload.records;
-  if (!payload.records || typeof payload.records !== "object") return [];
-
-  const recordsByKey = payload.records as Record<string, unknown>;
-  if (key && Array.isArray(recordsByKey[key])) {
-    return recordsByKey[key];
-  }
-
-  return Object.values(recordsByKey).flatMap((value) =>
-    Array.isArray(value) ? value : [],
-  );
-}
-
-function normalizeRpcLoadRecords(
-  uuid: string,
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): LoadRecordsResponse {
-  const records = parseArrayLenient(LoadRecordSchema, extractRpcRecords(payload, uuid));
-  const count = payload.count;
-  return {
-    count: typeof count === "number" && Number.isFinite(count) && count > 0 ? count : records.length,
-    records,
-    intervalSeconds: inferHistoryIntervalSeconds(records),
-    ...range,
-  };
-}
-
 function derivePingTasks(records: PingRecordsResponse["records"]): PingTask[] {
   return Array.from(new Set(records.map((record) => record.task_id)))
     .sort((a, b) => a - b)
@@ -283,70 +211,21 @@ function derivePingTasks(records: PingRecordsResponse["records"]): PingTask[] {
     }));
 }
 
-function normalizeRpcPingRecords(
-  uuid: string,
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): PingRecordsResponse {
-  const records = parseArrayLenient(PingRecordSchema, extractRpcRecords(payload, uuid));
-  const parsedTasks = z.array(PingTaskSchema).safeParse(payload.tasks);
-  const tasks = parsedTasks.success ? parsedTasks.data : derivePingTasks(records);
-  const count = payload.count;
-  return {
-    count: typeof count === "number" && Number.isFinite(count) && count > 0 ? count : records.length,
-    records,
-    tasks,
-    ...range,
-  };
-}
-
-function normalizeRpcPingOverview(
-  payload: RpcRecordsPayload,
-  range?: RequestRange,
-): PingOverviewResponse {
-  const records = parseArrayLenient(PingRecordSchema, extractRpcRecords(payload));
-  const parsedTasks = z.array(PingTaskSchema).safeParse(payload.tasks);
-  return {
-    records,
-    tasks: parsedTasks.success ? parsedTasks.data : derivePingTasks(records),
-    ...range,
-  };
-}
-
-let metricQueryApiUnavailable = false;
 let publicPingTasksCache: PingTask[] | null = null;
 let publicPingTasksCachedAt = 0;
 let publicPingTasksRequest: Promise<PingTask[]> | null = null;
-
-function isMissingMetricMethod(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  return /method.*(?:not found|unknown|registered)|(?:not found|unknown).*method/i.test(
-    error.message,
-  );
-}
 
 async function queryMetricPayload(
   params: Record<string, unknown>,
   signal?: AbortSignal,
   timeout?: number,
 ): Promise<z.output<typeof MetricQueryResponseSchema>> {
-  if (metricQueryApiUnavailable) {
-    throw new Error("Metric query API is unavailable on this server");
-  }
-
-  try {
-    const payload = await rpcCall(
-      "public:queryMetrics",
-      params,
-      MetricQueryResponseSchema,
-      { signal, timeout },
-    );
-    return payload as z.output<typeof MetricQueryResponseSchema>;
-  } catch (error) {
-    if (signal?.aborted) throw error;
-    if (isMissingMetricMethod(error)) metricQueryApiUnavailable = true;
-    throw error;
-  }
+  return await rpcCall(
+    "public:queryMetrics",
+    params,
+    MetricQueryResponseSchema,
+    { signal, timeout },
+  ) as z.output<typeof MetricQueryResponseSchema>;
 }
 
 export function getPublicPingTasks() {
@@ -462,7 +341,7 @@ async function repairMetricBoundary<T extends MetricBoundarySeries>(
 async function getLoadMetricData(
   uuid: string,
   hours: number,
-  signal?: AbortSignal,
+  options?: ApiCallOptions,
 ): Promise<LoadRecordsResponse> {
   const requestRange = createRequestRange(hours);
   const metricPayload = await queryMetricPayload(
@@ -475,7 +354,8 @@ async function getLoadMetricData(
       aggregation_by_metric: LOAD_LAST_AGGREGATION,
       fill_empty: false,
     },
-    signal,
+    options?.signal,
+    options?.timeout,
   );
   const series: LoadMetricSeries[] = metricPayload.series.map((item) => ({
     metricKey: item.metric_key,
@@ -505,6 +385,7 @@ async function getPingMetricData({
   includeStats = false,
   repairBoundary = false,
   signal,
+  timeout,
 }: {
   hours: number;
   entityIds?: string[];
@@ -513,11 +394,8 @@ async function getPingMetricData({
   includeStats?: boolean;
   repairBoundary?: boolean;
   signal?: AbortSignal;
+  timeout?: number;
 }): Promise<PingRecordsResponse> {
-  if (metricQueryApiUnavailable) {
-    throw new Error("Metric query API is unavailable on this server");
-  }
-
   const requestRange = createRequestRange(hours);
   const commonParams = {
     hours,
@@ -531,7 +409,7 @@ async function getPingMetricData({
         "public:getPingMetricStats",
         commonParams,
         PingMetricStatsResponseSchema,
-        { signal },
+        { signal, timeout },
       )
         .then((payload) => payload as z.output<typeof PingMetricStatsResponseSchema>)
         .catch((error: unknown) => {
@@ -549,6 +427,7 @@ async function getPingMetricData({
         fill_empty: false,
       },
       signal,
+      timeout,
     ),
     statsRequest,
     getPublicPingTasks().catch(() => null),
@@ -579,6 +458,7 @@ async function getPingMetricData({
       }),
       {},
       signal,
+      timeout,
     );
   }
   const records = mergePingMetricSeries(series);
@@ -640,7 +520,7 @@ export async function getNodes(options?: ApiCallOptions): Promise<NodeInfo[]> {
     return Object.values(map) as NodeInfo[];
   } catch (error) {
     if (options?.signal?.aborted) throw error;
-    // RPC 不可用时兜底回旧的 HTTP 接口（拿不到 IP，但节点列表照常加载）。
+    // RPC 不可用时使用仍受支持的 HTTP 接口（拿不到 IP，但节点列表照常加载）。
     return (await apiGet("/api/nodes", z.array(NodeInfoSchema), options)) as NodeInfo[];
   }
 }
@@ -650,46 +530,7 @@ export async function getLoadRecords(
   hours = 6,
   options?: ApiCallOptions,
 ): Promise<LoadRecordsResponse> {
-  const requestRange = createRequestRange(hours);
-  if (!options?.skipMetricQuery) {
-    try {
-      return await getLoadMetricData(uuid, hours, options?.signal);
-    } catch (error) {
-      if (options?.signal?.aborted) throw error;
-      // 旧版后端没有 public metric API，或新接口暂时失败时回退兼容记录接口。
-    }
-  }
-
-  try {
-    const maxCount = getRecordsMaxCount(hours, LOAD_RECORDS_PER_HOUR);
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        uuid,
-        hours,
-        type: "load",
-        maxCount,
-      },
-      RpcRecordsSchema,
-      { signal: options?.signal, timeout: options?.timeout },
-    );
-    return normalizeRpcLoadRecords(uuid, payload, requestRange);
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    const legacy = (await apiGet(
-      `/api/records/load?${new URLSearchParams({ uuid, hours: String(hours) })}`,
-      z.object({
-        count: z.number().default(0),
-        records: z.array(LoadRecordSchema).default([]),
-      }),
-      { signal: options?.signal, timeout: options?.timeout },
-    )) as LoadRecordsResponse;
-    return {
-      ...legacy,
-      ...requestRange,
-      intervalSeconds: inferHistoryIntervalSeconds(legacy.records),
-    };
-  }
+  return getLoadMetricData(uuid, hours, options);
 }
 
 export interface TodayTrafficMetricResponse {
@@ -766,49 +607,12 @@ export async function getPingRecords(
   hours = 6,
   options?: ApiCallOptions,
 ): Promise<PingRecordsResponse> {
-  const requestRange = createRequestRange(hours);
-  try {
-    return await getPingMetricData({
-      hours,
-      entityIds: [uuid],
-      maxPoints: DETAIL_METRIC_MAX_POINTS,
-      signal: options?.signal,
-    });
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    // 旧版后端没有 public metric API，或新版接口暂时失败时回退兼容记录接口。
-  }
-
-  try {
-    const maxCount = getRecordsMaxCount(hours, PING_RECORDS_PER_HOUR);
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        uuid,
-        hours,
-        type: "ping",
-        maxCount,
-      },
-      RpcRecordsSchema,
-      options,
-    );
-    return normalizeRpcPingRecords(uuid, payload, requestRange);
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    const legacy = (await apiGet(
-      `/api/records/ping?${new URLSearchParams({ uuid, hours: String(hours) })}`,
-      z.object({
-        count: z.number().default(0),
-        records: z.array(PingRecordSchema).default([]),
-        tasks: z.array(PingTaskSchema).default([]),
-      }),
-      options,
-    )) as PingRecordsResponse;
-    return {
-      ...legacy,
-      ...requestRange,
-    };
-  }
+  return getPingMetricData({
+    hours,
+    entityIds: [uuid],
+    maxPoints: DETAIL_METRIC_MAX_POINTS,
+    ...options,
+  });
 }
 
 export async function getPingMetricStats(
@@ -816,9 +620,6 @@ export async function getPingMetricStats(
   hours = 6,
   options?: ApiCallOptions,
 ): Promise<PingTaskStats[]> {
-  if (metricQueryApiUnavailable) {
-    throw new Error("Metric query API is unavailable on this server");
-  }
   const payload = await rpcCall(
     "public:getPingMetricStats",
     {
@@ -888,57 +689,15 @@ export async function getPingOverview(
   taskId?: number,
   options?: { signal?: AbortSignal; entityIds?: string[] },
 ): Promise<PingOverviewResponse> {
-  const requestRange = createRequestRange(hours);
-  try {
-    return await getPingMetricData({
-      hours,
-      entityIds: options?.entityIds,
-      taskId,
-      maxPoints: OVERVIEW_METRIC_MAX_POINTS,
-      includeStats: true,
-      repairBoundary: true,
-      signal: options?.signal,
-    });
-  } catch (error) {
-    if (options?.signal?.aborted) throw error;
-    // 旧版后端没有 public metric API 时继续走原有记录接口。
-  }
-
-  try {
-    const payload = await rpcCall(
-      "common:getRecords",
-      {
-        hours,
-        type: "ping",
-        ...(taskId != null ? { task_id: taskId } : {}),
-        maxCount: OVERVIEW_PING_MAX_COUNT,
-      },
-      RpcRecordsSchema,
-      { signal: options?.signal },
-    );
-    return normalizeRpcPingOverview(payload, requestRange);
-  } catch {
-    if (taskId == null) {
-      throw new Error("Ping overview fallback requires a concrete task_id");
-    }
-    if (options?.signal?.aborted) {
-      throw options.signal.reason ?? new DOMException("Aborted", "AbortError");
-    }
-
-    const data = await apiGet(
-      `/api/records/ping?${new URLSearchParams({ task_id: String(taskId), hours: String(hours) })}`,
-      z.object({
-        records: z.array(PingRecordSchema).default([]),
-        tasks: z.array(PingTaskSchema).default([]),
-      }),
-      { signal: options?.signal },
-    );
-    return {
-      records: data.records,
-      tasks: data.tasks,
-      ...requestRange,
-    } as PingOverviewResponse;
-  }
+  return getPingMetricData({
+    hours,
+    entityIds: options?.entityIds,
+    taskId,
+    maxPoints: OVERVIEW_METRIC_MAX_POINTS,
+    includeStats: true,
+    repairBoundary: true,
+    signal: options?.signal,
+  });
 }
 
 // ─── 版本号 ───────────────────────────────────────────────────────────────────
@@ -978,7 +737,16 @@ export function recordVisitorEvent(event: {
   );
 }
 
-// ─── 节点近期实时缓冲 ─────────────────────────────────────────────────────────
+// ─── 节点实时状态与近期缓冲 ───────────────────────────────────────────────────
+
+export function getNodesLatestStatus(options?: ApiCallOptions) {
+  return rpcCall(
+    "common:getNodesLatestStatus",
+    {},
+    z.record(z.string(), z.object({ online: z.boolean() }).passthrough()),
+    options,
+  );
+}
 
 export const RecentStatusRecordSchema = z
   .object({
