@@ -6,11 +6,14 @@ function readMeta(selector: string) {
   return document.querySelector<HTMLMetaElement>(selector)?.content.trim() || "";
 }
 
-function updateMeta(selector: string, attr: "content", value: string) {
-  const element = document.querySelector<HTMLMetaElement>(selector);
-  if (element) {
-    element[attr] = value;
+function updateMeta(attr: "name" | "property", key: string, value: string) {
+  let element = document.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
+  if (!element) {
+    element = document.createElement("meta");
+    element.setAttribute(attr, key);
+    document.head.append(element);
   }
+  element.content = value;
 }
 
 export function useSiteMetadata() {
@@ -22,13 +25,13 @@ export function useSiteMetadata() {
       config?.description?.trim() || readMeta('meta[name="description"]');
 
     if (siteName) {
-      updateMeta('meta[property="og:title"]', "content", siteName);
-      updateMeta('meta[name="twitter:title"]', "content", siteName);
-      updateMeta('meta[name="apple-mobile-web-app-title"]', "content", siteName);
+      updateMeta("property", "og:title", siteName);
+      updateMeta("name", "twitter:title", siteName);
+      updateMeta("name", "apple-mobile-web-app-title", siteName);
     }
     if (description) {
-      updateMeta('meta[property="og:description"]', "content", description);
-      updateMeta('meta[name="twitter:description"]', "content", description);
+      updateMeta("property", "og:description", description);
+      updateMeta("name", "twitter:description", description);
     }
 
     let disposed = false;
