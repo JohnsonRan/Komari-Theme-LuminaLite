@@ -6,7 +6,7 @@ vi.mock("@/services/rpc2Client", () => ({
   getRpc2Client: () => ({ call: rpcCallMock }),
 }));
 
-import { getLoadRecords, getNodesLatestStatus, getPingOverview, getPingRecords } from "@/services/api";
+import { getLoadRecords, getNodesLatestStatus, getPingOverview, getPingRecords, getPublic } from "@/services/api";
 
 const START = "2026-07-15T03:00:00Z";
 const END = "2026-07-15T04:00:00Z";
@@ -243,5 +243,18 @@ describe("metric boundary repair in the API adapter", () => {
       expect(params).toMatchObject({ entity_ids: ["node-a"], hours: 24 });
       expect(callOptions).toEqual(options);
     }
+  });
+});
+
+describe("HTTP API timeout", () => {
+  it("aborts when the response body stalls after headers arrive", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: () => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new Error("body aborted")));
+      }),
+    })));
+    await expect(getPublic({ timeout: 20 })).rejects.toThrow("body aborted");
   });
 });

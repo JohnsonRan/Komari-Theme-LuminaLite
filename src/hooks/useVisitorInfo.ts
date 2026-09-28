@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
-import { fetchWithTimeout } from "@/utils/abort";
+import { withTimeoutSignal } from "@/utils/abort";
 import { VISITOR_INFO_PROVIDERS, type VisitorInfo } from "@/utils/visitorInfo";
 
 const PROVIDER_TIMEOUT_MS = 8_000;
@@ -9,13 +9,19 @@ async function fetchVisitorInfo(signal?: AbortSignal): Promise<VisitorInfo | nul
   for (const provider of VISITOR_INFO_PROVIDERS) {
     // 串行而非并发：第一家成功就不该再把访客 IP 送给另外两家。
     try {
-      const response = await fetchWithTimeout(
-        provider.url,
-        { headers: { Accept: "application/json" }, signal },
+      const payload = await withTimeoutSignal(
+        async (timeoutSignal) => {
+          const response = await fetch(provider.url, {
+            headers: { Accept: "application/json" },
+            signal: timeoutSignal,
+          });
+          return response.ok ? ((await response.json()) as unknown) : null;
+        },
         PROVIDER_TIMEOUT_MS,
+        signal,
       );
-      if (!response.ok) continue;
-      const info = provider.normalize(await response.json());
+      if (payload == null) continue;
+      const info = provider.normalize(payload);
       if (info) return info;
     } catch {
       if (signal?.aborted) throw new Error("aborted");

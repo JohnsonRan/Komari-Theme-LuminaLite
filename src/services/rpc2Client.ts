@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from "@/utils/abort";
+import { withTimeoutSignal } from "@/utils/abort";
 
 type JsonRpcId = number | string;
 
@@ -305,31 +305,31 @@ class RPC2Client {
   ): Promise<TResult> {
     const id = ++this.requestId;
     const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-    const response = await fetchWithTimeout(
-      this.baseUrl,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id,
-          method,
-          params,
-        } satisfies JsonRpcRequest<TParams>),
+    const payload = await withTimeoutSignal(
+      async (signal) => {
+        const response = await fetch(this.baseUrl, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            method,
+            params,
+          } satisfies JsonRpcRequest<TParams>),
+          signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Request ${this.baseUrl} failed: ${response.status}`);
+        }
+        return (await response.json()) as JsonRpcResponse<TResult>;
       },
       timeoutMs,
       options.signal,
     );
-
-    if (!response.ok) {
-      throw new Error(`Request ${this.baseUrl} failed: ${response.status}`);
-    }
-
-    const payload = (await response.json()) as JsonRpcResponse<TResult>;
     if ("error" in payload) {
       throw new RpcResponseError(
         payload.error.message || `RPC Error ${payload.error.code ?? "unknown"}`,

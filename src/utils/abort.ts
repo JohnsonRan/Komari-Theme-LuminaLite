@@ -56,21 +56,3 @@ export async function withTimeoutSignal<T>(
     managed.cleanup();
   }
 }
-
-export async function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init: RequestInit | undefined,
-  ms: number,
-  upstream?: AbortSignal,
-): Promise<Response> {
-  const requestSignal =
-    typeof Request !== "undefined" && input instanceof Request ? input.signal : undefined;
-  const effectiveRequestSignal =
-    init?.signal !== undefined ? init.signal : requestSignal;
-  const { signal, cleanup } = createTimeoutSignal([upstream, effectiveRequestSignal], ms);
-  try {
-    return await fetch(input, { ...init, signal });
-  } finally {
-    cleanup();
-  }
-}

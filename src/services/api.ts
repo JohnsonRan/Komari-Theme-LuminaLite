@@ -14,7 +14,7 @@ import {
   type PingTask,
   type PingTaskStats,
 } from "@/types/komari";
-import { fetchWithTimeout } from "@/utils/abort";
+import { withTimeoutSignal } from "@/utils/abort";
 import {
   LOAD_LAST_AGGREGATION,
   LOAD_METRIC_KEYS,
@@ -154,19 +154,22 @@ async function apiGet<T>(
   schema: z.ZodType<T>,
   options?: { signal?: AbortSignal; timeout?: number },
 ): Promise<T> {
-  const resp = await fetchWithTimeout(
-    path,
-    {
-      credentials: "include",
-      headers: { Accept: "application/json" },
+  // 超时覆盖到 body 读完：响应头到达后 body 卡住同样要快速失败。
+  const json = await withTimeoutSignal(
+    async (signal) => {
+      const resp = await fetch(path, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!resp.ok) {
+        throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
+      }
+      return (await resp.json()) as unknown;
     },
     options?.timeout ?? DEFAULT_API_TIMEOUT_MS,
     options?.signal,
   );
-  if (!resp.ok) {
-    throw new ApiRequestError(`Request ${path} failed: ${resp.status}`, resp.status, path);
-  }
-  const json = (await resp.json()) as unknown;
   const envelopeResult = ApiEnvelope(schema).safeParse(json);
   if (envelopeResult.success) return envelopeResult.data.data as T;
   const rawResult = schema.safeParse(json);
