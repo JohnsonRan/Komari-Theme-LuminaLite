@@ -3,11 +3,12 @@
 //   npx vite --port 5199
 // 再跑：
 //   node scripts/make-preview.mjs
-// 浏览器复用本机已装的 Playwright Chromium（playwright-core 驱动，不下载浏览器）。
+// 浏览器复用本机已装的 Chromium / Chrome / Edge（playwright-core 驱动，不下载浏览器）；
+// 可用 PREVIEW_BROWSER 指定可执行文件路径。
 import { chromium } from "playwright-core";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // release/package 在 CI 里也会调用本脚本，但 CI 没有 dev server。检测不到可用 dev server
 // 或浏览器时就回退为「原样保留 preview.png」，不阻塞打包。本地想重新生成时，先起 dev server
@@ -18,13 +19,18 @@ const root = resolve(__dirname, "..");
 const shotsDir = resolve(root, ".pi", "preview-frames");
 mkdirSync(shotsDir, { recursive: true });
 
-// 优先用系统 Playwright 缓存里的 Chromium；找不到再尝试可执行文件。
+// 顺序：显式指定 → 当前 playwright-core 对应的 Chromium 缓存 → 各平台常见系统浏览器。
 const CANDIDATES = [
+  process.env.PREVIEW_BROWSER,
+  chromium.executablePath(),
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-  "C:/Users/JohnsonRan/AppData/Local/ms-playwright/chromium-1228/chrome-win64/chrome.exe",
-  "C:/Users/JohnsonRan/AppData/Local/ms-playwright/chromium-1223/chrome-win64/chrome.exe",
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium",
+  "/usr/bin/chromium-browser",
 ];
-const executablePath = CANDIDATES.find((p) => existsSync(p));
+const executablePath = CANDIDATES.find((p) => p && existsSync(p));
 
 const DEV = process.env.PREVIEW_URL ?? "http://localhost:5199";
 
@@ -130,7 +136,7 @@ async function main() {
     }
     console.log(
       !executablePath
-        ? "未找到 Playwright Chromium，保留现有 preview.png。"
+        ? "未找到可用浏览器（可设 PREVIEW_BROWSER），保留现有 preview.png。"
         : `未检测到 dev server (${DEV})，保留现有 preview.png。`,
     );
     return;
@@ -154,7 +160,7 @@ async function main() {
       deviceScaleFactor: 2,
     });
     const page = await ctx.newPage();
-    await page.goto("file:///" + htmlPath.replace(/\\/g, "/"), { waitUntil: "load" });
+    await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "load" });
     await page.waitForTimeout(600);
     // 按内容实际高度截图，避免固定 viewport 留下底部大段空白。
     const contentHeight = await page.evaluate(() => document.body.scrollHeight);
