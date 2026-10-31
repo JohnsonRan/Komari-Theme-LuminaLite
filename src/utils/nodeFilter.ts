@@ -143,9 +143,9 @@ export function evaluateFilterRule(rule: NodeFilterRule, ctx: NodeFieldValueCont
 
   switch (rule.operator) {
     case "is_true":
-      return Boolean(raw) === true;
+      return raw === true;
     case "is_false":
-      return Boolean(raw) === false;
+      return raw === false;
 
     case "empty": {
       if (raw == null) return true;

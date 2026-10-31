@@ -54,6 +54,11 @@ export function isHomeSortDirection(value: unknown): value is HomeSortDirection 
   return value === "asc" || value === "desc";
 }
 
+/** 实时总速率和列表「实时」列共用滞回，避免每一帧按瞬时字节重排。 */
+export function isHysteresisSpeedField(field: HomeSortField): boolean {
+  return field === "speed" || field === "live_speed";
+}
+
 export function sortFieldNeedsLiveMetrics(field: HomeSortField): boolean {
   if (field === "default") return false;
   if (field === "speed" || field === "traffic") return true;
@@ -93,6 +98,7 @@ function resolveRawPrimary(
     case "name":
       return ctx.nameByUuid.get(node.uuid) ?? getNodeMetaSnapshot(node.uuid)?.name?.trim() ?? node.uuid;
     case "speed":
+    case "live_speed":
       return ctx.speedAvgByUuid.get(node.uuid) ?? (node.netUp || 0) + (node.netDown || 0);
     case "traffic":
       return (node.trafficUp || 0) + (node.trafficDown || 0);
@@ -120,7 +126,7 @@ function segmentOf(
 ): 0 | 1 | 2 {
   if (field === "online") return 0;
   if (node.online === false) return 2;
-  if (field === "speed") return ctx.speedActive.has(node.uuid) ? 0 : 1;
+  if (isHysteresisSpeedField(field)) return ctx.speedActive.has(node.uuid) ? 0 : 1;
   if (rawPrimary === null) return 1;
   return 0;
 }

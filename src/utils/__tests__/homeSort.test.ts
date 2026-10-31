@@ -111,6 +111,21 @@ describe("sortHomeNodes", () => {
     });
     expect(order(nodes, "speed", "desc", context)).toEqual(["fast", "med", "idle", "off"]);
   });
+
+  it("live_speed keeps the speed hysteresis buckets instead of chasing one noisy sample", () => {
+    const nodes = [
+      node({ uuid: "fast", weight: 2, netUp: 100, netDown: 0 }),
+      node({ uuid: "spike", weight: 1, netUp: 9_000_000, netDown: 0 }),
+    ];
+    const context = ctx({
+      speedActive: new Set(["fast"]),
+      speedAvgByUuid: new Map([
+        ["fast", 5_000_000],
+        ["spike", 9_000_000],
+      ]),
+    });
+    expect(order(nodes, "live_speed", "desc", context)).toEqual(["fast", "spike"]);
+  });
 });
 
 describe("reconcileSpeedOrder", () => {

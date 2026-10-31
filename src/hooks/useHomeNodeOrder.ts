@@ -6,6 +6,7 @@ import {
   HOME_SPEED_EXIT_BPS,
   HOME_SPEED_RESORT_INTERVAL_MS,
   HOME_SPEED_SAMPLE_WINDOW,
+  isHysteresisSpeedField,
   reconcileSpeedOrder,
   sortHomeNodes,
   type HomeSortDirection,
@@ -36,7 +37,7 @@ export function useHomeNodeOrder({
   const ringRef = useRef<Map<string, number[]>>(new Map());
   const nodesRef = useRef(nodes);
   useEffect(() => {
-    if (field !== "speed") {
+    if (!isHysteresisSpeedField(field)) {
       if (ringRef.current.size) ringRef.current.clear();
       return;
     }
@@ -60,7 +61,7 @@ export function useHomeNodeOrder({
   }, [nodes, field]);
 
   const stableOrder = useMemo(() => {
-    if (field === "speed") return null;
+    if (isHysteresisSpeedField(field)) return null;
     return sortHomeNodes(nodes, field, direction, {
       nameByUuid,
       speedAvgByUuid: EMPTY_NUMBER_MAP,
@@ -73,7 +74,7 @@ export function useHomeNodeOrder({
   const [speedUuids, setSpeedUuids] = useState<string[]>([]);
   const activeRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (field !== "speed") {
+    if (!isHysteresisSpeedField(field)) {
       activeRef.current = new Set();
       return;
     }
@@ -92,7 +93,7 @@ export function useHomeNodeOrder({
         if (value >= threshold) next.add(node.uuid);
       }
       activeRef.current = next;
-      const ordered = sortHomeNodes(current, "speed", direction, {
+      const ordered = sortHomeNodes(current, field, direction, {
         nameByUuid: EMPTY_NAME_MAP,
         speedAvgByUuid: avg,
         speedActive: next,
@@ -111,9 +112,9 @@ export function useHomeNodeOrder({
   }, [field, direction]);
 
   const speedOrder = useMemo(
-    () => (field === "speed" ? reconcileSpeedOrder(nodes, speedUuids) : null),
+    () => (isHysteresisSpeedField(field) ? reconcileSpeedOrder(nodes, speedUuids) : null),
     [field, nodes, speedUuids],
   );
 
-  return (field === "speed" ? speedOrder : stableOrder) ?? nodes;
+  return (isHysteresisSpeedField(field) ? speedOrder : stableOrder) ?? nodes;
 }

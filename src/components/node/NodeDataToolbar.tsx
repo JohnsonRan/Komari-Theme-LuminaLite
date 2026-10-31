@@ -423,7 +423,7 @@ export function NodeDataToolbar({
               onClick={() =>
                 setActivePanel((cur) => (cur === "columns" ? null : "columns"))
               }
-              title="自主勾选与调整列表显示的字段列（共 64 个采集字段）"
+              title={`自主勾选与调整列表显示的字段列（共 ${ALL_NODE_FIELD_IDS.length} 个采集字段）`}
             >
               <SlidersHorizontal size={14} />
               <span>字段</span>

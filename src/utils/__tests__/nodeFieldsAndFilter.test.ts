@@ -312,6 +312,88 @@ describe("nodeFilter multi-field filtering & search", () => {
     ).toEqual(["us-1", "jp-off"]);
   });
 
+  it("does not treat missing samples as zero, Linux, or unknown sentinels", () => {
+    const bare = makeSummary({
+      uuid: "bare",
+      region: "",
+      online: null,
+      cpuCores: 0,
+      ramTotal: 0,
+      diskTotal: 0,
+    });
+    const bareMeta = makeMeta({
+      uuid: "bare",
+      os: "",
+      region: "",
+      arch: "",
+      virtualization: "",
+      gpu_name: "",
+      cpu_cores: 0,
+      mem_total: 0,
+      swap_total: 0,
+      disk_total: 0,
+      ipv4: "",
+      ipv6: "",
+      currency: "",
+      billing_cycle: "",
+      traffic_limit: 0,
+    });
+    const bareMetrics = makeMetrics({
+      gpuPct: 0,
+      gpuMemUsed: 0,
+      gpuMemTotal: 0,
+      gpuTemp: 0,
+      gpu: undefined,
+      swapUsed: 0,
+      swapTotal: 0,
+      load1: 0.2,
+      load5: 1.4,
+      load15: 0.3,
+    });
+    const ctx = { summary: bare, meta: bareMeta, metrics: bareMetrics };
+
+    expect(extractNodeFieldFilterValue("os", ctx)).toBe("");
+    expect(extractNodeFieldFilterValue("region", ctx)).toBe("UN");
+    expect(extractNodeFieldFilterValue("arch", ctx)).toBe("");
+    expect(extractNodeFieldFilterValue("ip_stack", ctx)).toBe("");
+    expect(extractNodeFieldFilterValue("cpu_cores", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("mem_total", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("swap", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("gpu_pct", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("gpu_temp", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("traffic_limit", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("traffic_used_pct", ctx)).toBeNull();
+    expect(extractNodeFieldFilterValue("load_all", ctx)).toBe(1.4);
+    expect(extractNodeFieldFilterValue("online", ctx)).toBeNull();
+
+    const hiddenByZero = filterHomeNodes(
+      [bare],
+      {
+        keyword: "",
+        status: "all",
+        rules: [{ id: "gpu", field: "gpu_pct", operator: "lte", value: "10" }],
+      },
+      {
+        metaByUuid: new Map([["bare", bareMeta]]),
+        metricsByUuid: new Map([["bare", bareMetrics]]),
+      },
+    );
+    expect(hiddenByZero).toEqual([]);
+
+    expect(
+      evaluateFilterRule(
+        { id: "off", field: "online", operator: "is_false" },
+        ctx,
+      ),
+    ).toBe(false);
+    expect(
+      evaluateFilterRule(
+        { id: "on", field: "online", operator: "is_true" },
+        ctx,
+      ),
+    ).toBe(false);
+  });
+
   it("collects enum options with accurate counts and formats rule labels", () => {
     const groupOpts = collectFieldEnumOptions("group", [s1, s2, s3], {
       metaByUuid,

@@ -96,6 +96,37 @@
   min-width: 0;
 }
 
+/* 宽表横向滚动时钉住第一列，避免节点名滚出视口。背景用实色，避免半透明表面透出后列文字。 */
+.node-list-row > :first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  margin-left: -14px;
+  padding-left: 14px;
+  background: var(--surface);
+}
+
+.node-list-head > :first-child {
+  z-index: 3;
+  background: var(--surface-elev);
+}
+
+.node-list-row:not(.node-list-head):hover > :first-child {
+  background: color-mix(in srgb, var(--hover-bg) 72%, var(--surface));
+}
+
+.node-list-row.is-offline > :first-child {
+  background: color-mix(in srgb, var(--status-offline) 5%, var(--surface));
+}
+
+.node-list-row.is-offline:hover > :first-child {
+  background: color-mix(
+    in srgb,
+    var(--hover-bg) 72%,
+    color-mix(in srgb, var(--status-offline) 5%, var(--surface))
+  );
+}
+
 /* 除节点列外都居中,与格内内容(gauge / 堆叠)对齐。 */
 .col-metric,
 .col-load,
@@ -446,7 +477,7 @@
   border-radius: 5px;
   background: transparent;
   color: var(--text-tertiary);
-  opacity: 0.42;
+  opacity: 0.72;
   cursor: pointer;
   transition:
     opacity 140ms ease,
@@ -556,6 +587,11 @@
 .node-list-status-pill.is-offline {
   background: color-mix(in srgb, var(--status-offline) 14%, transparent);
   color: var(--status-offline);
+}
+
+.node-list-status-pill.is-unknown {
+  background: color-mix(in srgb, var(--text-tertiary) 14%, transparent);
+  color: var(--text-tertiary);
 }
 
 .node-list-status-dot {

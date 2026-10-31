@@ -24,12 +24,17 @@ import { formatBillingCycle } from "@/utils/billing";
 import {
   formatBytes,
   formatByteRate,
+  formatRelativeTime,
   trimFixed,
 } from "@/utils/format";
 import { getDisplayRegionCode } from "@/utils/geo";
 import { getReportedGpuLabel } from "@/utils/gpu";
 import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
-import { getNodeFieldDefinition, type NodeFieldId } from "@/utils/nodeFields";
+import {
+  getNodeFieldDefinition,
+  resolveIpStackLabel,
+  type NodeFieldId,
+} from "@/utils/nodeFields";
 import { trafficTypeLabel } from "@/utils/traffic";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
@@ -54,13 +59,14 @@ function formatShortDate(raw: string | number | null | undefined): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
 
-function resolveIpStackLabel(ipv4?: string, ipv6?: string): string {
-  const has4 = Boolean(ipv4 && ipv4.trim());
-  const has6 = Boolean(ipv6 && ipv6.trim());
-  if (has4 && has6) return "IPv4 / IPv6";
-  if (has4) return "仅 IPv4";
-  if (has6) return "仅 IPv6";
-  return "";
+function worstSeriesLoss(series: NodePingSeries[]): number | null {
+  let worst: number | null = null;
+  for (const item of series) {
+    const loss = item.ping.loss;
+    if (loss == null || !Number.isFinite(loss)) continue;
+    if (worst == null || loss > worst) worst = loss;
+  }
+  return worst;
 }
 
 // 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
@@ -199,7 +205,8 @@ function renderDynamicCell(
         ? "is-align-right"
         : "is-align-left";
   const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
-  const activePing = pingSeries[pingIndex]?.ping;
+  const primaryPing = pingSeries[0]?.ping;
+  const primaryLoss = worstSeriesLoss(pingSeries);
 
   switch (colId) {
     case "node":
@@ -240,15 +247,23 @@ function renderDynamicCell(
         </div>
       );
 
-    case "os":
+    case "os": {
+      const rawOs = node.os?.trim() ?? "";
       return (
         <div key={colId} className="node-list-cell col-os">
-          <OsLogo value={node.os} size={16} />
-          <span className="node-list-os-name" title={node.os || osName}>
-            {formatOsLabel(osName, node.os)}
-          </span>
+          {rawOs ? (
+            <>
+              <OsLogo value={node.os} size={16} />
+              <span className="node-list-os-name" title={rawOs}>
+                {formatOsLabel(osName, node.os)}
+              </span>
+            </>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
         </div>
       );
+    }
 
     case "cpu":
       return (
@@ -367,11 +382,15 @@ function renderDynamicCell(
           <span
             className={clsx(
               "node-list-status-pill",
-              node.online === true ? "is-online" : "is-offline",
+              node.online === true
+                ? "is-online"
+                : node.online === false
+                  ? "is-offline"
+                  : "is-unknown",
             )}
           >
             <span className="node-list-status-dot" />
-            {node.online === true ? "在线" : "离线"}
+            {node.online === true ? "在线" : node.online === false ? "离线" : "未知"}
           </span>
         </div>
       );
@@ -857,7 +876,7 @@ function renderDynamicCell(
       );
 
     case "ping_latency": {
-      const lat = activePing?.lastValue ?? null;
+      const lat = primaryPing?.lastValue ?? null;
       return (
         <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
           {lat != null ? (
@@ -870,7 +889,7 @@ function renderDynamicCell(
     }
 
     case "ping_avg": {
-      const avg = activePing?.avg ?? activePing?.lastValue ?? null;
+      const avg = primaryPing?.avg ?? null;
       return (
         <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
           {avg != null ? (
@@ -883,7 +902,7 @@ function renderDynamicCell(
     }
 
     case "ping_loss": {
-      const loss = activePing?.loss ?? null;
+      const loss = primaryLoss;
       return (
         <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
           {loss != null ? (
@@ -968,12 +987,19 @@ function renderDynamicCell(
         </div>
       );
 
-    case "updated_at":
+    case "updated_at": {
+      const reportedAt = node.updatedAt > 0 ? formatRelativeTime(node.updatedAt) : "";
+      const editedAt = formatShortDate(node.updated_at);
       return (
-        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
-          {formatShortDate(node.updated_at)}
+        <div
+          key={colId}
+          className={clsx("node-list-cell tabular", alignClass)}
+          title={editedAt !== "—" ? `资料更新于 ${editedAt}` : undefined}
+        >
+          {reportedAt || editedAt}
         </div>
       );
+    }
   }
 }
 

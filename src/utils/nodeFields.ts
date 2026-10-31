@@ -260,7 +260,7 @@ export const NODE_FIELD_DEFINITIONS: readonly NodeFieldDefinition[] = [
     unit: "天",
     naturalSortDirection: "desc",
     needsLiveMetrics: true,
-    description: "节点在线运行时长与距离到期剩余天数",
+    description: "上行是在线时长，下行是到期剩余。排序和筛选只按在线天数，到期请用「到期时间」列",
   },
 
   // ── 基础与身份字段 (NodeInfo) ────────────────────────────────────────────────
@@ -638,7 +638,7 @@ export const NODE_FIELD_DEFINITIONS: readonly NodeFieldDefinition[] = [
     filterType: "number",
     naturalSortDirection: "desc",
     needsLiveMetrics: true,
-    description: "1 / 5 / 15 分钟三级系统负载",
+    description: "1 / 5 / 15 分钟负载；排序和筛选取三者中的最大值",
   },
   {
     id: "process",
@@ -1007,10 +1007,10 @@ export const NODE_FIELD_DEFINITIONS: readonly NodeFieldDefinition[] = [
     fr: 0.9,
     align: "center",
     filterType: "number",
-    unit: "秒",
+    unit: "秒前",
     naturalSortDirection: "desc",
     needsLiveMetrics: true,
-    description: "最近一次实时状态上报时间",
+    description: "筛选按距最近一次实时上报的秒数，越小越新；表头降序把最近上报排在前面",
   },
 ] as const;
 
@@ -1184,10 +1184,43 @@ const MIB = 1024 ** 2;
 export function resolveIpStackLabel(ipv4?: string | null, ipv6?: string | null): string {
   const hasV4 = Boolean(ipv4 && String(ipv4).trim());
   const hasV6 = Boolean(ipv6 && String(ipv6).trim());
-  if (hasV4 && hasV6) return "双栈 (V4+V6)";
+  if (hasV4 && hasV6) return "IPv4 / IPv6";
   if (hasV4) return "仅 IPv4";
   if (hasV6) return "仅 IPv6";
-  return "未上报";
+  return "";
+}
+
+/** 与列表「系统」列相同的短标签。没有原始系统字符串时不猜 Linux。 */
+function osDisplayLabel(raw: string | null | undefined): string {
+  const trimmed = raw?.trim() ?? "";
+  if (!trimmed) return "";
+  const name = resolveOsInfo(trimmed).name;
+  const match = trimmed.match(/\d+(?:\.\d+)?/);
+  return match ? `${name} ${match[0]}` : name;
+}
+
+function hasReportedGpu(meta: NodeInfo | undefined, metrics: NodeMetrics | undefined): boolean {
+  if (getReportedGpuLabel(metrics?.gpu)) return true;
+  if ((meta?.gpu_name ?? "").trim()) return true;
+  if ((metrics?.gpuMemTotal ?? 0) > 0) return true;
+  if ((metrics?.gpuPct ?? 0) > 0) return true;
+  return false;
+}
+
+function positiveOrNull(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function bytesToDisplay(bytes: number | null | undefined, unit: number): number | null {
+  const positive = positiveOrNull(bytes);
+  return positive == null ? null : positive / unit;
+}
+
+function maxLoad(summary: HomeNodeSummary, metrics: NodeMetrics | undefined): number {
+  const load1 = metrics?.load1 ?? summary.load1 ?? 0;
+  const load5 = metrics?.load5 ?? 0;
+  const load15 = metrics?.load15 ?? 0;
+  return Math.max(load1, load5, load15);
 }
 
 function resolvePrimaryPingStat(
@@ -1256,11 +1289,11 @@ export function extractNodeFieldSortValue(
     case "online":
       return summary.online === true ? 1 : summary.online === false ? 0 : -1;
     case "os":
-      return meta?.os ? resolveOsInfo(meta.os).name : "";
+      return osDisplayLabel(meta?.os) || null;
     case "group":
       return (meta?.group ?? summary.group ?? "").trim();
     case "region":
-      return getDisplayRegionCode(meta?.region ?? summary.region) || "";
+      return getDisplayRegionCode(meta?.region ?? summary.region) || null;
     case "tags":
       return (meta?.tags ?? "").trim();
     case "public_remark":
@@ -1270,7 +1303,7 @@ export function extractNodeFieldSortValue(
     case "ipv6":
       return (meta?.ipv6 ?? "").trim();
     case "ip_stack":
-      return resolveIpStackLabel(meta?.ipv4, meta?.ipv6);
+      return resolveIpStackLabel(meta?.ipv4, meta?.ipv6) || null;
     case "weight":
       return meta?.weight ?? summary.weight ?? 0;
     case "hidden":
@@ -1278,7 +1311,7 @@ export function extractNodeFieldSortValue(
     case "cpu_name":
       return (meta?.cpu_name ?? "").trim();
     case "cpu_cores":
-      return meta?.cpu_cores ?? summary.cpuCores ?? 0;
+      return positiveOrNull(meta?.cpu_cores ?? summary.cpuCores);
     case "arch":
       return (meta?.arch ?? "").trim();
     case "virtualization":
@@ -1288,11 +1321,11 @@ export function extractNodeFieldSortValue(
     case "gpu_name":
       return (getReportedGpuLabel(metrics?.gpu) ?? meta?.gpu_name ?? "").trim();
     case "mem_total":
-      return meta?.mem_total ?? metrics?.ramTotal ?? summary.ramTotal ?? 0;
+      return positiveOrNull(meta?.mem_total ?? metrics?.ramTotal ?? summary.ramTotal);
     case "swap_total":
-      return meta?.swap_total ?? metrics?.swapTotal ?? 0;
+      return positiveOrNull(meta?.swap_total ?? metrics?.swapTotal);
     case "disk_total":
-      return meta?.disk_total ?? metrics?.diskTotal ?? summary.diskTotal ?? 0;
+      return positiveOrNull(meta?.disk_total ?? metrics?.diskTotal ?? summary.diskTotal);
     case "cpu":
       return metrics?.cpuPct ?? summary.cpuPct ?? 0;
     case "memory":
@@ -1302,10 +1335,12 @@ export function extractNodeFieldSortValue(
     case "swap": {
       const used = metrics?.swapUsed ?? 0;
       const total = metrics?.swapTotal ?? meta?.swap_total ?? 0;
-      return total > 0 ? (used / total) * 100 : 0;
+      return total > 0 ? (used / total) * 100 : null;
     }
-    case "swap_used":
-      return metrics?.swapUsed ?? 0;
+    case "swap_used": {
+      const total = metrics?.swapTotal ?? meta?.swap_total ?? 0;
+      return total > 0 ? (metrics?.swapUsed ?? 0) : null;
+    }
     case "disk":
       return metrics?.diskPct ?? summary.diskPct ?? 0;
     case "disk_used":
@@ -1315,8 +1350,9 @@ export function extractNodeFieldSortValue(
     case "load5":
       return metrics?.load5 ?? 0;
     case "load15":
+      return metrics?.load15 ?? 0;
     case "load_all":
-      return field === "load15" ? (metrics?.load15 ?? 0) : (metrics?.load1 ?? summary.load1 ?? 0);
+      return maxLoad(summary, metrics);
     case "process":
       return metrics?.process ?? 0;
     case "connections":
@@ -1329,11 +1365,11 @@ export function extractNodeFieldSortValue(
     case "connections_udp":
       return metrics?.connectionsUdp ?? summary.connectionsUdp ?? 0;
     case "gpu_pct":
-      return metrics?.gpuPct ?? 0;
+      return hasReportedGpu(meta, metrics) ? (metrics?.gpuPct ?? 0) : null;
     case "gpu_mem":
-      return metrics?.gpuMemUsed ?? 0;
+      return positiveOrNull(metrics?.gpuMemTotal) != null ? (metrics?.gpuMemUsed ?? 0) : null;
     case "gpu_temp":
-      return metrics?.gpuTemp ?? 0;
+      return hasReportedGpu(meta, metrics) ? positiveOrNull(metrics?.gpuTemp) : null;
     case "live_speed":
     case "speed":
       return (metrics?.netUp ?? summary.netUp ?? 0) + (metrics?.netDown ?? summary.netDown ?? 0);
@@ -1352,7 +1388,7 @@ export function extractNodeFieldSortValue(
     case "traffic_down":
       return metrics?.trafficDown ?? summary.trafficDown ?? 0;
     case "traffic_limit":
-      return meta?.traffic_limit ?? 0;
+      return positiveOrNull(meta?.traffic_limit);
     case "traffic_used_pct": {
       const usage = resolveTrafficUsage(
         meta?.traffic_limit_type,
@@ -1360,7 +1396,7 @@ export function extractNodeFieldSortValue(
         metrics?.trafficDown ?? summary.trafficDown ?? 0,
         meta?.traffic_limit ?? 0,
       );
-      return usage.unlimited ? 0 : usage.fraction * 100;
+      return usage.unlimited ? null : usage.fraction * 100;
     }
     case "traffic_limit_type":
       return trafficTypeLabel(meta?.traffic_limit_type);
@@ -1414,7 +1450,9 @@ export function extractNodeFieldFilterValue(
 
   switch (field) {
     case "online":
-      return summary.online === true;
+      if (summary.online === true) return true;
+      if (summary.online === false) return false;
+      return null;
     case "hidden":
       return Boolean(meta?.hidden ?? summary.hidden);
     case "auto_renewal":
@@ -1436,11 +1474,11 @@ export function extractNodeFieldFilterValue(
     case "uuid":
       return summary.uuid;
     case "os":
-      return meta?.os ? resolveOsInfo(meta.os).name : "Linux";
+      return osDisplayLabel(meta?.os);
     case "group":
       return (meta?.group ?? summary.group ?? "").trim() || "未分组";
     case "region":
-      return getDisplayRegionCode(meta?.region ?? summary.region) || "未知";
+      return getDisplayRegionCode(meta?.region ?? summary.region) || "";
     case "tags": {
       const parsed = parseTags(meta?.tags).map((t) => t.label);
       return parsed.length > 0 ? parsed : [];
@@ -1456,9 +1494,9 @@ export function extractNodeFieldFilterValue(
     case "cpu_name":
       return (meta?.cpu_name ?? "").trim();
     case "arch":
-      return (meta?.arch ?? "").trim() || "未知";
+      return (meta?.arch ?? "").trim();
     case "virtualization":
-      return (meta?.virtualization ?? "").trim() || "未知";
+      return (meta?.virtualization ?? "").trim();
     case "kernel_version":
       return (meta?.kernel_version ?? "").trim();
     case "gpu_name":
@@ -1466,9 +1504,9 @@ export function extractNodeFieldFilterValue(
     case "traffic_limit_type":
       return trafficTypeLabel(meta?.traffic_limit_type);
     case "billing_cycle":
-      return meta?.billing_cycle ? formatBillingCycle(meta.billing_cycle) : "未设置";
+      return meta?.billing_cycle ? formatBillingCycle(meta.billing_cycle) : "";
     case "currency":
-      return (meta?.currency ?? "").trim() || "未设置";
+      return (meta?.currency ?? "").trim();
     case "created_at":
       return (meta?.created_at ?? "").trim();
 
@@ -1476,13 +1514,13 @@ export function extractNodeFieldFilterValue(
     case "weight":
       return meta?.weight ?? summary.weight ?? 0;
     case "cpu_cores":
-      return meta?.cpu_cores ?? summary.cpuCores ?? 0;
+      return positiveOrNull(meta?.cpu_cores ?? summary.cpuCores);
     case "mem_total":
-      return (meta?.mem_total ?? metrics?.ramTotal ?? summary.ramTotal ?? 0) / GIB;
+      return bytesToDisplay(meta?.mem_total ?? metrics?.ramTotal ?? summary.ramTotal, GIB);
     case "swap_total":
-      return (meta?.swap_total ?? metrics?.swapTotal ?? 0) / GIB;
+      return bytesToDisplay(meta?.swap_total ?? metrics?.swapTotal, GIB);
     case "disk_total":
-      return (meta?.disk_total ?? metrics?.diskTotal ?? summary.diskTotal ?? 0) / GIB;
+      return bytesToDisplay(meta?.disk_total ?? metrics?.diskTotal ?? summary.diskTotal, GIB);
     case "cpu":
       return metrics?.cpuPct ?? summary.cpuPct ?? 0;
     case "memory":
@@ -1492,17 +1530,20 @@ export function extractNodeFieldFilterValue(
     case "swap": {
       const used = metrics?.swapUsed ?? 0;
       const total = metrics?.swapTotal ?? meta?.swap_total ?? 0;
-      return total > 0 ? (used / total) * 100 : 0;
+      return total > 0 ? (used / total) * 100 : null;
     }
-    case "swap_used":
-      return (metrics?.swapUsed ?? 0) / GIB;
+    case "swap_used": {
+      const total = metrics?.swapTotal ?? meta?.swap_total ?? 0;
+      return total > 0 ? (metrics?.swapUsed ?? 0) / GIB : null;
+    }
     case "disk":
       return metrics?.diskPct ?? summary.diskPct ?? 0;
     case "disk_used":
       return (metrics?.diskUsed ?? summary.diskUsed ?? 0) / GIB;
     case "load":
-    case "load_all":
       return metrics?.load1 ?? summary.load1 ?? 0;
+    case "load_all":
+      return maxLoad(summary, metrics);
     case "load5":
       return metrics?.load5 ?? 0;
     case "load15":
@@ -1519,11 +1560,11 @@ export function extractNodeFieldFilterValue(
     case "connections_udp":
       return metrics?.connectionsUdp ?? summary.connectionsUdp ?? 0;
     case "gpu_pct":
-      return metrics?.gpuPct ?? 0;
+      return hasReportedGpu(meta, metrics) ? (metrics?.gpuPct ?? 0) : null;
     case "gpu_mem":
-      return (metrics?.gpuMemUsed ?? 0) / GIB;
+      return positiveOrNull(metrics?.gpuMemTotal) != null ? (metrics?.gpuMemUsed ?? 0) / GIB : null;
     case "gpu_temp":
-      return metrics?.gpuTemp ?? 0;
+      return hasReportedGpu(meta, metrics) ? positiveOrNull(metrics?.gpuTemp) : null;
     case "live_speed":
     case "speed":
       return (
@@ -1545,7 +1586,7 @@ export function extractNodeFieldFilterValue(
     case "traffic_down":
       return (metrics?.trafficDown ?? summary.trafficDown ?? 0) / GIB;
     case "traffic_limit":
-      return (meta?.traffic_limit ?? 0) / GIB;
+      return bytesToDisplay(meta?.traffic_limit, GIB);
     case "traffic_used_pct": {
       const usage = resolveTrafficUsage(
         meta?.traffic_limit_type,
@@ -1553,7 +1594,7 @@ export function extractNodeFieldFilterValue(
         metrics?.trafficDown ?? summary.trafficDown ?? 0,
         meta?.traffic_limit ?? 0,
       );
-      return usage.unlimited ? 0 : usage.fraction * 100;
+      return usage.unlimited ? null : usage.fraction * 100;
     }
     case "network":
     case "ping_latency":
