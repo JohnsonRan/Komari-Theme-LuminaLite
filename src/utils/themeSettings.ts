@@ -20,6 +20,11 @@ import {
   normalizeAttentionThresholds,
   type AttentionThresholds,
 } from "@/utils/nodeAttention";
+import {
+  DEFAULT_LIST_COLUMNS,
+  normalizeListColumns,
+  type NodeFieldId,
+} from "@/utils/nodeFields";
 
 export type Appearance = "system" | "light" | "dark";
 export type NodeViewMode = "large" | "compact" | "mini" | "list";
@@ -40,6 +45,7 @@ export interface ResolvedThemeSettings {
   showRegionBar: boolean;
   showCardGroup: boolean;
   homeGroupOrder: string[];
+  listDefaultColumns: NodeFieldId[];
   enableHomeSort: boolean;
   homeSortField: HomeSortField;
   homeSortDirection: HomeSortDirection;
@@ -76,6 +82,7 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showRegionBar: true,
   showCardGroup: true,
   homeGroupOrder: [],
+  listDefaultColumns: [...DEFAULT_LIST_COLUMNS],
   enableHomeSort: false,
   homeSortField: "default",
   homeSortDirection: HOME_SORT_NATURAL_DIRECTION.default,
@@ -244,6 +251,10 @@ export function normalizeThemeSettings(
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
     showCardGroup: enabledUnlessFalse(settings?.showCardGroup),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
+    listDefaultColumns: normalizeListColumns(
+      settings?.listDefaultColumns,
+      DEFAULT_THEME_SETTINGS.listDefaultColumns,
+    ),
     // 默认关闭(需手动开启):与参考站点默认一致,访客端排序由站长显式开启。
     enableHomeSort: settings?.enableHomeSort === true,
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),

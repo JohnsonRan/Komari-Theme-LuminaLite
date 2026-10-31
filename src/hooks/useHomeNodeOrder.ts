@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { NodeInfo, NodeMetrics } from "@/types/komari";
 import type { HomeNodeSummary } from "@/services/wsStore";
 import {
   HOME_SPEED_ENTER_BPS,
@@ -16,6 +17,8 @@ interface Params {
   field: HomeSortField;
   direction: HomeSortDirection;
   nameByUuid: Map<string, string>;
+  metaByUuid?: ReadonlyMap<string, NodeInfo>;
+  metricsByUuid?: ReadonlyMap<string, NodeMetrics>;
 }
 
 const EMPTY_NUMBER_MAP = new Map<string, number>();
@@ -27,6 +30,8 @@ export function useHomeNodeOrder({
   field,
   direction,
   nameByUuid,
+  metaByUuid,
+  metricsByUuid,
 }: Params): HomeNodeSummary[] {
   const ringRef = useRef<Map<string, number[]>>(new Map());
   const nodesRef = useRef(nodes);
@@ -60,8 +65,10 @@ export function useHomeNodeOrder({
       nameByUuid,
       speedAvgByUuid: EMPTY_NUMBER_MAP,
       speedActive: EMPTY_SET,
+      metaByUuid,
+      metricsByUuid,
     });
-  }, [field, direction, nodes, nameByUuid]);
+  }, [field, direction, nodes, nameByUuid, metaByUuid, metricsByUuid]);
 
   const [speedUuids, setSpeedUuids] = useState<string[]>([]);
   const activeRef = useRef<Set<string>>(new Set());

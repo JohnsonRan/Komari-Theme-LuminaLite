@@ -1,26 +1,45 @@
-import type { HomeNodeSummary } from "@/services/wsStore";
+import type { NodeInfo, NodeMetrics } from "@/types/komari";
+import {
+  getNodeMetaSnapshot,
+  getNodeMetricsSnapshot,
+  type HomeNodeSummary,
+} from "@/services/wsStore";
+import {
+  ALL_NODE_FIELD_IDS,
+  extractNodeFieldSortValue,
+  getNodeFieldDefinition,
+  NODE_FIELD_DEFINITIONS,
+  type NodeFieldId,
+} from "@/utils/nodeFields";
 
-// 首页临时排序；默认使用后端 weight，离线节点始终沉底。
+// 首页与列表全字段排序；默认使用后端 weight，除按「在线状态」本身排序外离线节点始终沉底。
 
-export type HomeSortField = "default" | "name" | "speed" | "traffic";
+export type HomeSortField = "default" | NodeFieldId;
 export type HomeSortDirection = "asc" | "desc";
 
-export const HOME_SORT_FIELDS: readonly HomeSortField[] = [
-  "default",
-  "name",
-  "speed",
-  "traffic",
-];
+export const HOME_SORT_FIELDS: readonly HomeSortField[] = Array.from(
+  new Set<HomeSortField>(["default", "name", "speed", "traffic", ...ALL_NODE_FIELD_IDS]),
+);
+
+const dynamicLabels = Object.fromEntries(
+  NODE_FIELD_DEFINITIONS.map((def) => [def.id, def.label]),
+) as Record<NodeFieldId, string>;
 
 export const HOME_SORT_FIELD_LABELS: Record<HomeSortField, string> = {
+  ...dynamicLabels,
   default: "默认",
   name: "名称",
   speed: "实时网速",
   traffic: "累计流量",
 };
 
-// 每个维度的自然默认方向:文本升序(A→Z),数值降序(高的在前)。
+const dynamicNaturalDirections = Object.fromEntries(
+  NODE_FIELD_DEFINITIONS.map((def) => [def.id, def.naturalSortDirection]),
+) as Record<NodeFieldId, HomeSortDirection>;
+
+// 每个维度的自然默认方向:文本升序(A→Z),数值降序(高的在前),延迟/权重升序。
 export const HOME_SORT_NATURAL_DIRECTION: Record<HomeSortField, HomeSortDirection> = {
+  ...dynamicNaturalDirections,
   default: "asc",
   name: "asc",
   speed: "desc",
@@ -33,6 +52,12 @@ export function isHomeSortField(value: unknown): value is HomeSortField {
 
 export function isHomeSortDirection(value: unknown): value is HomeSortDirection {
   return value === "asc" || value === "desc";
+}
+
+export function sortFieldNeedsLiveMetrics(field: HomeSortField): boolean {
+  if (field === "default") return false;
+  if (field === "speed" || field === "traffic") return true;
+  return getNodeFieldDefinition(field).needsLiveMetrics;
 }
 
 // 速率排序使用 0.5/0.3 MB/s 进出滞回门，避免节点反复换位。
@@ -48,31 +73,56 @@ export interface HomeSortContext {
   speedAvgByUuid: Map<string, number>;
   /** 通过滞回门、当前算「活跃」的节点集合,仅「实时网速」维度用。 */
   speedActive: Set<string>;
+  /** 可选注入静态节点元数据 Map（未传时自动读取 wsStore 快照）。 */
+  metaByUuid?: ReadonlyMap<string, NodeInfo>;
+  /** 可选注入实时指标 Map（未传时自动读取 wsStore 快照）。 */
+  metricsByUuid?: ReadonlyMap<string, NodeMetrics>;
+  /** 可选固定时间戳（便于测试到期/创建天数计算）。 */
+  now?: number;
 }
 
-// 0=参与排序，1=无有效排序值，2=离线；后两段按 weight 排列。
-function segmentOf(node: HomeNodeSummary, field: HomeSortField, ctx: HomeSortContext): 0 | 1 | 2 {
-  if (node.online === false) return 2;
-  if (field === "speed") return ctx.speedActive.has(node.uuid) ? 0 : 1;
-  return 0;
-}
-
-function primaryValue(
+function resolveRawPrimary(
   node: HomeNodeSummary,
   field: HomeSortField,
   ctx: HomeSortContext,
-): number | string {
+  now: number,
+): number | string | null {
   switch (field) {
+    case "default":
+      return node.weight;
     case "name":
-      return ctx.nameByUuid.get(node.uuid) ?? node.uuid;
+      return ctx.nameByUuid.get(node.uuid) ?? getNodeMetaSnapshot(node.uuid)?.name?.trim() ?? node.uuid;
     case "speed":
-      return ctx.speedAvgByUuid.get(node.uuid) ?? 0;
+      return ctx.speedAvgByUuid.get(node.uuid) ?? (node.netUp || 0) + (node.netDown || 0);
     case "traffic":
       return (node.trafficUp || 0) + (node.trafficDown || 0);
-    case "default":
-    default:
-      return node.weight;
+    default: {
+      const meta = ctx.metaByUuid?.get(node.uuid) ?? getNodeMetaSnapshot(node.uuid);
+      const metrics = ctx.metricsByUuid?.get(node.uuid) ?? getNodeMetricsSnapshot(node.uuid);
+      const displayName = ctx.nameByUuid.get(node.uuid) ?? meta?.name?.trim() ?? node.uuid;
+      return extractNodeFieldSortValue(field, {
+        summary: node,
+        meta,
+        metrics,
+        displayName,
+        now,
+      });
+    }
   }
+}
+
+// 0=参与排序，1=无有效排序值，2=离线；后两段按 weight 排列。
+function segmentOf(
+  node: HomeNodeSummary,
+  field: HomeSortField,
+  ctx: HomeSortContext,
+  rawPrimary: number | string | null,
+): 0 | 1 | 2 {
+  if (field === "online") return 0;
+  if (node.online === false) return 2;
+  if (field === "speed") return ctx.speedActive.has(node.uuid) ? 0 : 1;
+  if (rawPrimary === null) return 1;
+  return 0;
 }
 
 /** 三段式稳定排序，实时速率状态由调用方注入。 */
@@ -83,22 +133,26 @@ export function sortHomeNodes(
   ctx: HomeSortContext,
 ): HomeNodeSummary[] {
   const factor = direction === "asc" ? 1 : -1;
+  const now = ctx.now ?? Date.now();
   // 预计算比较键，避免 comparator 重复查 Map。
   return nodes
-    .map((node) => ({
-      node,
-      segment: segmentOf(node, field, ctx),
-      primary: primaryValue(node, field, ctx),
-      weight: node.weight,
-      uuid: node.uuid,
-    }))
+    .map((node) => {
+      const rawPrimary = resolveRawPrimary(node, field, ctx, now);
+      return {
+        node,
+        segment: segmentOf(node, field, ctx, rawPrimary),
+        primary: rawPrimary ?? 0,
+        weight: node.weight,
+        uuid: node.uuid,
+      };
+    })
     .sort((a, b) => {
       if (a.segment !== b.segment) return a.segment - b.segment;
 
       if (a.segment === 0) {
         const cmp =
           typeof a.primary === "string" || typeof b.primary === "string"
-            ? String(a.primary).localeCompare(String(b.primary), "zh-CN")
+            ? String(a.primary).localeCompare(String(b.primary), "zh-CN", { numeric: true })
             : a.primary - b.primary;
         if (cmp !== 0) return cmp * factor;
       }

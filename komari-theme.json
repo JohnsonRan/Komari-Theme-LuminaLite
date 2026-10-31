@@ -92,6 +92,16 @@
           "en": "Default node view at ≤720px. list is not available on mobile."
         }
       },
+      {
+        "key": "listDefaultColumns",
+        "name": { "zh-CN": "列表视图默认列", "en": "List view default columns" },
+        "type": "richtext",
+        "default": "node,os,cpu,memory,disk,load,live_speed,traffic,network,life",
+        "help": {
+          "zh-CN": "列表视图默认展示的字段列 ID（逗号或换行分隔）。访客也可在前端点击「字段」按钮自主勾选、拖拽调整全部 64 个采集字段的显示顺序。",
+          "en": "Comma or newline separated column IDs for list view. Visitors can also customize all 64 fields directly in the UI."
+        }
+      },
 
       {
         "name": { "zh-CN": "背景", "en": "Background" },

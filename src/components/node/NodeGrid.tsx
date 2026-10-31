@@ -19,7 +19,12 @@ import {
   useHomeNodeSummaries,
   useNodeStoreStatus,
 } from "@/hooks/useNode";
-import type { HomeNodeStructure, HomeNodeSummary } from "@/services/wsStore";
+import {
+  getNodeMetricsSnapshot,
+  type HomeNodeStructure,
+  type HomeNodeSummary,
+} from "@/services/wsStore";
+import type { NodeInfo, NodeMetrics } from "@/types/komari";
 import { useHomepagePingOverview } from "@/hooks/usePingOverview";
 import { usePublicConfig } from "@/hooks/usePublicConfig";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
@@ -49,12 +54,16 @@ import {
 import { getDisplayRegionCode } from "@/utils/geo";
 import { useHomeSort } from "@/hooks/useHomeSort";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
+import { useNodeFilter } from "@/hooks/useNodeFilter";
+import { sortFieldNeedsLiveMetrics } from "@/utils/homeSort";
+import { filterHomeNodes, filterNeedsLiveMetrics } from "@/utils/nodeFilter";
 import { useLayoutTransition } from "@/hooks/useLayoutTransition";
 import { AttentionProvider, useNodeAttention } from "@/hooks/useNodeAttention";
 import { useHourlyClock } from "@/hooks/useClock";
 import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { useVersion } from "@/hooks/useVersion";
 import { HomeSortControl } from "./HomeSortControl";
+import { NodeDataToolbar } from "./NodeDataToolbar";
 import { NodeCardSkeleton } from "./NodeCardSkeleton";
 import type { NodeViewMode } from "@/utils/themeSettings";
 
@@ -720,8 +729,12 @@ export function NodeGrid() {
   const attentionClock = useHourlyClock();
   const { mode } = useViewMode();
   const sort = useHomeSort();
-  // enableHomeSort 控制访客能否改排序;关闭时无视 session 覆盖、直接用管理员默认序(默认仍是 weight)。
-  const sortEnabled = themeSettings.isReady && themeSettings.enableHomeSort;
+  const filterState = useNodeFilter();
+  // enableHomeSort 或列表视图或用户主动点击表头/排序栏时均允许自定义排序。
+  const sortEnabled =
+    (themeSettings.isReady && themeSettings.enableHomeSort) ||
+    mode === "list" ||
+    sort.hasOverride;
   const sortField = sortEnabled ? sort.field : themeSettings.homeSortField;
   const sortDirection = sortEnabled ? sort.direction : themeSettings.homeSortDirection;
   const [selectedGroup, setSelectedGroup] = useState(HOME_ALL_GROUP);
@@ -729,9 +742,11 @@ export function NodeGrid() {
   useHomepagePingOverview();
 
   const attentionEnabled = themeSettings.isReady && themeSettings.enableAttentionSort;
-  // 实时排序 / 异常置顶需要 live 字段；总览拆到 HomeOverviewLive 自己订。
+  // 实时排序 / 实时字段筛选 / 异常置顶需要 live 字段；总览拆到 HomeOverviewLive 自己订。
   const needsLiveOrder =
-    sortField === "speed" || sortField === "traffic" || attentionEnabled;
+    sortFieldNeedsLiveMetrics(sortField) ||
+    filterNeedsLiveMetrics(filterState.filter) ||
+    attentionEnabled;
   const liveNodes = useHomeNodeSummaries(needsLiveOrder);
 
   // 摘要不含名称，先从完整 meta 解析主题隐藏列表，再统一过滤各类数据。
@@ -758,6 +773,11 @@ export function NodeGrid() {
       ),
     [allMeta, me?.logged_in, hiddenUuids],
   );
+  const metaByUuid = useMemo(() => {
+    const map = new Map<string, NodeInfo>();
+    for (const node of visibleMeta) map.set(node.uuid, node);
+    return map;
+  }, [visibleMeta]);
   const trafficUuids = useMemo(
     () => visibleMeta.map((node) => node.uuid),
     [visibleMeta],
@@ -812,8 +832,8 @@ export function NodeGrid() {
     [groupFilteredStructures, selectedRegion],
   );
 
-  // 排序输入：default/name 走结构态；speed/traffic/attention 才拼 live。
-  const sortSourceNodes = useMemo(() => {
+  // 排序与高级筛选输入：不需要实时指标时走结构态；需要实时指标时拼 live。
+  const baseSourceNodes = useMemo(() => {
     if (!needsLiveOrder) {
       return filteredStructures.map(structureAsSortable);
     }
@@ -821,12 +841,35 @@ export function NodeGrid() {
     return liveNodes.filter((node) => allowed.has(node.uuid));
   }, [needsLiveOrder, filteredStructures, liveNodes]);
 
-  // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
+  const metricsByUuid = useMemo(() => {
+    const map = new Map<string, NodeMetrics>();
+    for (const node of baseSourceNodes) {
+      const m = getNodeMetricsSnapshot(node.uuid);
+      if (m) map.set(node.uuid, m);
+    }
+    return map;
+  }, [baseSourceNodes]);
+
+  // 应用全字段关键字搜索、在线状态筛选与多维度规则过滤。
+  const sortSourceNodes = useMemo(
+    () =>
+      filterHomeNodes(baseSourceNodes, filterState.filter, {
+        metaByUuid,
+        metricsByUuid,
+        nameByUuid,
+        now: attentionClock,
+      }),
+    [baseSourceNodes, filterState.filter, metaByUuid, metricsByUuid, nameByUuid, attentionClock],
+  );
+
+  // 排序在筛选之后。离线永远沉底(除按「在线状态」本身排序外,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
   const sortedNodes = useHomeNodeOrder({
     nodes: sortSourceNodes,
     field: sortField,
     direction: sortDirection,
     nameByUuid,
+    metaByUuid,
+    metricsByUuid,
   });
 
   const attentionByUuid = useNodeAttention(
@@ -1006,6 +1049,31 @@ export function NodeGrid() {
           selectedRegion={selectedRegion}
           onSelectRegion={setSelectedRegion}
         />
+      )}
+      <NodeDataToolbar
+        allNodes={baseSourceNodes}
+        matchedCount={orderedUuids.length}
+        totalCount={baseSourceNodes.length}
+        metaByUuid={metaByUuid}
+        metricsByUuid={metricsByUuid}
+        nameByUuid={nameByUuid}
+        sortState={sort}
+        showSortInToolbar={!showHomeSort}
+      />
+      {orderedUuids.length === 0 && (
+        <div className="home-empty-state" role="status" aria-live="polite">
+          <span className="home-empty-state-title">没有符合当前筛选条件的节点</span>
+          <span className="home-empty-state-desc">
+            请尝试调整搜索关键字或放宽字段过滤规则。
+          </span>
+          <button
+            type="button"
+            className="node-toolbar-primary-btn mt-2"
+            onClick={filterState.clearFilter}
+          >
+            清空全部筛选条件
+          </button>
+        </div>
       )}
       {isList ? (
         <Suspense fallback={<NodeCardSkeleton />}>

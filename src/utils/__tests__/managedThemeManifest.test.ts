@@ -86,6 +86,7 @@ describe("komari-theme.json managed configuration", () => {
     expectDefault("defaultAppearance", DEFAULT_THEME_SETTINGS.defaultAppearance);
     expectDefault("desktopNodeViewMode", DEFAULT_THEME_SETTINGS.desktopNodeViewMode);
     expectDefault("mobileNodeViewMode", DEFAULT_THEME_SETTINGS.mobileNodeViewMode);
+    expectDefault("listDefaultColumns", DEFAULT_THEME_SETTINGS.listDefaultColumns.join(","));
     expectDefault("enableAdminButton", DEFAULT_THEME_SETTINGS.enableAdminButton);
     expectDefault("enableIconAnimations", DEFAULT_THEME_SETTINGS.enableIconAnimations);
     expectDefault("enableDataAnimations", DEFAULT_THEME_SETTINGS.enableDataAnimations);

@@ -1,16 +1,36 @@
-import { memo, useRef, useState, type CSSProperties } from "react";
+import { memo, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDown, ArrowUp, CircleDollarSign } from "@/components/ui/icons";
+import {
+  ArrowDown,
+  ArrowUp,
+  CircleDollarSign,
+  ListFilter,
+} from "@/components/ui/icons";
 import { clsx } from "clsx";
 import { Flag } from "@/components/ui/Flag";
 import { OsLogo } from "@/components/ui/OsLogo";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
-import { useNodeCardModel, type NodePingSeries } from "@/hooks/useNodeCardModel";
+import {
+  useNodeCardModel,
+  type NodePingSeries,
+} from "@/hooks/useNodeCardModel";
+import { useListColumns } from "@/hooks/useListColumns";
+import { useHomeSort } from "@/hooks/useHomeSort";
+import { useNodeFilter } from "@/hooks/useNodeFilter";
 import { useLayoutTransition } from "@/hooks/useLayoutTransition";
 import { useNodeStatusFlash } from "@/hooks/useNodeStatusFlash";
 import { useCanvasRedrawKey } from "@/hooks/useMetricColors";
-import { formatBytes } from "@/utils/format";
-import { speedRateColor } from "@/utils/metricTone";
+import { formatBillingCycle } from "@/utils/billing";
+import {
+  formatBytes,
+  formatByteRate,
+  trimFixed,
+} from "@/utils/format";
+import { getDisplayRegionCode } from "@/utils/geo";
+import { getReportedGpuLabel } from "@/utils/gpu";
+import { latencyHeatColor, lossHeatColor, speedRateColor } from "@/utils/metricTone";
+import { getNodeFieldDefinition, type NodeFieldId } from "@/utils/nodeFields";
+import { trafficTypeLabel } from "@/utils/traffic";
 import { LatencyBars } from "./LatencyBars";
 import { PingTaskTabs } from "./PingTaskTabs";
 import { attentionAttrs } from "@/utils/nodeAttention";
@@ -23,12 +43,37 @@ import {
   nodeDetailLinkLabels,
 } from "./nodeCardShared";
 
+type NodeCardModel = ReturnType<typeof useNodeCardModel>;
+
+function formatShortDate(raw: string | number | null | undefined): string {
+  if (raw == null) return "—";
+  const str = String(raw).trim();
+  if (!str) return "—";
+  const ts = Date.parse(str);
+  if (Number.isNaN(ts) || ts <= 0) return "—";
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
+function resolveIpStackLabel(ipv4?: string, ipv6?: string): string {
+  const has4 = Boolean(ipv4 && ipv4.trim());
+  const has6 = Boolean(ipv6 && ipv6.trim());
+  if (has4 && has6) return "IPv4 / IPv6";
+  if (has4) return "仅 IPv4";
+  if (has6) return "仅 IPv6";
+  return "";
+}
+
 // 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
 const LIST_PING_BUCKETS = 12;
 
 type ListGaugeStyle = CSSProperties & {
   "--list-gauge-color": string;
   "--list-gauge-fill": string;
+};
+
+type DynamicListStyle = CSSProperties & {
+  "--node-list-grid-template"?: string;
+  "--node-list-min-width"?: string;
 };
 
 function pctText(value: number) {
@@ -121,7 +166,824 @@ function ListLatency({
   );
 }
 
-const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
+function renderDynamicCell(
+  colId: NodeFieldId,
+  model: NodeCardModel,
+  pingIndex: number,
+  setActivePingIndex: (index: number) => void,
+  redrawKey: string,
+) {
+  if (!model.node) return null;
+  const {
+    node,
+    traffic,
+    pingSeries,
+    hasHomepagePingBinding,
+    footerTags,
+    expire,
+    expireColor,
+    uptime,
+    renewalPrice,
+    loadFraction,
+    upRate,
+    downRate,
+    osName,
+    attention,
+  } = model;
+
+  const def = getNodeFieldDefinition(colId);
+  const alignClass =
+    def.align === "center"
+      ? "is-align-center"
+      : def.align === "right"
+        ? "is-align-right"
+        : "is-align-left";
+  const usedPct = `${Math.round(clamp01(traffic.fraction) * 100)}%`;
+  const activePing = pingSeries[pingIndex]?.ping;
+
+  switch (colId) {
+    case "node":
+      return (
+        <div key={colId} className="node-list-cell node-list-node">
+          <AttentionReasons attention={attention} />
+          <div className="node-list-node-text">
+            <div className="node-list-node-head">
+              <Flag region={node.region} size={14} />
+              <span className="node-list-name" title={node.name}>
+                {node.name}
+              </span>
+            </div>
+            {(renewalPrice || footerTags.length > 0) && (
+              <div
+                className="node-list-chips"
+                title={footerTags.length > 0 ? joinTagTitle(footerTags) : undefined}
+              >
+                {renewalPrice && (
+                  <span className="dstatus-price-chip">
+                    <CircleDollarSign size={12} strokeWidth={2.2} />
+                    {renewalPrice}
+                  </span>
+                )}
+                {footerTags.map((tag, index) => (
+                  <span
+                    key={`${tag.label}-${index}`}
+                    className="dstatus-tag-chip"
+                    data-tag={tag.color}
+                    style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
+                  >
+                    {tag.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+
+    case "os":
+      return (
+        <div key={colId} className="node-list-cell col-os">
+          <OsLogo value={node.os} size={16} />
+          <span className="node-list-os-name" title={node.os || osName}>
+            {formatOsLabel(osName, node.os)}
+          </span>
+        </div>
+      );
+
+    case "cpu":
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          <ListGauge
+            value={pctText(node.cpuPct)}
+            fraction={node.cpuPct / 100}
+            paint="var(--progress-cpu)"
+          />
+        </div>
+      );
+
+    case "memory":
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          <ListGauge
+            value={pctText(node.ramPct)}
+            fraction={node.ramPct / 100}
+            paint="var(--progress-memory)"
+          />
+        </div>
+      );
+
+    case "disk":
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          <ListGauge
+            value={pctText(node.diskPct)}
+            fraction={node.diskPct / 100}
+            paint="var(--progress-disk)"
+          />
+        </div>
+      );
+
+    case "load":
+      return (
+        <div key={colId} className="node-list-cell col-load">
+          <ListGauge
+            value={node.load1.toFixed(2)}
+            unit=""
+            fraction={loadFraction}
+            paint="var(--progress-load)"
+          />
+        </div>
+      );
+
+    case "live_speed":
+      return (
+        <div key={colId} className="node-list-cell col-live node-list-stack">
+          <StackLine
+            icon={<ArrowUp size={11} strokeWidth={2.4} />}
+            value={upRate.value}
+            unit={upRate.unit}
+            color={speedRateColor(upRate.unit)}
+          />
+          <StackLine
+            icon={<ArrowDown size={11} strokeWidth={2.4} />}
+            value={downRate.value}
+            unit={downRate.unit}
+            color={speedRateColor(downRate.unit)}
+          />
+        </div>
+      );
+
+    case "traffic":
+      return (
+        <div
+          key={colId}
+          className="node-list-cell col-traffic"
+          title={`剩余 ${traffic.remainingLabel} · ${traffic.detail}`}
+        >
+          <div className="node-list-traffic-rows">
+            <StackLine
+              icon={<ArrowUp size={11} strokeWidth={2.1} />}
+              value={formatBytes(node.trafficUp)}
+            />
+            <StackLine
+              icon={<ArrowDown size={11} strokeWidth={2.1} />}
+              value={formatBytes(node.trafficDown)}
+            />
+          </div>
+          <span className="node-list-traffic-quota" style={{ color: traffic.color }}>
+            {usedPct}
+          </span>
+        </div>
+      );
+
+    case "network":
+      return (
+        <div key={colId} className="node-list-cell col-net">
+          {hasHomepagePingBinding ? (
+            <ListLatency
+              pingSeries={pingSeries}
+              activeIndex={pingIndex}
+              onSelect={setActivePingIndex}
+              redrawKey={redrawKey}
+            />
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "life":
+      return (
+        <div key={colId} className="node-list-cell col-life node-list-stack">
+          <StackLine value={uptime.value} unit={uptime.unit} color="var(--progress-cpu)" />
+          <StackLine value={expire.value} unit={expire.unit} color={expireColor} />
+        </div>
+      );
+
+    // ── 基础与身份字段 ──────────────────────────────────────────────────────
+    case "online":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          <span
+            className={clsx(
+              "node-list-status-pill",
+              node.online === true ? "is-online" : "is-offline",
+            )}
+          >
+            <span className="node-list-status-dot" />
+            {node.online === true ? "在线" : "离线"}
+          </span>
+        </div>
+      );
+
+    case "name":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)} title={node.name}>
+          <span className="node-list-name">{node.name}</span>
+        </div>
+      );
+
+    case "group":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.group?.trim() ? (
+            <span className="node-list-badge">{node.group.trim()}</span>
+          ) : (
+            <span className="node-list-muted">未分组</span>
+          )}
+        </div>
+      );
+
+    case "region": {
+      const code = getDisplayRegionCode(node.region);
+      return (
+        <div key={colId} className={clsx("node-list-cell node-list-inline", alignClass)}>
+          <Flag region={node.region} size={14} />
+          <span className="tabular">{code || "—"}</span>
+        </div>
+      );
+    }
+
+    case "tags":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell", alignClass)}
+          title={footerTags.length > 0 ? joinTagTitle(footerTags) : undefined}
+        >
+          {footerTags.length > 0 ? (
+            <div className="node-list-chips">
+              {footerTags.map((tag, idx) => (
+                <span
+                  key={`${tag.label}-${idx}`}
+                  className="dstatus-tag-chip"
+                  data-tag={tag.color}
+                  style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
+                >
+                  {tag.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "public_remark":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell", alignClass)}
+          title={node.public_remark || undefined}
+        >
+          {node.public_remark?.trim() ? (
+            <span className="node-list-ellipsis">{node.public_remark.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "ipv4":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell tabular", alignClass)}
+          title={node.ipv4 || undefined}
+        >
+          {node.ipv4?.trim() ? (
+            <span className="node-list-ellipsis">{node.ipv4.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "ipv6":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell tabular", alignClass)}
+          title={node.ipv6 || undefined}
+        >
+          {node.ipv6?.trim() ? (
+            <span className="node-list-ellipsis">{node.ipv6.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "ip_stack": {
+      const label = resolveIpStackLabel(node.ipv4, node.ipv6);
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {label ? (
+            <span className="node-list-badge">{label}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "weight":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.weight}
+        </div>
+      );
+
+    case "hidden":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.hidden ? (
+            <span className="node-list-badge is-warn">隐藏</span>
+          ) : (
+            <span className="node-list-muted">公开</span>
+          )}
+        </div>
+      );
+
+    case "uuid":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell tabular", alignClass)}
+          title={node.uuid}
+        >
+          <span className="node-list-ellipsis">{node.uuid}</span>
+        </div>
+      );
+
+    // ── 硬件与系统规格字段 ──────────────────────────────────────────────────
+    case "cpu_name":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell", alignClass)}
+          title={node.cpu_name || undefined}
+        >
+          {node.cpu_name?.trim() ? (
+            <span className="node-list-ellipsis">{node.cpu_name.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "cpu_cores":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.cpu_cores > 0 ? `${node.cpu_cores} 核` : "—"}
+        </div>
+      );
+
+    case "arch":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.arch?.trim() ? (
+            <span className="node-list-badge">{node.arch.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "virtualization":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.virtualization?.trim() ? (
+            <span className="node-list-badge">{node.virtualization.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "kernel_version":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell tabular", alignClass)}
+          title={node.kernel_version || undefined}
+        >
+          {node.kernel_version?.trim() ? (
+            <span className="node-list-ellipsis">{node.kernel_version.trim()}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "gpu_name": {
+      const gpuLabel = getReportedGpuLabel(node.gpu) || node.gpu_name?.trim() || "";
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell", alignClass)}
+          title={gpuLabel || undefined}
+        >
+          {gpuLabel ? (
+            <span className="node-list-ellipsis">{gpuLabel}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "mem_total":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.mem_total > 0 ? formatBytes(node.mem_total) : "—"}
+        </div>
+      );
+
+    case "swap_total":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.swap_total > 0 ? formatBytes(node.swap_total) : "—"}
+        </div>
+      );
+
+    case "disk_total":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.disk_total > 0 ? formatBytes(node.disk_total) : "—"}
+        </div>
+      );
+
+    // ── 实时资源与进程指标 ──────────────────────────────────────────────────
+    case "ram_used":
+      return (
+        <div key={colId} className="node-list-cell node-list-stack">
+          <StackLine value={formatBytes(node.ramUsed)} color="var(--progress-memory)" />
+          <StackLine value={`/ ${formatBytes(node.ramTotal || node.mem_total)}`} />
+        </div>
+      );
+
+    case "swap": {
+      const swapTotal = node.swapTotal || node.swap_total || 0;
+      const swapPct = swapTotal > 0 ? (node.swapUsed / swapTotal) * 100 : 0;
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          {swapTotal > 0 ? (
+            <ListGauge
+              value={pctText(swapPct)}
+              fraction={swapPct / 100}
+              paint="var(--progress-swap)"
+            />
+          ) : (
+            <span className="node-list-muted">未启用</span>
+          )}
+        </div>
+      );
+    }
+
+    case "swap_used": {
+      const swapTotal = node.swapTotal || node.swap_total || 0;
+      return (
+        <div key={colId} className="node-list-cell node-list-stack">
+          {swapTotal > 0 ? (
+            <>
+              <StackLine value={formatBytes(node.swapUsed)} color="var(--progress-swap)" />
+              <StackLine value={`/ ${formatBytes(swapTotal)}`} />
+            </>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "disk_used":
+      return (
+        <div key={colId} className="node-list-cell node-list-stack">
+          <StackLine value={formatBytes(node.diskUsed)} color="var(--progress-disk)" />
+          <StackLine value={`/ ${formatBytes(node.diskTotal || node.disk_total)}`} />
+        </div>
+      );
+
+    case "load5":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <AnimatedValue text={node.load5.toFixed(2)} />
+        </div>
+      );
+
+    case "load15":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <AnimatedValue text={node.load15.toFixed(2)} />
+        </div>
+      );
+
+    case "load_all":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <span>
+            {node.load1.toFixed(2)} / {node.load5.toFixed(2)} / {node.load15.toFixed(2)}
+          </span>
+        </div>
+      );
+
+    case "process":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <AnimatedValue text={String(node.process)} />
+        </div>
+      );
+
+    case "connections":
+      return (
+        <div key={colId} className="node-list-cell node-list-stack">
+          <StackLine value={`TCP ${node.connectionsTcp}`} />
+          <StackLine value={`UDP ${node.connectionsUdp}`} />
+        </div>
+      );
+
+    case "connections_tcp":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <AnimatedValue text={String(node.connectionsTcp)} />
+        </div>
+      );
+
+    case "connections_udp":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <AnimatedValue text={String(node.connectionsUdp)} />
+        </div>
+      );
+
+    case "gpu_pct": {
+      const hasGpu = Boolean(
+        getReportedGpuLabel(node.gpu) || node.gpu_name?.trim() || node.gpuPct > 0,
+      );
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          {hasGpu ? (
+            <ListGauge
+              value={pctText(node.gpuPct)}
+              fraction={node.gpuPct / 100}
+              paint="var(--progress-cpu)"
+            />
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "gpu_mem":
+      return (
+        <div key={colId} className="node-list-cell node-list-stack">
+          {node.gpuMemTotal > 0 ? (
+            <>
+              <StackLine value={formatBytes(node.gpuMemUsed)} />
+              <StackLine value={`/ ${formatBytes(node.gpuMemTotal)}`} />
+            </>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "gpu_temp":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.gpuTemp > 0 ? `${Math.round(node.gpuTemp)}°C` : "—"}
+        </div>
+      );
+
+    // ── 网络、流量与延迟细分字段 ────────────────────────────────────────────
+    case "net_up":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          <StackLine
+            icon={<ArrowUp size={11} strokeWidth={2.4} />}
+            value={upRate.value}
+            unit={upRate.unit}
+            color={speedRateColor(upRate.unit)}
+          />
+        </div>
+      );
+
+    case "net_down":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          <StackLine
+            icon={<ArrowDown size={11} strokeWidth={2.4} />}
+            value={downRate.value}
+            unit={downRate.unit}
+            color={speedRateColor(downRate.unit)}
+          />
+        </div>
+      );
+
+    case "speed": {
+      const totalRate = formatByteRate((node.netUp || 0) + (node.netDown || 0));
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          <StackLine
+            value={totalRate.value}
+            unit={totalRate.unit}
+            color={speedRateColor(totalRate.unit)}
+          />
+        </div>
+      );
+    }
+
+    case "traffic_up":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <StackLine
+            icon={<ArrowUp size={11} strokeWidth={2.1} />}
+            value={formatBytes(node.trafficUp)}
+          />
+        </div>
+      );
+
+    case "traffic_down":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          <StackLine
+            icon={<ArrowDown size={11} strokeWidth={2.1} />}
+            value={formatBytes(node.trafficDown)}
+          />
+        </div>
+      );
+
+    case "traffic_total":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {formatBytes((node.trafficUp || 0) + (node.trafficDown || 0))}
+        </div>
+      );
+
+    case "traffic_limit":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.traffic_limit > 0 ? formatBytes(node.traffic_limit) : "不限"}
+        </div>
+      );
+
+    case "traffic_used_pct":
+      return (
+        <div key={colId} className="node-list-cell col-metric">
+          {node.traffic_limit > 0 ? (
+            <ListGauge
+              value={String(Math.round(clamp01(traffic.fraction) * 100))}
+              fraction={traffic.fraction}
+              paint={traffic.color}
+            />
+          ) : (
+            <span className="node-list-muted">不限</span>
+          )}
+        </div>
+      );
+
+    case "traffic_limit_type":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.traffic_limit > 0 ? (
+            <span className="node-list-badge">{trafficTypeLabel(node.traffic_limit_type)}</span>
+          ) : (
+            <span className="node-list-muted">未设限</span>
+          )}
+        </div>
+      );
+
+    case "ping_latency": {
+      const lat = activePing?.lastValue ?? null;
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {lat != null ? (
+            <span style={{ color: latencyHeatColor(lat) }}>{Math.round(lat)} ms</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "ping_avg": {
+      const avg = activePing?.avg ?? activePing?.lastValue ?? null;
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {avg != null ? (
+            <span style={{ color: latencyHeatColor(avg) }}>{Math.round(avg)} ms</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "ping_loss": {
+      const loss = activePing?.loss ?? null;
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {loss != null ? (
+            <span style={{ color: lossHeatColor(loss) }}>{trimFixed(loss, 1)}%</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    // ── 计费与生命周期字段 ──────────────────────────────────────────────────
+    case "uptime":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          <StackLine value={uptime.value} unit={uptime.unit} color="var(--progress-cpu)" />
+        </div>
+      );
+
+    case "expired_at":
+      return (
+        <div
+          key={colId}
+          className={clsx("node-list-cell", alignClass)}
+          title={node.expired_at ? formatShortDate(node.expired_at) : undefined}
+        >
+          <StackLine value={expire.value} unit={expire.unit} color={expireColor} />
+        </div>
+      );
+
+    case "price":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {renewalPrice ? (
+            <span className="dstatus-price-chip">
+              <CircleDollarSign size={12} strokeWidth={2.2} />
+              {renewalPrice}
+            </span>
+          ) : node.price === -1 ? (
+            <span className="node-list-badge">免费</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+
+    case "billing_cycle": {
+      const cycle = formatBillingCycle(node.billing_cycle);
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {cycle ? (
+            <span className="node-list-badge">{cycle}</span>
+          ) : (
+            <span className="node-list-muted">—</span>
+          )}
+        </div>
+      );
+    }
+
+    case "currency":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {node.currency?.trim() || "—"}
+        </div>
+      );
+
+    case "auto_renewal":
+      return (
+        <div key={colId} className={clsx("node-list-cell", alignClass)}>
+          {node.auto_renewal ? (
+            <span className="node-list-badge is-ok">是</span>
+          ) : (
+            <span className="node-list-muted">否</span>
+          )}
+        </div>
+      );
+
+    case "created_at":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {formatShortDate(node.created_at)}
+        </div>
+      );
+
+    case "updated_at":
+      return (
+        <div key={colId} className={clsx("node-list-cell tabular", alignClass)}>
+          {formatShortDate(node.updated_at)}
+        </div>
+      );
+  }
+}
+
+const NodeRow = memo(function NodeRow({
+  uuid,
+  columns,
+}: {
+  uuid: string;
+  columns: readonly NodeFieldId[];
+}) {
   const redrawKey = useCanvasRedrawKey();
   const model = useNodeCardModel(uuid, LIST_PING_BUCKETS);
   // 多任务时选中的任务序号。任务数变化(改绑定)后可能越界,取用处再夹一次。
@@ -153,12 +1015,8 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
     traffic,
     pingSeries,
     hasHomepagePingBinding,
-    footerTags,
     expire,
-    expireColor,
     uptime,
-    renewalPrice,
-    loadFraction,
     upRate,
     downRate,
     isOffline,
@@ -206,113 +1064,19 @@ const NodeRow = memo(function NodeRow({ uuid }: { uuid: string }) {
       to={`/instance/${encodeURIComponent(uuid)}`}
       data-flip-id={uuid}
       // content-enter:骨架行换成真实行时 Link 首次挂载,淡入一次;实时刷新不重建。
-      className={clsx("node-list-row content-enter", isOffline && "is-offline", statusFlash.className)}
+      className={clsx(
+        "node-list-row content-enter",
+        isOffline && "is-offline",
+        statusFlash.className,
+      )}
       onAnimationEnd={statusFlash.onAnimationEnd}
       {...attentionProps}
       title={attentionProps.title ?? detailLabels.title}
       aria-label={rowLabel}
     >
-      <div className="node-list-cell node-list-node">
-        <AttentionReasons attention={attention} />
-        <div className="node-list-node-text">
-          <div className="node-list-node-head">
-            <Flag region={node.region} size={14} />
-            <span className="node-list-name" title={node.name}>
-              {node.name}
-            </span>
-          </div>
-          {(renewalPrice || footerTags.length > 0) && (
-            <div className="node-list-chips" title={footerTags.length > 0 ? joinTagTitle(footerTags) : undefined}>
-              {renewalPrice && (
-                <span className="dstatus-price-chip">
-                  <CircleDollarSign size={12} strokeWidth={2.2} />
-                  {renewalPrice}
-                </span>
-              )}
-              {footerTags.map((tag, index) => (
-                <span
-                  key={`${tag.label}-${index}`}
-                  className="dstatus-tag-chip"
-                  data-tag={tag.color}
-                  style={{ background: "var(--tag-bg)", color: "var(--tag-fg)" }}
-                >
-                  {tag.label}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="node-list-cell col-os">
-        <OsLogo value={node.os} size={16} />
-        <span className="node-list-os-name" title={node.os || osName}>
-          {formatOsLabel(osName, node.os)}
-        </span>
-      </div>
-
-      <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.cpuPct)} fraction={node.cpuPct / 100} paint="var(--progress-cpu)" />
-      </div>
-      <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.ramPct)} fraction={node.ramPct / 100} paint="var(--progress-memory)" />
-      </div>
-      <div className="node-list-cell col-metric">
-        <ListGauge value={pctText(node.diskPct)} fraction={node.diskPct / 100} paint="var(--progress-disk)" />
-      </div>
-
-      <div className="node-list-cell col-load">
-        <ListGauge
-          value={node.load1.toFixed(2)}
-          unit=""
-          fraction={loadFraction}
-          paint="var(--progress-load)"
-        />
-      </div>
-
-      <div className="node-list-cell col-live node-list-stack">
-        <StackLine
-          icon={<ArrowUp size={11} strokeWidth={2.4} />}
-          value={upRate.value}
-          unit={upRate.unit}
-          color={speedRateColor(upRate.unit)}
-        />
-        <StackLine
-          icon={<ArrowDown size={11} strokeWidth={2.4} />}
-          value={downRate.value}
-          unit={downRate.unit}
-          color={speedRateColor(downRate.unit)}
-        />
-      </div>
-
-      <div
-        className="node-list-cell col-traffic"
-        title={`剩余 ${traffic.remainingLabel} · ${traffic.detail}`}
-      >
-        <div className="node-list-traffic-rows">
-          <StackLine icon={<ArrowUp size={11} strokeWidth={2.1} />} value={formatBytes(node.trafficUp)} />
-          <StackLine icon={<ArrowDown size={11} strokeWidth={2.1} />} value={formatBytes(node.trafficDown)} />
-        </div>
-        <span className="node-list-traffic-quota" style={{ color: traffic.color }}>
-          {usedPct}
-        </span>
-      </div>
-
-      <div className="node-list-cell col-net">
-        {hasHomepagePingBinding && (
-          <ListLatency
-            pingSeries={pingSeries}
-            activeIndex={pingIndex}
-            onSelect={setActivePingIndex}
-            redrawKey={redrawKey}
-          />
-        )}
-      </div>
-
-      <div className="node-list-cell col-life node-list-stack">
-        <StackLine value={uptime.value} unit={uptime.unit} color="var(--progress-cpu)" />
-        <StackLine value={expire.value} unit={expire.unit} color={expireColor} />
-      </div>
+      {columns.map((colId) =>
+        renderDynamicCell(colId, model, pingIndex, setActivePingIndex, redrawKey),
+      )}
     </Link>
   );
 });
@@ -328,23 +1092,89 @@ export function NodeListView({
   // data-flip-id 不参与追踪。
   const listRef = useRef<HTMLDivElement>(null);
   useLayoutTransition(listRef, uuids, undefined, contentRevision);
+
+  const { columns } = useListColumns();
+  const sort = useHomeSort();
+  const { filter, requestFilterForField } = useNodeFilter();
+
+  const listStyle = useMemo<DynamicListStyle>(() => {
+    const defs = columns.map(getNodeFieldDefinition);
+    const template = defs.map((d) => `minmax(${d.minWidth}px, ${d.fr}fr)`).join(" ");
+    const totalMin =
+      defs.reduce((sum, d) => sum + d.minWidth, 0) +
+      Math.max(0, defs.length - 1) * 14 +
+      36;
+    return {
+      "--node-list-grid-template": template,
+      "--node-list-min-width": `${Math.max(640, totalMin)}px`,
+    };
+  }, [columns]);
+
+  const filteredFieldSet = useMemo(
+    () => new Set(filter.rules.map((r) => r.field)),
+    [filter.rules],
+  );
+
   return (
     <div className="node-list-scroll">
-      <div className="node-list" ref={listRef}>
-        <div className="node-list-row node-list-head" aria-hidden>
-          <div className="node-list-cell node-list-node">节点</div>
-          <div className="node-list-cell col-os">系统</div>
-          <div className="node-list-cell col-metric">CPU</div>
-          <div className="node-list-cell col-metric">内存</div>
-          <div className="node-list-cell col-metric">磁盘</div>
-          <div className="node-list-cell col-load">负载</div>
-          <div className="node-list-cell col-live">实时</div>
-          <div className="node-list-cell col-traffic">流量</div>
-          <div className="node-list-cell col-net">网络</div>
-          <div className="node-list-cell col-life">在线 / 到期</div>
+      <div className="node-list" ref={listRef} style={listStyle}>
+        <div className="node-list-row node-list-head" role="row">
+          {columns.map((colId) => {
+            const def = getNodeFieldDefinition(colId);
+            const isSorted = sort.field === colId;
+            const hasRule = filteredFieldSet.has(colId);
+            const alignClass =
+              def.align === "center"
+                ? "is-align-center"
+                : def.align === "right"
+                  ? "is-align-right"
+                  : "is-align-left";
+            return (
+              <div
+                key={colId}
+                role="columnheader"
+                aria-sort={
+                  isSorted
+                    ? sort.direction === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+                className={clsx(
+                  "node-list-cell node-list-head-cell",
+                  alignClass,
+                  isSorted && "is-sorted",
+                )}
+              >
+                <button
+                  type="button"
+                  className="node-list-head-sort-btn"
+                  onClick={() => sort.cycleField(colId)}
+                  title={`点击按「${def.label}」排序（${def.description}）`}
+                >
+                  <span className="node-list-head-label">{def.shortLabel}</span>
+                  <span className="node-list-head-sort-indicator" aria-hidden>
+                    {isSorted ? (sort.direction === "asc" ? "↑" : "↓") : "↕"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={clsx("node-list-head-filter-btn", hasRule && "is-active")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    requestFilterForField(colId);
+                  }}
+                  title={`按「${def.label}」添加筛选条件`}
+                  aria-label={`按${def.label}筛选`}
+                >
+                  <ListFilter size={11} />
+                </button>
+              </div>
+            );
+          })}
         </div>
         {uuids.map((uuid) => (
-          <NodeRow key={uuid} uuid={uuid} />
+          <NodeRow key={uuid} uuid={uuid} columns={columns} />
         ))}
       </div>
     </div>

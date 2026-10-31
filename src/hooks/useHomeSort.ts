@@ -84,8 +84,11 @@ function emitChange(next: SortPref | null) {
 export interface HomeSortControlState {
   field: HomeSortField;
   direction: HomeSortDirection;
+  hasOverride: boolean;
   setField: (field: HomeSortField) => void;
+  setSort: (field: HomeSortField, dir: HomeSortDirection) => void;
   toggleDirection: () => void;
+  cycleField: (field: HomeSortField) => void;
 }
 
 export function useHomeSort(): HomeSortControlState {
@@ -96,6 +99,7 @@ export function useHomeSort(): HomeSortControlState {
 
   const field = override?.field ?? defaultField;
   const direction = override?.dir ?? defaultDir;
+  const hasOverride = override !== null;
 
   const apply = useCallback(
     (next: SortPref) => {
@@ -118,12 +122,42 @@ export function useHomeSort(): HomeSortControlState {
     [apply],
   );
 
+  const setSort = useCallback(
+    (nextField: HomeSortField, nextDir: HomeSortDirection) => {
+      apply({ field: nextField, dir: nextDir });
+    },
+    [apply],
+  );
+
   const toggleDirection = useCallback(() => {
     apply({ field, dir: direction === "asc" ? "desc" : "asc" });
   }, [apply, field, direction]);
 
+  const cycleField = useCallback(
+    (targetField: HomeSortField) => {
+      const natural = HOME_SORT_NATURAL_DIRECTION[targetField];
+      const opposite: HomeSortDirection = natural === "asc" ? "desc" : "asc";
+      if (field !== targetField) {
+        apply({ field: targetField, dir: natural });
+      } else if (direction === natural) {
+        apply({ field: targetField, dir: opposite });
+      } else {
+        apply({ field: "default", dir: HOME_SORT_NATURAL_DIRECTION.default });
+      }
+    },
+    [apply, field, direction],
+  );
+
   return useMemo(
-    () => ({ field, direction, setField, toggleDirection }),
-    [field, direction, setField, toggleDirection],
+    () => ({
+      field,
+      direction,
+      hasOverride,
+      setField,
+      setSort,
+      toggleDirection,
+      cycleField,
+    }),
+    [field, direction, hasOverride, setField, setSort, toggleDirection, cycleField],
   );
 }
