@@ -6,6 +6,20 @@ import type { NodePingSeries } from "@/hooks/useNodeCardModel";
 // 是渲染 bug,所以这条以下只留底部色条,不追加数值。
 const LOSS_TEXT_THRESHOLD = 0.05;
 
+export function densePingValue(
+  lastValue: number | null | undefined,
+  loss: number | null | undefined,
+): { text: string; asLoss: boolean } {
+  const hasLoss = loss != null && Number.isFinite(loss) && loss >= LOSS_TEXT_THRESHOLD;
+  if (lastValue == null && hasLoss && loss != null) {
+    return { text: `${Math.round(loss)}%`, asLoss: true };
+  }
+  return {
+    text: lastValue != null ? String(Math.round(lastValue)) : "--",
+    asLoss: false,
+  };
+}
+
 function lossBarColor(loss: number | null | undefined, lossColor: string) {
   // 无样本用轨道色,读作"没数据"而不是"丢包未知"(lossHeatColor 对 null 给的是正文三级色,
   // 压到 2px 高时会和"轻微丢包"的暖色难以区分)。
@@ -22,16 +36,21 @@ function lossBarColor(loss: number | null | undefined, lossColor: string) {
 // 但"哪条线路在丢"必须一眼看见。
 //
 // 只在 pingSeries.length > 1 时渲染:单任务卡片的视觉与改动前完全一致。
+// dense is the list layout: loss percent does not take a column (the bar and
+// data-loss stay). A missing latency sample shows an integer loss percent
+// instead of "--ms 100.0%", which was widening every chip.
 export const PingTaskTabs = memo(function PingTaskTabs({
   series,
   activeIndex,
   onSelect,
   size = "regular",
+  dense = false,
 }: {
   series: NodePingSeries[];
   activeIndex: number;
   onSelect: (index: number) => void;
   size?: "regular" | "small";
+  dense?: boolean;
 }) {
   if (series.length < 2) return null;
 
@@ -40,8 +59,21 @@ export const PingTaskTabs = memo(function PingTaskTabs({
       {series.map((entry, index) => {
         const active = index === activeIndex;
         const { lastValue, loss } = entry.ping;
-        const valueText = lastValue != null ? Math.round(lastValue).toString() : "--";
         const hasLoss = loss != null && Number.isFinite(loss) && loss >= LOSS_TEXT_THRESHOLD;
+        const lossState =
+          loss == null || !Number.isFinite(loss) || loss < 0 ? "none" : hasLoss ? "high" : "ok";
+        const denseValue = densePingValue(lastValue, loss);
+        const showLossAsValue = dense && denseValue.asLoss;
+        const valueText = dense
+          ? denseValue.text
+          : lastValue != null
+            ? String(Math.round(lastValue))
+            : "--";
+        const valueColor = showLossAsValue
+          ? entry.lossColor
+          : lastValue != null
+            ? entry.latencyColor
+            : undefined;
         const lossText =
           loss == null || !Number.isFinite(loss) || loss < 0 ? "无数据" : `${loss.toFixed(1)}%`;
         const summary = `${entry.label}，延迟 ${
@@ -55,6 +87,7 @@ export const PingTaskTabs = memo(function PingTaskTabs({
             aria-selected={active}
             aria-label={summary}
             className={clsx("ping-task-tab", active && "is-active")}
+            data-loss={lossState}
             style={
               {
                 "--ping-task-loss": lossBarColor(loss, entry.lossColor),
@@ -71,14 +104,11 @@ export const PingTaskTabs = memo(function PingTaskTabs({
             }}
           >
             <span className="ping-task-tab-label">{entry.label}</span>
-            <span
-              className="ping-task-tab-value tabular"
-              style={{ color: lastValue != null ? entry.latencyColor : undefined }}
-            >
+            <span className="ping-task-tab-value tabular" style={{ color: valueColor }}>
               {valueText}
-              <small>ms</small>
+              {!showLossAsValue && <small>ms</small>}
             </span>
-            {hasLoss && (
+            {!dense && hasLoss && (
               <span
                 className="ping-task-tab-loss tabular"
                 style={{ color: entry.lossColor }}

@@ -71,6 +71,8 @@ function worstSeriesLoss(series: NodePingSeries[]): number | null {
 
 // 列表网络列的延迟柱数:比卡片(24)少,配窄列宽,柱子仍清晰可读。
 const LIST_PING_BUCKETS = 12;
+// Same height as the CPU gauge track, so the history bars do not add a row.
+const LIST_PING_BAR_HEIGHT = 8;
 
 type ListGaugeStyle = CSSProperties & {
   "--list-gauge-color": string;
@@ -137,8 +139,8 @@ function StackLine({
   );
 }
 
-// 网络列:当前延迟在上,聚合延迟柱状图在下(热力着色,与大卡同一视觉语言)。
-// 绑定了多个 Ping 任务时,标签行让延迟柱切换到对应任务。
+// Network column: ping tasks sit on one line, with the active task's history
+// bars underneath at gauge height. One row per task was doubling list row height.
 function ListLatency({
   pingSeries,
   activeIndex,
@@ -159,6 +161,7 @@ function ListLatency({
         activeIndex={activeIndex}
         onSelect={onSelect}
         size="small"
+        dense
       />
       {/* 多任务时标签行已经把三个延迟都读出来了,再重复一遍当前值只会撑高行高。 */}
       {pingSeries.length === 1 && (
@@ -167,7 +170,12 @@ function ListLatency({
           {latency != null && <small>ms</small>}
         </span>
       )}
-      <LatencyBars buckets={buckets} max={ping.max} redrawKey={redrawKey} height={14} />
+      <LatencyBars
+        buckets={buckets}
+        max={ping.max}
+        redrawKey={redrawKey}
+        height={LIST_PING_BAR_HEIGHT}
+      />
     </div>
   );
 }
