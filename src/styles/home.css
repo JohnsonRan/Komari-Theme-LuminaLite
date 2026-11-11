@@ -1346,10 +1346,162 @@
   position: relative;
 }
 
-.home-controls-bar .home-sort {
+.home-controls-actions {
+  display: flex;
   grid-column: -2 / -1;
+  min-width: 0;
+  align-items: center;
   justify-self: end;
   align-self: center;
+  gap: 8px;
+}
+
+/* 搜索框与排序触发器同一套描边面板视觉。 */
+.home-search {
+  display: inline-flex;
+  min-width: 0;
+  height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
+  border-radius: 14px;
+  background: var(--surface-a);
+  box-shadow:
+    0 14px 30px -26px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+  color: var(--text-tertiary);
+  transition: border-color 160ms ease;
+}
+
+.home-search:focus-within {
+  border-color: var(--ring);
+}
+
+.home-search svg {
+  display: block;
+  flex: none;
+}
+
+.home-search input {
+  width: 168px;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.home-search input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* 列菜单：勾选 + 上下移动；列多时面板内滚动。 */
+.list-column-panel {
+  width: 240px;
+  max-height: min(440px, 70vh);
+  overflow-y: auto;
+}
+
+.list-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 6px 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.list-column-head button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.list-column-head button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.list-column-head button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.list-column-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.list-column-item {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 2px;
+  padding-right: 2px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.list-column-item:hover {
+  background: var(--hover-bg);
+}
+
+.list-column-item label {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  cursor: pointer;
+}
+
+.list-column-item input {
+  flex: none;
+  accent-color: var(--accent-500);
+}
+
+.list-column-item input:checked + span {
+  color: var(--text-primary);
+}
+
+.list-column-item button {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.list-column-item button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--hover-bg) 60%, var(--surface-elev-a));
+}
+
+.list-column-item button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.list-column-item button:focus-visible,
+.list-column-head button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 
 .home-sort-trigger {
@@ -1427,11 +1579,15 @@
     min-width: 0;
   }
 
-  .home-controls-bar .home-sort {
+  .home-controls-actions {
     grid-column: auto;
     align-self: auto;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     margin-inline-start: auto;
+  }
+
+  .home-search input {
+    width: 96px;
   }
 }
 

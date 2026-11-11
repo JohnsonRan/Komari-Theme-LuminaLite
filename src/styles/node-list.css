@@ -5,9 +5,9 @@
   border-radius: 14px;
 }
 
+/* 列模板与最小宽度随访客选的列变化，由 NodeListView 内联写入。 */
 .node-list {
   display: flex;
-  min-width: 1120px;
   flex-direction: column;
   gap: 0;
   overflow: hidden;
@@ -18,18 +18,7 @@
 
 .node-list-row {
   display: grid;
-  grid-template-columns:
-    minmax(196px, 2.4fr)
-    minmax(116px, 1.1fr)
-    minmax(82px, 1fr)
-    minmax(82px, 1fr)
-    minmax(82px, 1fr)
-    minmax(72px, 0.78fr)
-    minmax(94px, 1fr)
-    minmax(110px, 1.15fr)
-    /* 网络列:多任务时这里要放下「任务名 + 延迟 + 丢包」三段，比单任务档宽一些。 */
-    minmax(108px, 1.1fr)
-    minmax(102px, 1fr);
+  grid-template-columns: var(--node-list-columns);
   align-items: center;
   gap: 12px;
   min-height: 56px;
@@ -100,7 +89,8 @@
 .col-load,
 .col-live,
 .col-net,
-.col-life {
+.col-life,
+.col-num {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -367,48 +357,63 @@
   letter-spacing: 0.02em;
 }
 
-/* ── 响应式收窄:桌面变窄时按优先级隐藏 网络 → 负载,并同步收缩列模板(否则空轨道错位)。 ── */
-@media (max-width: 1180px) {
-  .node-list {
-    min-width: 1020px;
-  }
-
-  .node-list-row {
-    grid-template-columns:
-      minmax(190px, 2.4fr)
-      minmax(116px, 1.1fr)
-      minmax(82px, 1fr)
-      minmax(82px, 1fr)
-      minmax(82px, 1fr)
-      minmax(72px, 0.78fr)
-      minmax(94px, 1fr)
-      minmax(110px, 1.15fr)
-      minmax(102px, 1fr);
-  }
-
-  .col-net {
-    display: none;
-  }
+/* 可选的纯文本列(型号/内核/价格等):单行省略，悬停看全文。 */
+.col-text {
+  min-width: 0;
+  text-align: left;
 }
 
-@media (max-width: 1000px) {
-  .node-list {
-    min-width: 900px;
-  }
+.node-list-text {
+  display: block;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .node-list-row {
-    grid-template-columns:
-      minmax(184px, 2.4fr)
-      minmax(110px, 1.1fr)
-      minmax(80px, 1fr)
-      minmax(80px, 1fr)
-      minmax(80px, 1fr)
-      minmax(94px, 1fr)
-      minmax(108px, 1.15fr)
-      minmax(100px, 1fr);
-  }
+/* V4/V6 并排，不像其他居中列那样竖着堆。 */
+.col-ip {
+  flex-direction: row;
+  gap: 4px;
+}
 
-  .col-load {
-    display: none;
-  }
+.node-list-row.is-offline .node-list-text {
+  color: var(--text-tertiary);
+}
+
+/* 表头排序按钮:保持列标签的字号与颜色，只在悬停/选中时提亮。 */
+.node-list-sort {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 3px;
+  margin: -3px -5px;
+  padding: 3px 5px;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.node-list-sort:hover,
+.node-list-sort[data-active="true"] {
+  color: var(--text-primary);
+}
+
+.node-list-sort:hover {
+  background: var(--hover-bg);
+}
+
+.node-list-sort:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 0;
+}
+
+.node-list-sort svg {
+  flex: none;
+  color: var(--accent-500);
 }

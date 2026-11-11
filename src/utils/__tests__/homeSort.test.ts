@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { HomeNodeSummary } from "@/services/wsStore";
+import type { NodeInfo, NodeMetrics } from "@/types/komari";
 import {
+  isHomeSortField,
+  naturalSortDirection,
   reconcileSpeedOrder,
   sortHomeNodes,
   type HomeSortContext,
@@ -38,6 +41,7 @@ function node(partial: Partial<HomeNodeSummary> & Pick<HomeNodeSummary, "uuid">)
 function ctx(over: Partial<HomeSortContext> = {}): HomeSortContext {
   return {
     nameByUuid: new Map(),
+    metaByUuid: new Map(),
     speedAvgByUuid: new Map(),
     speedActive: new Set(),
     ...over,
@@ -110,6 +114,50 @@ describe("sortHomeNodes", () => {
       ]),
     });
     expect(order(nodes, "speed", "desc", context)).toEqual(["fast", "med", "idle", "off"]);
+  });
+
+  it("list column fields: missing values sit after real ones instead of counting as 0", () => {
+    const meta = (uuid: string, partial: Partial<NodeInfo>) => [uuid, { uuid, ...partial } as NodeInfo] as const;
+    const nodes = [
+      node({ uuid: "none", weight: 0 }),
+      node({ uuid: "small", weight: 1 }),
+      node({ uuid: "big", weight: 2 }),
+      node({ uuid: "off", online: false, weight: 3 }),
+    ];
+    const context = ctx({
+      metaByUuid: new Map([
+        meta("none", { cpu_cores: 0, kernel_version: "", price: 0, expired_at: "" }),
+        meta("small", { cpu_cores: 2, kernel_version: "5.10.0", price: -1, expired_at: "2030-01-01T00:00:00Z" }),
+        meta("big", { cpu_cores: 16, kernel_version: "6.1.0", price: 9.9, expired_at: "2027-01-01T00:00:00Z" }),
+        meta("off", { cpu_cores: 64, kernel_version: "6.8.0", price: 99 }),
+      ]),
+    });
+    expect(order(nodes, "cores", "desc", context)).toEqual(["big", "small", "none", "off"]);
+    expect(order(nodes, "cores", "asc", context)).toEqual(["small", "big", "none", "off"]);
+    expect(order(nodes, "kernel", "asc", context)).toEqual(["small", "big", "none", "off"]);
+    // -1 = 免费，排在付费前；0 且非长期 = 未填写。
+    expect(order(nodes, "price", "asc", context)).toEqual(["small", "big", "none", "off"]);
+    expect(order(nodes, "expire", "asc", context)).toEqual(["big", "small", "none", "off"]);
+  });
+
+  it("swap/process read injected metrics; nodes without samples go to the missing segment", () => {
+    const nodes = [node({ uuid: "a", weight: 0 }), node({ uuid: "b", weight: 1 }), node({ uuid: "c", weight: 2 })];
+    const metrics: Record<string, Partial<NodeMetrics>> = {
+      a: { swapUsed: 0, swapTotal: 0, process: 0 },
+      b: { swapUsed: 10, swapTotal: 100, process: 80 },
+      c: { swapUsed: 50, swapTotal: 100, process: 120 },
+    };
+    const context = ctx({ metricsOf: (uuid) => metrics[uuid] as NodeMetrics | undefined });
+    expect(order(nodes, "swap", "desc", context)).toEqual(["c", "b", "a"]);
+    expect(order(nodes, "process", "asc", context)).toEqual(["b", "c", "a"]);
+  });
+
+  it("validates fields and picks natural directions", () => {
+    expect(isHomeSortField("cpu_name")).toBe(true);
+    expect(isHomeSortField("toString")).toBe(false);
+    expect(naturalSortDirection("name")).toBe("asc");
+    expect(naturalSortDirection("expire")).toBe("asc");
+    expect(naturalSortDirection("cpu")).toBe("desc");
   });
 });
 

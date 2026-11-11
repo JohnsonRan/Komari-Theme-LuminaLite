@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { HomeNodeSummary } from "@/services/wsStore";
+import type { NodeInfo } from "@/types/komari";
 import {
   getHomeGroupOptions,
+  matchesNodeSearch,
   normalizeHomeGroupOrder,
   sortHomeGroupOptions,
 } from "@/utils/homeNodes";
@@ -71,5 +73,34 @@ describe("home group ordering", () => {
 
   it("ignores configured groups that no longer exist and never duplicates", () => {
     expect(sortHomeGroupOptions(["US", "HK"], ["GONE", "HK", "HK"])).toEqual(["HK", "US"]);
+  });
+});
+
+describe("matchesNodeSearch", () => {
+  const meta = {
+    uuid: "u1",
+    name: "Tokyo-01",
+    group: "亚洲",
+    region: "JP",
+    tags: "CN2GIA;IPLC",
+    public_remark: "",
+    os: "Debian GNU/Linux 12",
+    arch: "amd64",
+    virtualization: "kvm",
+    kernel_version: "6.1.0",
+    cpu_name: "AMD EPYC 7763",
+    gpu_name: "",
+  } as NodeInfo;
+
+  it("matches every whitespace-separated token case-insensitively across fields", () => {
+    expect(matchesNodeSearch(meta, "")).toBe(true);
+    expect(matchesNodeSearch(meta, "  tokyo  ")).toBe(true);
+    expect(matchesNodeSearch(meta, "epyc debian")).toBe(true);
+    expect(matchesNodeSearch(meta, "cn2gia 亚洲")).toBe(true);
+    expect(matchesNodeSearch(meta, "epyc ubuntu")).toBe(false);
+  });
+
+  it("does not match nodes whose meta has not loaded", () => {
+    expect(matchesNodeSearch(undefined, "tokyo")).toBe(false);
   });
 });

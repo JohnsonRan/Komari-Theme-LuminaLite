@@ -193,6 +193,8 @@ export interface ThemeSettings {
   showCardGroup?: boolean;
   /** 旧数组或官方 richtext 分隔文本。 */
   homeGroupOrder?: string[] | string;
+  /** 列表视图默认列 ID(逗号或换行分隔，或数组)。 */
+  listDefaultColumns?: string[] | string;
   enableHomeSort?: boolean;
   homeSortField?: "default" | "name" | "speed" | "traffic";
   homeSortDirection?: "asc" | "desc";

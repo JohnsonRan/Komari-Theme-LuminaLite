@@ -1,8 +1,8 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { MorphIcon, iconData } from "@/components/ui/icons";
 import {
-  HOME_SORT_FIELDS,
   HOME_SORT_FIELD_LABELS,
+  HOME_SORT_MENU_FIELDS,
   type HomeSortDirection,
   type HomeSortField,
 } from "@/utils/homeSort";
@@ -21,7 +21,12 @@ function SortIcon({ direction, size = 14 }: { direction: HomeSortDirection; size
 
 // 选择当前维度会翻转方向，选择其他维度会采用该维度的自然方向。
 export function HomeSortControl({ state }: { state: HomeSortControlState }) {
-  const { field, direction, setField, toggleDirection } = state;
+  const { field, direction, select } = state;
+  // 由列表表头选中的维度临时补进下拉，让当前排序始终可见、可翻转。
+  const options = useMemo(
+    () => (HOME_SORT_MENU_FIELDS.includes(field) ? HOME_SORT_MENU_FIELDS : [...HOME_SORT_MENU_FIELDS, field]),
+    [field],
+  );
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -30,7 +35,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
 
   useEffect(() => {
     if (!open) return;
-    const activeIndex = HOME_SORT_FIELDS.indexOf(field);
+    const activeIndex = options.indexOf(field);
     const targetIndex = activeIndex >= 0 ? activeIndex : 0;
     const timer = requestAnimationFrame(() => {
       itemRefs.current[targetIndex]?.focus();
@@ -47,7 +52,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
       cancelAnimationFrame(timer);
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [open, field]);
+  }, [open, field, options]);
 
   const closeAndFocusTrigger = () => {
     setOpen(false);
@@ -55,8 +60,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
   };
 
   const handleSelect = (next: HomeSortField) => {
-    if (next === field) toggleDirection();
-    else setField(next);
+    select(next);
     closeAndFocusTrigger();
   };
 
@@ -73,18 +77,18 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
       closeAndFocusTrigger();
     } else if (event.key === "ArrowDown") {
       event.preventDefault();
-      const nextIndex = (index + 1) % HOME_SORT_FIELDS.length;
+      const nextIndex = (index + 1) % options.length;
       itemRefs.current[nextIndex]?.focus();
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      const prevIndex = (index - 1 + HOME_SORT_FIELDS.length) % HOME_SORT_FIELDS.length;
+      const prevIndex = (index - 1 + options.length) % options.length;
       itemRefs.current[prevIndex]?.focus();
     } else if (event.key === "Home") {
       event.preventDefault();
       itemRefs.current[0]?.focus();
     } else if (event.key === "End") {
       event.preventDefault();
-      itemRefs.current[HOME_SORT_FIELDS.length - 1]?.focus();
+      itemRefs.current[options.length - 1]?.focus();
     } else if (event.key === "Tab") {
       setOpen(false);
     }
@@ -122,7 +126,7 @@ export function HomeSortControl({ state }: { state: HomeSortControlState }) {
           aria-label="排序方式"
           aria-orientation="vertical"
         >
-          {HOME_SORT_FIELDS.map((option, index) => {
+          {options.map((option, index) => {
             const active = option === field;
             return (
               <button

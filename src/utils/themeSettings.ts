@@ -9,12 +9,13 @@ import {
 import { normalizeNodeIdentityList } from "@/utils/nodeIdentity";
 import { normalizeHomeGroupOrder } from "@/utils/homeNodes";
 import {
-  HOME_SORT_NATURAL_DIRECTION,
+  naturalSortDirection,
   isHomeSortDirection,
   isHomeSortField,
   type HomeSortDirection,
   type HomeSortField,
 } from "@/utils/homeSort";
+import { DEFAULT_LIST_COLUMNS, parseListColumns, type ListColumnId } from "@/utils/listColumns";
 import {
   DEFAULT_ATTENTION_THRESHOLDS,
   normalizeAttentionThresholds,
@@ -40,6 +41,7 @@ export interface ResolvedThemeSettings {
   showRegionBar: boolean;
   showCardGroup: boolean;
   homeGroupOrder: string[];
+  listDefaultColumns: ListColumnId[];
   enableHomeSort: boolean;
   homeSortField: HomeSortField;
   homeSortDirection: HomeSortDirection;
@@ -76,9 +78,10 @@ export const DEFAULT_THEME_SETTINGS: ResolvedThemeSettings = {
   showRegionBar: true,
   showCardGroup: true,
   homeGroupOrder: [],
+  listDefaultColumns: [...DEFAULT_LIST_COLUMNS],
   enableHomeSort: false,
   homeSortField: "default",
-  homeSortDirection: HOME_SORT_NATURAL_DIRECTION.default,
+  homeSortDirection: naturalSortDirection("default"),
   // 默认关闭:它会改变访客看到的节点顺序,与 enableHomeSort 一样交由站长显式开启。
   enableAttentionSort: false,
   // 默认关闭:开启后首页会额外批量拉一次 24 小时指标(全站一次请求,节点多时载荷不小),
@@ -181,8 +184,14 @@ function normalizeHomeSortDefault(
     homeSortField,
     homeSortDirection: isHomeSortDirection(direction)
       ? direction
-      : HOME_SORT_NATURAL_DIRECTION[homeSortField],
+      : naturalSortDirection(homeSortField),
   };
+}
+
+// 留空或全是未知 ID 时用内置默认列。
+function normalizeListDefaultColumns(value: unknown): ListColumnId[] {
+  const columns = parseListColumns(value);
+  return columns.length > 0 ? columns : [...DEFAULT_LIST_COLUMNS];
 }
 
 function hasOwn(settings: object | null | undefined, key: string): boolean {
@@ -244,6 +253,7 @@ export function normalizeThemeSettings(
     showRegionBar: enabledUnlessFalse(settings?.showRegionBar),
     showCardGroup: enabledUnlessFalse(settings?.showCardGroup),
     homeGroupOrder: normalizeHomeGroupOrder(settings?.homeGroupOrder),
+    listDefaultColumns: normalizeListDefaultColumns(settings?.listDefaultColumns),
     // 默认关闭(需手动开启):与参考站点默认一致,访客端排序由站长显式开启。
     enableHomeSort: settings?.enableHomeSort === true,
     ...normalizeHomeSortDefault(settings?.homeSortField, settings?.homeSortDirection),

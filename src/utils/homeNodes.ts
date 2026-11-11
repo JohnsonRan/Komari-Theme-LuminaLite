@@ -1,4 +1,5 @@
 import type { HomeNodeStructure } from "@/services/wsStore";
+import type { NodeInfo } from "@/types/komari";
 import { getDisplayRegionCode } from "@/utils/geo";
 
 /** 分组/地区只读 group、region；结构态与完整 summary 都能喂进来。 */
@@ -111,4 +112,27 @@ export function sortHomeGroupOptions(groups: string[], order: string[]): string[
   }
 
   return result;
+}
+
+/** 首页搜索：按空白分词，每个词都要命中名称/分组/地区/标签/备注/系统/架构/虚拟化/内核/CPU/GPU 之一，不区分大小写。 */
+export function matchesNodeSearch(meta: NodeInfo | undefined, query: string): boolean {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  if (!meta) return false;
+  const haystack = [
+    meta.name,
+    meta.group,
+    meta.region,
+    meta.tags,
+    meta.public_remark,
+    meta.os,
+    meta.arch,
+    meta.virtualization,
+    meta.kernel_version,
+    meta.cpu_name,
+    meta.gpu_name,
+  ]
+    .join("\n")
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
 }

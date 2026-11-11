@@ -11,6 +11,7 @@ import {
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AnimatedValue } from "@/components/ui/AnimatedValue";
+import { Search } from "@/components/ui/icons";
 import { Flag } from "@/components/ui/Flag";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -43,11 +44,14 @@ import {
   getHomeRegionOptions,
   HOME_ALL_GROUP,
   HOME_ALL_REGION,
+  matchesNodeSearch,
   sortHomeGroupOptions,
   type HomeRegionOption,
 } from "@/utils/homeNodes";
 import { getDisplayRegionCode } from "@/utils/geo";
+import { LIVE_SORT_FIELDS } from "@/utils/homeSort";
 import { useHomeSort } from "@/hooks/useHomeSort";
+import { useListColumns } from "@/hooks/useListColumns";
 import { useHomeNodeOrder } from "@/hooks/useHomeNodeOrder";
 import { useLayoutTransition } from "@/hooks/useLayoutTransition";
 import { AttentionProvider, useNodeAttention } from "@/hooks/useNodeAttention";
@@ -55,6 +59,7 @@ import { useHourlyClock } from "@/hooks/useClock";
 import { preloadTodayTrafficStats } from "@/hooks/useTodayTrafficStats";
 import { useVersion } from "@/hooks/useVersion";
 import { HomeSortControl } from "./HomeSortControl";
+import { ListColumnPicker } from "./ListColumnPicker";
 import { NodeCardSkeleton } from "./NodeCardSkeleton";
 import type { NodeViewMode } from "@/utils/themeSettings";
 
@@ -85,7 +90,7 @@ type MiniGridStyle = CSSProperties & { "--mini-card-min-width": string };
 // 标准 UUID 不含逗号，可安全拼成稳定签名。
 const UUID_KEY_SEPARATOR = ",";
 
-/** 结构态补齐 live 字段为 0：仅用于 default/name 排序与离线沉底，绝不喂给总览/异常判定。 */
+/** 结构态补齐 live 字段为 0：仅用于不依赖实时摘要的排序与离线沉底，绝不喂给总览/异常判定。 */
 function structureAsSortable(node: HomeNodeStructure): HomeNodeSummary {
   return {
     ...node,
@@ -726,12 +731,13 @@ export function NodeGrid() {
   const sortDirection = sortEnabled ? sort.direction : themeSettings.homeSortDirection;
   const [selectedGroup, setSelectedGroup] = useState(HOME_ALL_GROUP);
   const [selectedRegion, setSelectedRegion] = useState(HOME_ALL_REGION);
+  const [searchQuery, setSearchQuery] = useState("");
+  const listColumns = useListColumns(themeSettings.listDefaultColumns);
   useHomepagePingOverview();
 
   const attentionEnabled = themeSettings.isReady && themeSettings.enableAttentionSort;
   // 实时排序 / 异常置顶需要 live 字段；总览拆到 HomeOverviewLive 自己订。
-  const needsLiveOrder =
-    sortField === "speed" || sortField === "traffic" || attentionEnabled;
+  const needsLiveOrder = LIVE_SORT_FIELDS.has(sortField) || attentionEnabled;
   const liveNodes = useHomeNodeSummaries(needsLiveOrder);
 
   // 摘要不含名称，先从完整 meta 解析主题隐藏列表，再统一过滤各类数据。
@@ -765,12 +771,16 @@ export function NodeGrid() {
   const warmTrafficPage = useCallback(() => {
     void preloadTodayTrafficStats(queryClient, trafficUuids, Date.now());
   }, [queryClient, trafficUuids]);
-  // 「名称」排序需要展示名(摘要无 name),从 meta 注入。
+  // 「名称」与静态信息维度排序需要 meta(摘要无 name),从 meta 注入。
   const nameByUuid = useMemo(() => {
     const map = new Map<string, string>();
     for (const node of visibleMeta) map.set(node.uuid, node.name?.trim() || node.uuid);
     return map;
   }, [visibleMeta]);
+  const metaByUuid = useMemo(
+    () => new Map(visibleMeta.map((node) => [node.uuid, node] as const)),
+    [visibleMeta],
+  );
   const showHomeOverview = themeSettings.isReady && themeSettings.showHomeOverview;
   const hasNodes = visibleMeta.length > 0;
 
@@ -812,14 +822,25 @@ export function NodeGrid() {
     [groupFilteredStructures, selectedRegion],
   );
 
-  // 排序输入：default/name 走结构态；speed/traffic/attention 才拼 live。
+  // 搜索在分组/地区筛选之后；metaByUuid 只含可见节点，隐藏节点不会被搜出来。
+  // 只剩一台时搜索框隐藏，残留的关键字不再生效。
+  const activeQuery = visibleStructures.length > 1 ? searchQuery.trim() : "";
+  const searchedStructures = useMemo(
+    () =>
+      activeQuery
+        ? filteredStructures.filter((node) => matchesNodeSearch(metaByUuid.get(node.uuid), activeQuery))
+        : filteredStructures,
+    [filteredStructures, metaByUuid, activeQuery],
+  );
+
+  // 排序输入：静态维度走结构态；实时维度与异常置顶才拼 live。
   const sortSourceNodes = useMemo(() => {
     if (!needsLiveOrder) {
-      return filteredStructures.map(structureAsSortable);
+      return searchedStructures.map(structureAsSortable);
     }
-    const allowed = new Set(filteredStructures.map((node) => node.uuid));
+    const allowed = new Set(searchedStructures.map((node) => node.uuid));
     return liveNodes.filter((node) => allowed.has(node.uuid));
-  }, [needsLiveOrder, filteredStructures, liveNodes]);
+  }, [needsLiveOrder, searchedStructures, liveNodes]);
 
   // 排序在分组筛选之后。离线永远沉底(写死,见 homeSort);实时网速走防抖(键平滑+滞回+5s 重排)。
   const sortedNodes = useHomeNodeOrder({
@@ -827,6 +848,7 @@ export function NodeGrid() {
     field: sortField,
     direction: sortDirection,
     nameByUuid,
+    metaByUuid,
   });
 
   const attentionByUuid = useNodeAttention(
@@ -905,6 +927,8 @@ export function NodeGrid() {
   const showGroupTabs =
     themeSettings.isReady && themeSettings.showGroupTabs && groupOptions.length > 0;
   const showHomeSort = sortEnabled && visibleStructures.length > 1;
+  const showSearch = visibleStructures.length > 1;
+  const noSearchMatch = searchedStructures.length === 0 && filteredStructures.length > 0;
   // 地区栏:只有一个地区时筛选无意义,>1 才显示。
   const showRegionBar =
     themeSettings.isReady && themeSettings.showRegionBar && regionOptions.length > 1;
@@ -987,8 +1011,8 @@ export function NodeGrid() {
     // 卡片从 context 读各自的判定结果，避免每张卡再算一遍（见 useNodeAttention）。
     <AttentionProvider value={attentionByUuid}>
       {homeHeader}
-      {(showGroupTabs || showHomeSort) && (
-        // 分组标签落首列、排序钉在末列右侧；窄屏时两者保持在同一控件栏内。
+      {(showGroupTabs || showSearch || showHomeSort) && (
+        // 分组标签落首列、搜索/列/排序钉在末列右侧；窄屏时保持在同一控件栏内。
         <div className={controlsWrapClassName} style={controlsStyle}>
           {showGroupTabs && (
             <GroupTabs
@@ -997,7 +1021,22 @@ export function NodeGrid() {
               onSelectGroup={setSelectedGroup}
             />
           )}
-          {showHomeSort && <HomeSortControl state={sort} />}
+          <div className="home-controls-actions">
+            {showSearch && (
+              <label className="home-search">
+                <Search size={14} aria-hidden />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="搜索节点"
+                  aria-label="搜索节点：名称、分组、标签、备注、系统、CPU 等"
+                />
+              </label>
+            )}
+            {isList && <ListColumnPicker state={listColumns} />}
+            {showHomeSort && <HomeSortControl state={sort} />}
+          </div>
         </div>
       )}
       {showRegionBar && (
@@ -1007,9 +1046,21 @@ export function NodeGrid() {
           onSelectRegion={setSelectedRegion}
         />
       )}
-      {isList ? (
+      {noSearchMatch ? (
+        <div className="home-empty-state" role="status" aria-live="polite">
+          <span className="home-empty-state-title">没有匹配「{activeQuery}」的节点</span>
+          <button type="button" className="home-empty-state-desc underline" onClick={() => setSearchQuery("")}>
+            清空搜索
+          </button>
+        </div>
+      ) : isList ? (
         <Suspense fallback={<NodeCardSkeleton />}>
-          <NodeListView uuids={orderedUuids} contentRevision={contentRevision} />
+          <NodeListView
+            uuids={orderedUuids}
+            contentRevision={contentRevision}
+            columns={listColumns.columns}
+            sort={showHomeSort ? sort : null}
+          />
         </Suspense>
       ) : (
         <div ref={gridRef} className={gridWrapClassName} style={gridStyle}>

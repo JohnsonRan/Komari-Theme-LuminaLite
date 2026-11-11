@@ -113,6 +113,7 @@ describe("komari-theme.json managed configuration", () => {
     expectDefault("backgroundAlignment", DEFAULT_THEME_SETTINGS.backgroundAlignment);
     expectDefault("surfaceOpacity", DEFAULT_THEME_SETTINGS.surfaceOpacity);
     expectDefault("homeGroupOrder", "");
+    expectDefault("listDefaultColumns", "");
     expectDefault("hiddenNodeIds", "[]");
     expectDefault("homepagePingTasks", "[]");
     expectDefault("attentionCpuPct", DEFAULT_ATTENTION_THRESHOLDS.cpuPct);

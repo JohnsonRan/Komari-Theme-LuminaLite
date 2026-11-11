@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
-  HOME_SORT_NATURAL_DIRECTION,
   isHomeSortDirection,
+  naturalSortDirection,
   isHomeSortField,
   type HomeSortDirection,
   type HomeSortField,
@@ -86,6 +86,8 @@ export interface HomeSortControlState {
   direction: HomeSortDirection;
   setField: (field: HomeSortField) => void;
   toggleDirection: () => void;
+  /** 选当前维度翻转方向，选其他维度采用其自然方向(下拉与列表表头共用)。 */
+  select: (field: HomeSortField) => void;
 }
 
 export function useHomeSort(): HomeSortControlState {
@@ -113,7 +115,7 @@ export function useHomeSort(): HomeSortControlState {
   const setField = useCallback(
     (nextField: HomeSortField) => {
       // 切到新维度时用该维度的自然方向(文本升、数值降)。
-      apply({ field: nextField, dir: HOME_SORT_NATURAL_DIRECTION[nextField] });
+      apply({ field: nextField, dir: naturalSortDirection(nextField) });
     },
     [apply],
   );
@@ -122,8 +124,16 @@ export function useHomeSort(): HomeSortControlState {
     apply({ field, dir: direction === "asc" ? "desc" : "asc" });
   }, [apply, field, direction]);
 
+  const select = useCallback(
+    (nextField: HomeSortField) => {
+      if (nextField === field) toggleDirection();
+      else setField(nextField);
+    },
+    [field, setField, toggleDirection],
+  );
+
   return useMemo(
-    () => ({ field, direction, setField, toggleDirection }),
-    [field, direction, setField, toggleDirection],
+    () => ({ field, direction, setField, toggleDirection, select }),
+    [field, direction, setField, toggleDirection, select],
   );
 }

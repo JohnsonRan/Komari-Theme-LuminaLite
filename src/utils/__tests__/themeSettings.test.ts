@@ -19,6 +19,22 @@ describe("normalizeThemeSettings", () => {
     );
   });
 
+  it("parses list default columns, dropping unknown and duplicate ids", () => {
+    expect(normalizeThemeSettings({}).listDefaultColumns).toEqual([
+      "os", "cpu", "memory", "disk", "load", "live", "traffic", "net", "life",
+    ]);
+    expect(
+      normalizeThemeSettings({ listDefaultColumns: "cpu_name,\n cpu ， nope, cpu；price" })
+        .listDefaultColumns,
+    ).toEqual(["cpu_name", "cpu", "price"]);
+    expect(normalizeThemeSettings({ listDefaultColumns: ["swap", 1, "ip"] } as never).listDefaultColumns).toEqual([
+      "swap",
+      "ip",
+    ]);
+    // 全是未知 ID 时回落内置默认，而不是一列都没有。
+    expect(normalizeThemeSettings({ listDefaultColumns: "nope" }).listDefaultColumns).toHaveLength(9);
+  });
+
   it("defaults detail chart/network units and falls back on unknown values", () => {
     const base = normalizeThemeSettings({});
     expect(base.detailChartUnit).toBe("bytes");
